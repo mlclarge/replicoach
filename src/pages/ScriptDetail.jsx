@@ -47,7 +47,23 @@ function ScriptDetail() {
     return positions;
   }, [currentScript?.characters]);
 
-  // Handler pour sauvegarder les modifications d'une réplique
+  // URL du fichier original
+  const originalFileUrl = useMemo(() => {
+    if (!currentScript?.pdf_url) return null;
+    return getFileUrl(currentScript.pdf_url);
+  }, [currentScript?.pdf_url]);
+
+  // Compter les repliques par personnage (DOIT etre avant les early returns)
+  const replicaCountByCharacter = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const counts = {};
+    currentScript.replicas.forEach((r) => {
+      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
+    });
+    return counts;
+  }, [currentScript?.replicas]);
+
+  // Handler pour sauvegarder les modifications d'une replique
   const handleSaveReplica = async (replicaId, newCharacterId, newText) => {
     try {
       await updateReplica(replicaId, {
@@ -55,19 +71,13 @@ function ScriptDetail() {
         text: newText,
       });
       setEditingReplica(null);
-      // Rafraîchir le script
+      // Rafraichir le script
       fetchScript(id);
     } catch (err) {
       console.error("Error updating replica:", err);
-      alert("Erreur lors de la mise à jour de la réplique");
+      alert("Erreur lors de la mise a jour de la replique");
     }
   };
-
-  // URL du fichier original
-  const originalFileUrl = useMemo(() => {
-    if (!currentScript?.pdf_url) return null;
-    return getFileUrl(currentScript.pdf_url);
-  }, [currentScript?.pdf_url]);
 
   if (loading) {
     return (
@@ -80,7 +90,7 @@ function ScriptDetail() {
   if (error || !currentScript) {
     return (
       <div className="p-4 text-center">
-        <p className="text-red-400 mb-4">Script non trouvé</p>
+        <p className="text-red-400 mb-4">Script non trouve</p>
         <Link to="/" className="btn-primary">
           Retour
         </Link>
@@ -101,24 +111,15 @@ function ScriptDetail() {
     ? replicas.filter((r) => r.character_id === selectedCharacter)
     : replicas;
 
-  // Compter les répliques par personnage
-  const replicaCountByCharacter = useMemo(() => {
-    const counts = {};
-    replicas.forEach(r => {
-      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
-    });
-    return counts;
-  }, [replicas]);
-
   return (
     <div className="p-4 pb-24">
-      {/* En-tête */}
+      {/* En-tete */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
           <h1 className="text-xl font-display text-gold-500">{title}</h1>
           <p className="text-gray-500 text-sm">
             {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
-            {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
+            {replicas.length} replique{replicas.length > 1 ? "s" : ""}
           </p>
         </div>
         <div className="flex gap-2">
@@ -141,7 +142,7 @@ function ScriptDetail() {
         </div>
       </div>
 
-      {/* Didascalies / Informations de scène */}
+      {/* Didascalies / Informations de scene */}
       {stage_directions && (
         <div className="mb-4 p-4 bg-gray-800/50 rounded-lg border-l-4 border-gray-600">
           <p className="text-gray-400 italic text-sm whitespace-pre-line">
@@ -169,8 +170,9 @@ function ScriptDetail() {
             onClick={() => setSelectedCharacter(char.id)}
             className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
             style={{
-              backgroundColor: selectedCharacter === char.id ? char.color : '#374151',
-              color: selectedCharacter === char.id ? 'white' : '#9CA3AF',
+              backgroundColor:
+                selectedCharacter === char.id ? char.color : "#374151",
+              color: selectedCharacter === char.id ? "white" : "#9CA3AF",
             }}
           >
             {char.name} ({replicaCountByCharacter[char.id] || 0})
@@ -211,18 +213,18 @@ function ScriptDetail() {
                 : "bg-gray-800 text-gray-400"
             }`}
         >
-          🎭 Répliques
+          🎭 Repliques
         </button>
       </div>
 
-      {/* Liste des répliques - Style dialogue/bulles */}
+      {/* Liste des repliques - Style dialogue/bulles */}
       <div className="space-y-4">
         {filteredReplicas.map((replica, index) => {
           const character = characters.find(
             (c) => c.id === replica.character_id
           );
           const isRight = characterPositions[replica.character_id] === 1;
-          
+
           return (
             <DialogueBubble
               key={replica.id}
@@ -240,7 +242,7 @@ function ScriptDetail() {
 
       {filteredReplicas.length === 0 && (
         <p className="text-center text-gray-500 py-8">
-          Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
+          Aucune replique{selectedCharacter ? " pour ce personnage" : ""}
         </p>
       )}
 
@@ -254,7 +256,7 @@ function ScriptDetail() {
         🔊
       </Link>
 
-      {/* Modal d'édition de réplique */}
+      {/* Modal d'edition de replique */}
       {editingReplica && (
         <EditReplicaModal
           replica={editingReplica}
@@ -281,7 +283,7 @@ function ScriptDetail() {
             <h3 className="text-lg font-semibold text-white mb-2">
               Supprimer ?
             </h3>
-            <p className="text-gray-400 mb-6">Cette action est irréversible.</p>
+            <p className="text-gray-400 mb-6">Cette action est irreversible.</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
@@ -308,8 +310,7 @@ function ScriptDetail() {
  */
 function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
   const [showText, setShowText] = useState(!fileUrl);
-  const isPdf = filename?.toLowerCase().endsWith('.pdf');
-  const isTxt = filename?.toLowerCase().endsWith('.txt');
+  const isPdf = filename?.toLowerCase().endsWith(".pdf");
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
@@ -317,7 +318,9 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-700">
           <div>
-            <h3 className="text-lg font-semibold text-white">📄 Fichier original</h3>
+            <h3 className="text-lg font-semibold text-white">
+              📄 Fichier original
+            </h3>
             <p className="text-sm text-gray-400">{filename}</p>
           </div>
           <div className="flex gap-2">
@@ -325,7 +328,9 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
               <button
                 onClick={() => setShowText(!showText)}
                 className={`px-3 py-1 rounded-lg text-sm ${
-                  showText ? "bg-primary-700 text-white" : "bg-gray-700 text-gray-400"
+                  showText
+                    ? "bg-primary-700 text-white"
+                    : "bg-gray-700 text-gray-400"
                 }`}
               >
                 {showText ? "📄 PDF" : "📝 Texte"}
@@ -338,14 +343,14 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
                 rel="noopener noreferrer"
                 className="px-3 py-1 bg-gold-500 text-dark rounded-lg text-sm font-medium"
               >
-                ⬇️ Télécharger
+                Telecharger
               </a>
             )}
             <button
               onClick={onClose}
               className="p-2 text-gray-400 hover:text-white"
             >
-              ✕
+              X
             </button>
           </div>
         </div>
@@ -364,14 +369,16 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
             />
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-400 mb-4">Aperçu non disponible pour ce type de fichier</p>
+              <p className="text-gray-400 mb-4">
+                Apercu non disponible pour ce type de fichier
+              </p>
               <a
                 href={fileUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-gold inline-block"
               >
-                Télécharger le fichier
+                Telecharger le fichier
               </a>
             </div>
           )}
@@ -382,7 +389,7 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
 }
 
 /**
- * Modal d'édition d'une réplique
+ * Modal d'edition d'une replique
  */
 function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(replica.character_id);
@@ -396,19 +403,23 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
     setSaving(false);
   };
 
-  const selectedChar = characters.find(c => c.id === selectedCharId);
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700">
         <div className="p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
+          <h3 className="text-lg font-semibold text-white">
+            Modifier la replique
+          </h3>
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Sélection du personnage */}
+          {/* Selection du personnage */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Personnage
+            </label>
             <div className="flex gap-2 flex-wrap">
               {characters.map((char) => (
                 <button
@@ -416,8 +427,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
                   onClick={() => setSelectedCharId(char.id)}
                   className="px-3 py-2 rounded-lg text-sm font-medium transition"
                   style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                    backgroundColor:
+                      selectedCharId === char.id ? char.color : "#374151",
+                    color: selectedCharId === char.id ? "white" : "#9CA3AF",
                   }}
                 >
                   {char.name}
@@ -426,26 +438,29 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             </div>
           </div>
 
-          {/* Texte de la réplique */}
+          {/* Texte de la replique */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">Texte</label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
               className="input w-full h-32 resize-none"
-              placeholder="Texte de la réplique..."
+              placeholder="Texte de la replique..."
             />
           </div>
 
-          {/* Prévisualisation */}
-          <div 
+          {/* Previsualisation */}
+          <div
             className="p-3 rounded-lg border-l-4"
-            style={{ 
-              backgroundColor: `${selectedChar?.color}20`,
-              borderLeftColor: selectedChar?.color 
+            style={{
+              backgroundColor: selectedChar?.color + "20",
+              borderLeftColor: selectedChar?.color,
             }}
           >
-            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color }}>
+            <p
+              className="text-xs font-semibold mb-1"
+              style={{ color: selectedChar?.color }}
+            >
               {selectedChar?.name || "?"}
             </p>
             <p className="text-gray-300 text-sm">{text || "..."}</p>
@@ -453,15 +468,19 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
         </div>
 
         <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={saving}>
+          <button
+            onClick={onClose}
+            className="btn-secondary flex-1"
+            disabled={saving}
+          >
             Annuler
           </button>
-          <button 
-            onClick={handleSave} 
+          <button
+            onClick={handleSave}
             className="btn-gold flex-1"
             disabled={saving || !text.trim()}
           >
-            {saving ? "Sauvegarde..." : "💾 Sauvegarder"}
+            {saving ? "Sauvegarde..." : "Sauvegarder"}
           </button>
         </div>
       </div>
@@ -472,26 +491,33 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
 /**
  * Composant Bulle de dialogue style messagerie
  */
-function DialogueBubble({ replica, character, characters, viewMode, isRight, number, onEdit }) {
+function DialogueBubble({
+  replica,
+  character,
+  viewMode,
+  isRight,
+  number,
+  onEdit,
+}) {
   const [revealed, setRevealed] = useState(false);
 
-  // Générer une couleur de fond claire basée sur la couleur du personnage
+  // Generer une couleur de fond claire basee sur la couleur du personnage
   const getBubbleStyle = () => {
     if (!character?.color) {
       return {
-        backgroundColor: '#4B5563',
-        borderColor: '#6B7280',
+        backgroundColor: "#4B5563",
+        borderColor: "#6B7280",
       };
     }
-    
-    const hex = character.color.replace('#', '');
+
+    const hex = character.color.replace("#", "");
     const r = parseInt(hex.substr(0, 2), 16);
     const g = parseInt(hex.substr(2, 2), 16);
     const b = parseInt(hex.substr(4, 2), 16);
-    
-    const lightBg = `rgba(${r}, ${g}, ${b}, 0.15)`;
-    const borderColor = `rgba(${r}, ${g}, ${b}, 0.4)`;
-    
+
+    const lightBg = "rgba(" + r + ", " + g + ", " + b + ", 0.15)";
+    const borderColor = "rgba(" + r + ", " + g + ", " + b + ", 0.4)";
+
     return {
       backgroundColor: lightBg,
       borderColor: borderColor,
@@ -518,14 +544,14 @@ function DialogueBubble({ replica, character, characters, viewMode, isRight, num
           <div>
             {replica.cue_words && (
               <p className="text-gray-500 italic text-xs mb-2 border-b border-gray-700 pb-2">
-                💬 {replica.cue_words}
+                {replica.cue_words}
               </p>
             )}
             {revealed ? (
               <p className="text-gray-200">{replica.text}</p>
             ) : (
               <p className="text-gray-500 text-sm text-center py-2">
-                👆 Toucher pour révéler
+                Toucher pour reveler
               </p>
             )}
           </div>
@@ -539,22 +565,20 @@ function DialogueBubble({ replica, character, characters, viewMode, isRight, num
   const isClickable = viewMode !== "full";
 
   return (
-    <div className={`flex ${isRight ? 'justify-end' : 'justify-start'}`}>
+    <div className={"flex " + (isRight ? "justify-end" : "justify-start")}>
       <div
-        className={`
-          max-w-[85%] rounded-2xl p-4 relative group
-          ${isClickable ? 'cursor-pointer active:scale-[0.98]' : ''}
-          transition-all duration-200
-          border-2
-          ${isRight ? 'rounded-tr-sm' : 'rounded-tl-sm'}
-        `}
+        className={
+          "max-w-[85%] rounded-2xl p-4 relative group transition-all duration-200 border-2 " +
+          (isClickable ? "cursor-pointer active:scale-[0.98] " : "") +
+          (isRight ? "rounded-tr-sm" : "rounded-tl-sm")
+        }
         style={{
           backgroundColor: bubbleStyle.backgroundColor,
           borderColor: bubbleStyle.borderColor,
         }}
         onClick={() => isClickable && setRevealed(!revealed)}
       >
-        {/* Bouton éditer (visible au hover) */}
+        {/* Bouton editer (visible au hover) */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -563,7 +587,7 @@ function DialogueBubble({ replica, character, characters, viewMode, isRight, num
           className="absolute -top-2 -right-2 w-8 h-8 bg-gray-700 hover:bg-gray-600 
                      rounded-full flex items-center justify-center text-sm
                      opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-          title="Modifier cette réplique"
+          title="Modifier cette replique"
         >
           ✏️
         </button>
@@ -572,21 +596,21 @@ function DialogueBubble({ replica, character, characters, viewMode, isRight, num
         <div className="flex justify-between items-center mb-2">
           <span
             className="text-sm font-bold"
-            style={{ color: character?.color || '#9CA3AF' }}
+            style={{ color: character?.color || "#9CA3AF" }}
           >
             {character?.name || "Inconnu"}
           </span>
           <span className="text-xs text-gray-500 ml-2">#{number}</span>
         </div>
 
-        {/* Contenu de la réplique */}
+        {/* Contenu de la replique */}
         {renderContent()}
 
         {/* Indicateur cliquable */}
         {isClickable && (
           <div className="flex justify-end mt-2">
             <span className="text-xs text-gray-500">
-              {revealed ? "👁️ Visible" : "👆 Toucher"}
+              {revealed ? "Visible" : "Toucher"}
             </span>
           </div>
         )}

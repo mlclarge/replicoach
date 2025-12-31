@@ -118,12 +118,24 @@ function AudioMode() {
     }
   }, [currentScript, voices]);
 
-  // Répliques filtrées par personnage
+  // Filtrer les répliques par personnage
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
     if (!selectedCharacter) return currentScript.replicas;
-    return currentScript.replicas.filter(r => r.character_id === selectedCharacter);
+    return currentScript.replicas.filter(
+      (r) => r.character_id === selectedCharacter
+    );
   }, [currentScript?.replicas, selectedCharacter]);
+
+  // Compter les répliques par personnage
+  const replicaCountByCharacter = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const counts = {};
+    currentScript.replicas.forEach((r) => {
+      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
+    });
+    return counts;
+  }, [currentScript?.replicas]);
 
   const speak = (text, voiceName) => {
     return new Promise((resolve) => {
@@ -142,7 +154,7 @@ function AudioMode() {
   };
 
   const playAll = async () => {
-    if (filteredReplicas.length === 0) return;
+    if (!filteredReplicas.length) return;
 
     setIsPlaying(true);
     playingRef.current = true;
@@ -168,7 +180,7 @@ function AudioMode() {
   };
 
   const playOne = async (index) => {
-    if (filteredReplicas.length === 0) return;
+    if (!filteredReplicas.length) return;
 
     stop();
     setCurrentIndex(index);
@@ -190,7 +202,6 @@ function AudioMode() {
   // Reset index quand on change de filtre
   useEffect(() => {
     setCurrentIndex(0);
-    stop();
   }, [selectedCharacter]);
 
   if (loading || !currentScript) {
@@ -204,17 +215,28 @@ function AudioMode() {
   const { title, characters = [], replicas = [] } = currentScript;
 
   return (
-    <div className="p-4 pb-48">
+    <div className="p-4 pb-40">
+      {/* BOUTON ARRÊT FLOTTANT - Toujours visible quand lecture en cours */}
+      {isPlaying && (
+        <button
+          onClick={stop}
+          className="fixed top-4 right-4 z-50 w-16 h-16 bg-red-600 hover:bg-red-500 
+                     rounded-full flex items-center justify-center text-2xl shadow-2xl
+                     animate-pulse transition-all transform hover:scale-110"
+          title="Arrêter la lecture"
+        >
+          ⏹️
+        </button>
+      )}
+
       {/* En-tête */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <Link to={`/script/${id}`} className="text-gray-400 hover:text-white">
-            ←
-          </Link>
-          <div>
-            <h1 className="text-xl font-display text-gold-500">🔊 Mode Audio</h1>
-            <p className="text-gray-500 text-sm">{title}</p>
-          </div>
+      <div className="flex items-center gap-3 mb-6">
+        <Link to={`/script/${id}`} className="text-gray-400 hover:text-white">
+          ←
+        </Link>
+        <div className="flex-1">
+          <h1 className="text-xl font-display text-gold-500">🔊 Mode Audio</h1>
+          <p className="text-gray-500 text-sm">{title}</p>
         </div>
         <button
           onClick={() => setShowSettings(!showSettings)}
@@ -226,12 +248,39 @@ function AudioMode() {
         </button>
       </div>
 
-      {/* Paramètres voix (collapsible) */}
+      {/* Filtres personnages */}
+      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+        <button
+          onClick={() => setSelectedCharacter(null)}
+          className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium
+            ${
+              !selectedCharacter
+                ? "bg-gold-500 text-dark"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+            }`}
+        >
+          Tous ({replicas.length})
+        </button>
+        {characters.map((char) => (
+          <button
+            key={char.id}
+            onClick={() => setSelectedCharacter(char.id)}
+            className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
+            style={{
+              backgroundColor:
+                selectedCharacter === char.id ? char.color : "#374151",
+              color: selectedCharacter === char.id ? "white" : "#9CA3AF",
+            }}
+          >
+            {char.name} ({replicaCountByCharacter[char.id] || 0})
+          </button>
+        ))}
+      </div>
+
+      {/* Panneau des paramètres (voix) - Repliable */}
       {showSettings && (
-        <div className="card mb-4">
-          <h2 className="font-semibold text-white mb-3">
-            🎭 Voix des personnages
-          </h2>
+        <div className="card mb-6">
+          <h2 className="font-semibold text-white mb-3">🎭 Voix des personnages</h2>
 
           <div className="space-y-3">
             {characters.map((char) => {
@@ -299,48 +348,29 @@ function AudioMode() {
         </div>
       )}
 
-      {/* Filtres personnages */}
-      <div className="mb-4">
-        <h3 className="text-sm text-gray-400 mb-2">Filtrer par personnage :</h3>
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <button
-            onClick={() => setSelectedCharacter(null)}
-            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium
-              ${!selectedCharacter
-                ? "bg-gold-500 text-dark"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-              }`}
-          >
-            Tous ({replicas.length})
-          </button>
-          {characters.map((char) => {
-            const count = replicas.filter(r => r.character_id === char.id).length;
-            return (
-              <button
-                key={char.id}
-                onClick={() => setSelectedCharacter(char.id)}
-                className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
-                style={{
-                  backgroundColor: selectedCharacter === char.id ? char.color : '#374151',
-                  color: selectedCharacter === char.id ? 'white' : '#9CA3AF',
-                }}
-              >
-                {char.name} ({count})
-              </button>
-            );
-          })}
+      {/* Indicateur de progression */}
+      {filteredReplicas.length > 0 && (
+        <div className="mb-4 p-3 bg-gray-800 rounded-lg">
+          <div className="flex justify-between text-sm text-gray-400 mb-2">
+            <span>Progression</span>
+            <span>
+              {currentIndex + 1} / {filteredReplicas.length}
+            </span>
+          </div>
+          <div className="w-full bg-gray-700 rounded-full h-2">
+            <div
+              className="bg-gold-500 h-2 rounded-full transition-all"
+              style={{
+                width: `${((currentIndex + 1) / filteredReplicas.length) * 100}%`,
+              }}
+            />
+          </div>
         </div>
-      </div>
-
-      {/* Compteur de répliques filtrées */}
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-semibold text-white">📜 Répliques</h2>
-        <span className="text-sm text-gray-500">
-          {filteredReplicas.length} réplique{filteredReplicas.length > 1 ? "s" : ""}
-        </span>
-      </div>
+      )}
 
       {/* Liste des répliques */}
+      <h2 className="font-semibold text-white mb-3">📜 Répliques</h2>
+
       <div className="space-y-2">
         {filteredReplicas.map((replica, index) => {
           const character = characters.find(
@@ -383,75 +413,36 @@ function AudioMode() {
 
       {filteredReplicas.length === 0 && (
         <p className="text-center text-gray-500 py-8">
-          Aucune réplique pour ce personnage
+          Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
         </p>
       )}
 
-      {/* Bouton STOP flottant bien visible (quand lecture en cours) */}
-      {isPlaying && (
-        <button
-          onClick={stop}
-          className="fixed top-20 right-4 z-50 w-16 h-16 bg-red-600 hover:bg-red-500 
-                     rounded-full flex items-center justify-center shadow-xl
-                     animate-pulse transition-transform active:scale-95"
-        >
-          <span className="text-3xl">⏹️</span>
-        </button>
-      )}
-
       {/* Barre de contrôle fixe en bas */}
-      <div className="fixed bottom-0 left-0 right-0 bg-darker border-t border-gray-800 p-4 z-40">
-        <div className="max-w-md mx-auto">
-          {/* Barre de progression */}
-          {filteredReplicas.length > 0 && (
-            <div className="mb-3">
-              <div className="flex justify-between text-xs text-gray-500 mb-1">
-                <span>Réplique {currentIndex + 1} / {filteredReplicas.length}</span>
-                <span>{Math.round(((currentIndex + 1) / filteredReplicas.length) * 100)}%</span>
-              </div>
-              <div className="w-full bg-gray-700 rounded-full h-1">
-                <div
-                  className="bg-gold-500 h-1 rounded-full transition-all"
-                  style={{ width: `${((currentIndex + 1) / filteredReplicas.length) * 100}%` }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Boutons de contrôle */}
-          <div className="flex gap-3">
-            {isPlaying ? (
-              <button 
-                onClick={stop} 
-                className="flex-1 py-4 bg-red-600 hover:bg-red-500 text-white rounded-full 
-                           font-bold text-lg flex items-center justify-center gap-2 
-                           transition-all active:scale-95 shadow-lg"
+      <div className="fixed bottom-20 left-0 right-0 p-4 bg-gradient-to-t from-darker via-darker to-transparent">
+        <div className="flex gap-3 max-w-md mx-auto">
+          {isPlaying ? (
+            <button
+              onClick={stop}
+              className="bg-red-600 hover:bg-red-500 text-white px-6 py-4 rounded-full font-semibold flex-1 flex items-center justify-center gap-2 text-lg"
+            >
+              ⏹️ ARRÊTER
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => {
+                  setCurrentIndex(0);
+                  playAll();
+                }}
+                className="btn-secondary flex-1"
               >
-                <span className="text-2xl">⏹️</span>
-                ARRÊTER
+                ⏮️ Début
               </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    setCurrentIndex(0);
-                    setTimeout(playAll, 100);
-                  }}
-                  className="btn-secondary flex-1 py-4"
-                  disabled={filteredReplicas.length === 0}
-                >
-                  ⏮️ Début
-                </button>
-                <button 
-                  onClick={playAll} 
-                  className="btn-gold flex-1 py-4 text-lg font-bold"
-                  disabled={filteredReplicas.length === 0}
-                >
-                  ▶️ Lecture
-                </button>
-              </>
-            )}
-          </div>
+              <button onClick={playAll} className="btn-gold flex-1">
+                ▶️ Lecture
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
