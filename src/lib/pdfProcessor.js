@@ -3,6 +3,48 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+/**
+ * Extrait le texte d'un fichier (PDF ou TXT)
+ * @param {File} file - Le fichier à traiter
+ * @param {Function} onOCRProgress - Callback pour la progression OCR
+ * @returns {Promise<string>} Le texte extrait
+ */
+export async function extractTextFromFile(file, onOCRProgress = () => {}) {
+  const fileExtension = file.name.split('.').pop().toLowerCase();
+  
+  // Fichier texte - lecture directe
+  if (fileExtension === 'txt') {
+    return await extractTextFromTXT(file);
+  }
+  
+  // Fichier PDF
+  return await extractTextFromPDF(file, onOCRProgress);
+}
+
+/**
+ * Extrait le texte d'un fichier TXT
+ */
+async function extractTextFromTXT(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (event) => {
+      const text = event.target.result;
+      resolve(text);
+    };
+    
+    reader.onerror = (error) => {
+      reject(new Error("Erreur de lecture du fichier texte: " + error.message));
+    };
+    
+    // Lecture en UTF-8
+    reader.readAsText(file, 'UTF-8');
+  });
+}
+
+/**
+ * Extrait le texte d'un fichier PDF (natif ou OCR)
+ */
 export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
   try {
     const arrayBuffer = await file.arrayBuffer();
@@ -22,6 +64,9 @@ export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
   }
 }
 
+/**
+ * Extraction du texte natif d'un PDF
+ */
 async function extractNativeText(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = "";
@@ -38,6 +83,9 @@ async function extractNativeText(arrayBuffer) {
   return fullText.trim();
 }
 
+/**
+ * Extraction par OCR (pour PDF images)
+ */
 async function extractWithOCR(arrayBuffer, onProgress) {
   const Tesseract = await import("tesseract.js");
 
@@ -86,3 +134,6 @@ async function extractWithOCR(arrayBuffer, onProgress) {
     throw error;
   }
 }
+
+// Export legacy pour compatibilité
+export { extractTextFromPDF };

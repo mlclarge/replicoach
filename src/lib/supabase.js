@@ -14,7 +14,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    storage: window.localStorage,
+    storageKey: 'replicoach-auth',
   }
 })
 
@@ -28,10 +30,16 @@ export const getCurrentUser = async () => {
 }
 
 // ============================================
-// SCRIPTS - PDFs des saynètes
+// SCRIPTS - PDFs et TXT des saynètes
 // ============================================
 
-export const uploadPDF = async (file, userId) => {
+/**
+ * Upload un fichier (PDF ou TXT) pour un script
+ * @param {File} file - Le fichier à uploader
+ * @param {string} userId - ID de l'utilisateur
+ * @returns {Promise<string>} - Le chemin du fichier
+ */
+export const uploadFile = async (file, userId) => {
   const timestamp = Date.now()
   const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
   const fileName = `${userId}/${timestamp}_${safeName}`
@@ -40,7 +48,8 @@ export const uploadPDF = async (file, userId) => {
     .from('scripts-pdfs')
     .upload(fileName, file, {
       cacheControl: '3600',
-      upsert: false
+      upsert: false,
+      contentType: file.type || 'application/octet-stream'
     })
     
   if (error) throw error
@@ -48,7 +57,15 @@ export const uploadPDF = async (file, userId) => {
   return data.path
 }
 
+// Alias pour compatibilité
+export const uploadPDF = uploadFile
+
+/**
+ * Récupère l'URL publique d'un fichier
+ */
 export const getFileUrl = (path, bucket = 'scripts-pdfs') => {
+  if (!path) return null
+  
   const { data } = supabase.storage
     .from(bucket)
     .getPublicUrl(path)
@@ -56,6 +73,22 @@ export const getFileUrl = (path, bucket = 'scripts-pdfs') => {
   return data.publicUrl
 }
 
+/**
+ * Télécharge le contenu d'un fichier
+ */
+export const downloadFile = async (path, bucket = 'scripts-pdfs') => {
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .download(path)
+    
+  if (error) throw error
+  
+  return data
+}
+
+/**
+ * Supprime un fichier
+ */
 export const deleteFile = async (path, bucket = 'scripts-pdfs') => {
   const { error } = await supabase.storage
     .from(bucket)
@@ -69,7 +102,7 @@ export const deleteFile = async (path, bucket = 'scripts-pdfs') => {
 // ============================================
 
 /**
- * Upload une consigne PDF du metteur en scène
+ * Upload une consigne PDF/TXT du metteur en scène
  */
 export const uploadDirectorNote = async (file, userId) => {
   const timestamp = Date.now()
@@ -81,7 +114,8 @@ export const uploadDirectorNote = async (file, userId) => {
     .from('director-notes')
     .upload(filePath, file, {
       cacheControl: '3600',
-      upsert: false
+      upsert: false,
+      contentType: file.type || 'application/octet-stream'
     })
     
   if (uploadError) throw uploadError

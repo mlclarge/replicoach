@@ -27,8 +27,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /**
- * Carte de script draggable - CORRIGÉE
- * La poignée est maintenant SÉPARÉE du lien pour éviter les conflits
+ * Carte de script draggable
  */
 function SortableScriptCard({ script, onDelete, onOpen }) {
   const {
@@ -55,7 +54,7 @@ function SortableScriptCard({ script, onDelete, onOpen }) {
         }`}
       >
         <div className="flex items-start gap-3">
-          {/* Poignée de drag - SÉPARÉE et avec touch-action */}
+          {/* Poignée de drag */}
           <div
             {...attributes}
             {...listeners}
@@ -69,18 +68,15 @@ function SortableScriptCard({ script, onDelete, onOpen }) {
             </svg>
           </div>
 
-          {/* Contenu cliquable - navigue vers le script */}
+          {/* Contenu cliquable */}
           <div 
             className="flex-1 cursor-pointer"
             onClick={() => onOpen(script.id)}
           >
             <div className="flex items-center gap-3">
-              {/* Numéro */}
               <span className="text-gold-500 font-bold text-lg min-w-[2rem]">
                 #{script.display_order || "?"}
               </span>
-
-              {/* Infos */}
               <div className="flex-1">
                 <h3 className="font-semibold text-white">{script.title}</h3>
                 <p className="text-gray-500 text-sm">
@@ -92,7 +88,6 @@ function SortableScriptCard({ script, onDelete, onOpen }) {
               </div>
             </div>
 
-            {/* Tags personnages */}
             {script.characters && script.characters.length > 0 && (
               <div className="flex gap-2 mt-3 flex-wrap">
                 {script.characters.slice(0, 4).map((char) => (
@@ -144,7 +139,6 @@ function DirectorNotesCard({ onClick, notesCount = 0 }) {
       className="card cursor-pointer hover:border-yellow-500/50 transition group"
     >
       <div className="flex items-center gap-4">
-        {/* Icône dossier jaune */}
         <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
                         group-hover:bg-yellow-500/30 transition">
           <span className="text-3xl">📁</span>
@@ -171,10 +165,11 @@ function DirectorNotesCard({ onClick, notesCount = 0 }) {
 }
 
 /**
- * Modal Consignes Metteur en Scène
+ * Modal Consignes Metteur en Scène - CORRIGÉ
  */
-function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, uploading }) {
+function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, uploading, error }) {
   const [dragActive, setDragActive] = useState(false);
+  const fileInputRef = useState(null);
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -190,14 +185,16 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onUpload(e.dataTransfer.files);
     }
   }, [onUpload]);
 
   const handleFileSelect = (e) => {
-    if (e.target.files && e.target.files[0]) {
+    if (e.target.files && e.target.files.length > 0) {
       onUpload(e.target.files);
+      // Reset input pour permettre re-upload du même fichier
+      e.target.value = '';
     }
   };
 
@@ -246,14 +243,15 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
               <>
                 <span className="text-4xl">📤</span>
                 <p className="text-gray-300 mt-2">
-                  Glissez vos PDF de consignes ici
+                  Glissez vos fichiers ici
                 </p>
+                <p className="text-gray-500 text-xs mt-1">PDF ou TXT</p>
                 <p className="text-gray-500 text-sm mt-1">ou</p>
                 <label className="btn-gold mt-3 cursor-pointer inline-block">
                   Parcourir
                   <input
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.txt"
                     multiple
                     onChange={handleFileSelect}
                     className="hidden"
@@ -262,6 +260,13 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
               </>
             )}
           </div>
+          
+          {/* Message d'erreur */}
+          {error && (
+            <div className="mt-3 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
         </div>
 
         {/* Liste des documents */}
@@ -277,11 +282,17 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
                   key={note.id}
                   className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg"
                 >
-                  <span className="text-2xl">📄</span>
+                  <span className="text-2xl">
+                    {note.filename?.toLowerCase().endsWith('.txt') ? '📝' : '📄'}
+                  </span>
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-medium truncate">{note.filename}</p>
                     <p className="text-gray-500 text-xs">
-                      {new Date(note.created_at).toLocaleDateString('fr-FR')}
+                      {new Date(note.created_at).toLocaleDateString('fr-FR')} • {
+                        note.file_size 
+                          ? `${(note.file_size / 1024).toFixed(1)} Ko`
+                          : ''
+                      }
                     </p>
                   </div>
                   <a
@@ -292,6 +303,14 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
                     title="Ouvrir"
                   >
                     👁️
+                  </a>
+                  <a
+                    href={note.file_url}
+                    download={note.filename}
+                    className="p-2 text-gray-400 hover:text-green-400 rounded-lg hover:bg-green-500/10"
+                    title="Télécharger"
+                  >
+                    ⬇️
                   </a>
                   <button
                     onClick={() => onDelete(note.id)}
@@ -328,8 +347,7 @@ function Home() {
     loading, 
     fetchScripts, 
     deleteScript, 
-    updateScriptOrder,
-    renumberScripts 
+    updateScriptOrder 
   } = useScriptStore();
   
   const [activeTab, setActiveTab] = useState("mine");
@@ -342,11 +360,12 @@ function Home() {
   const [showDirectorNotes, setShowDirectorNotes] = useState(false);
   const [directorNotes, setDirectorNotes] = useState([]);
   const [uploadingNote, setUploadingNote] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5, // Réduit pour meilleure réactivité
+        distance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -357,7 +376,6 @@ function Home() {
   useEffect(() => {
     if (user) {
       fetchScripts(user.id);
-      // Charger les notes du metteur en scène
       loadDirectorNotes();
     }
   }, [user, fetchScripts]);
@@ -366,7 +384,7 @@ function Home() {
     if (!user) return;
     try {
       const notes = await fetchDirectorNotes(user.id);
-      setDirectorNotes(notes);
+      setDirectorNotes(notes || []);
     } catch (error) {
       console.error('Erreur chargement consignes:', error);
     }
@@ -418,11 +436,8 @@ function Home() {
       const newIndex = localScripts.findIndex((s) => s.id === over.id);
 
       const newOrder = arrayMove(localScripts, oldIndex, newIndex);
-
-      // Mise à jour locale immédiate
       setLocalScripts(newOrder);
 
-      // Mise à jour en base de données
       const updates = newOrder.map((script, index) => ({
         id: script.id,
         display_order: index + 1,
@@ -432,7 +447,6 @@ function Home() {
     }
   };
 
-  // Renuméroter à partir de 1
   const handleRenumber = async () => {
     const updates = localScripts.map((script, index) => ({
       id: script.id,
@@ -441,26 +455,47 @@ function Home() {
     
     await updateScriptOrder(updates);
     
-    // Mettre à jour localement
     setLocalScripts(prev => prev.map((script, index) => ({
       ...script,
       display_order: index + 1
     })));
   };
 
-  // Upload de consigne metteur en scène
+  // Upload de consigne metteur en scène - CORRIGÉ
   const handleUploadDirectorNote = async (files) => {
-    if (!user) return;
+    if (!user) {
+      setUploadError("Vous devez être connecté pour uploader des fichiers");
+      return;
+    }
+    
     setUploadingNote(true);
+    setUploadError(null);
     
     try {
-      for (const file of Array.from(files)) {
+      const fileArray = Array.from(files);
+      console.log('Uploading files:', fileArray.map(f => f.name));
+      
+      for (const file of fileArray) {
+        // Vérifier le type de fichier
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['pdf', 'txt'].includes(ext)) {
+          setUploadError(`Format non supporté: ${file.name}. Utilisez PDF ou TXT.`);
+          continue;
+        }
+        
+        // Vérifier la taille (max 10Mo)
+        if (file.size > 10 * 1024 * 1024) {
+          setUploadError(`Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`);
+          continue;
+        }
+        
         const uploaded = await uploadDirectorNote(file, user.id);
+        console.log('Uploaded:', uploaded);
         setDirectorNotes(prev => [uploaded, ...prev]);
       }
     } catch (error) {
       console.error('Erreur upload:', error);
-      alert('Erreur lors de l\'upload du fichier');
+      setUploadError(`Erreur lors de l'upload: ${error.message}`);
     } finally {
       setUploadingNote(false);
     }
@@ -479,7 +514,6 @@ function Home() {
     }
   };
 
-  // Script actif pour l'overlay de drag
   const activeScript = activeId 
     ? localScripts.find(s => s.id === activeId) 
     : null;
@@ -543,7 +577,6 @@ function Home() {
         <h2 className="text-lg font-semibold text-white">Mes saynètes</h2>
         
         <div className="flex items-center gap-2">
-          {/* Bouton Renuméroter */}
           {localScripts.length > 1 && (
             <button
               onClick={handleRenumber}
@@ -555,7 +588,6 @@ function Home() {
             </button>
           )}
           
-          {/* Boutons de tri */}
           {localScripts.length > 1 && (
             <div className="flex gap-1 ml-2">
               <button
@@ -565,7 +597,7 @@ function Home() {
                     ? "bg-gold-500 text-dark"
                     : "bg-gray-700 text-gray-400"
                 }`}
-                title="Tri manuel (drag & drop)"
+                title="Tri manuel"
               >
                 #
               </button>
@@ -609,7 +641,7 @@ function Home() {
           <p className="text-5xl mb-4">📄</p>
           <p className="text-gray-400">Aucun texte pour le moment</p>
           <p className="text-gray-600 text-sm mt-2">
-            Uploadez votre premier PDF pour commencer !
+            Uploadez votre premier fichier pour commencer !
           </p>
           <Link to="/upload" className="btn-primary mt-4 inline-block">
             📤 Importer un texte
@@ -638,7 +670,6 @@ function Home() {
             </div>
           </SortableContext>
 
-          {/* Overlay pendant le drag */}
           <DragOverlay>
             {activeScript ? (
               <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90">
@@ -683,11 +714,15 @@ function Home() {
       {/* Modal Consignes Metteur en Scène */}
       <DirectorNotesModal
         isOpen={showDirectorNotes}
-        onClose={() => setShowDirectorNotes(false)}
+        onClose={() => {
+          setShowDirectorNotes(false);
+          setUploadError(null);
+        }}
         notes={directorNotes}
         onUpload={handleUploadDirectorNote}
         onDelete={handleDeleteDirectorNote}
         uploading={uploadingNote}
+        error={uploadError}
       />
     </div>
   );

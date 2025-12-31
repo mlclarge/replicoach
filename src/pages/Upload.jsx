@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
-import { uploadPDF } from "../lib/supabase";
-import { extractTextFromPDF } from "../lib/pdfProcessor";
+import { uploadFile } from "../lib/supabase";
+import { extractTextFromFile } from "../lib/pdfProcessor";
 import { parseScript } from "../lib/scriptParser";
 import Loader from "../components/ui/Loader";
 
@@ -33,7 +33,10 @@ function Upload() {
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept: { 
+      "application/pdf": [".pdf"],
+      "text/plain": [".txt"]
+    },
     maxFiles: 50,
     maxSize: 50 * 1024 * 1024,
   });
@@ -48,17 +51,19 @@ function Upload() {
 
     try {
       setCurrentFileName(file.name);
+      const fileExtension = file.name.split('.').pop().toLowerCase();
+      const isTextFile = fileExtension === 'txt';
 
       // Étape 1: Extraction du texte
       const basePercent = (fileIndex / totalFiles) * 100;
       const filePercent = 100 / totalFiles;
 
       setProgress({
-        step: `Extraction du texte...`,
+        step: isTextFile ? `Lecture du fichier texte...` : `Extraction du texte...`,
         percent: basePercent + filePercent * 0.2,
       });
 
-      const text = await extractTextFromPDF(file, (ocrProgress) => {
+      const text = await extractTextFromFile(file, (ocrProgress) => {
         setProgress({
           step: `OCR en cours...`,
           percent:
@@ -78,10 +83,10 @@ function Upload() {
       result.title = title;
 
       setProgress({
-        step: "Upload du PDF...",
+        step: "Upload du fichier...",
         percent: basePercent + filePercent * 0.6,
       });
-      const pdfPath = await uploadPDF(file, user.id);
+      const filePath = await uploadFile(file, user.id);
 
       setProgress({
         step: "Sauvegarde...",
@@ -92,7 +97,7 @@ function Upload() {
         title: title,
         full_text: text,
         original_filename: file.name,
-        pdf_url: pdfPath,
+        pdf_url: filePath, // Garde le même nom de colonne pour compatibilité
       });
 
       setProgress({
@@ -170,6 +175,10 @@ function Upload() {
   const successCount = results.filter((r) => r.success).length;
   const errorCount = results.filter((r) => !r.success).length;
 
+  // Compter les types de fichiers
+  const pdfCount = files.filter(f => f.name.toLowerCase().endsWith('.pdf')).length;
+  const txtCount = files.filter(f => f.name.toLowerCase().endsWith('.txt')).length;
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-display text-gold-500 mb-6">
@@ -200,9 +209,17 @@ function Upload() {
                   {files.length} fichier{files.length > 1 ? "s" : ""}{" "}
                   sélectionné{files.length > 1 ? "s" : ""}
                 </p>
+                {(pdfCount > 0 || txtCount > 0) && (
+                  <p className="text-gray-400 text-sm mt-1">
+                    {pdfCount > 0 && `${pdfCount} PDF`}
+                    {pdfCount > 0 && txtCount > 0 && " • "}
+                    {txtCount > 0 && `${txtCount} TXT`}
+                  </p>
+                )}
                 <div className="mt-3 max-h-40 overflow-y-auto">
                   {files.map((file, index) => (
-                    <p key={index} className="text-gray-400 text-sm">
+                    <p key={index} className="text-gray-400 text-sm flex items-center justify-center gap-2">
+                      <span>{file.name.toLowerCase().endsWith('.txt') ? '📝' : '📄'}</span>
                       {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </p>
                   ))}
@@ -217,16 +234,32 @@ function Upload() {
                 <p className="text-gray-300 font-semibold">
                   {isDragActive
                     ? "Déposez les fichiers ici..."
-                    : "Glissez vos PDFs ici"}
+                    : "Glissez vos fichiers ici"}
                 </p>
                 <p className="text-gray-500 text-sm mt-2">
                   ou cliquez pour sélectionner
                 </p>
-                <p className="text-gold-500 text-sm mt-2">
+                <div className="flex justify-center gap-4 mt-4">
+                  <span className="text-sm px-3 py-1 bg-gray-700 rounded-full text-gray-300">
+                    📄 PDF
+                  </span>
+                  <span className="text-sm px-3 py-1 bg-gray-700 rounded-full text-gray-300">
+                    📝 TXT
+                  </span>
+                </div>
+                <p className="text-gold-500 text-sm mt-3">
                   📚 Jusqu'à 50 fichiers en une fois !
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Info fichiers texte */}
+          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+            <p className="text-blue-400 text-sm">
+              💡 <strong>Astuce :</strong> Les fichiers .txt sont recommandés pour les scripts scannés 
+              qui ne sont pas reconnus correctement en PDF.
+            </p>
           </div>
 
           {error && (

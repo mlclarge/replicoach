@@ -1,23 +1,126 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
 
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create((set, get) => ({
   user: null,
   loading: true,
+  initialized: false,
 
   initialize: async () => {
-    try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      set({ user: session?.user || null, loading: false });
+    // Éviter les initialisations multiples
+    if (get().initialized) {
+      return;
+    }
 
-      supabase.auth.onAuthStateChange((_event, session) => {
-        set({ user: session?.user || null });
+    try {
+      // 1. Récupérer la session existante
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error("Session error:", sessionError);
+      }
+
+      set({ 
+        user: session?.user || null, 
+        loading: false,
+        initialized: true 
       });
+
+      // 2. Configurer le listener pour les changements d'état
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log("Auth state changed:", event);
+          
+          switch (event) {
+            case 'SIGNED_IN':
+              set({ user: session?.user || null });
+              break;
+            
+            case 'SIGNED_OUT':
+              set({ user: null });
+              break;
+            
+            case 'TOKEN_REFRESHED':
+              // Session rafraîchie automatiquement
+              set({ user: session?.user || null });
+              break;
+            
+            case 'USER_UPDATED':
+              set({ user: session?.user || null });
+              break;
+
+            case 'INITIAL_SESSION':
+              // Session initiale chargée
+              set({ user: session?.user || null });
+              break;
+
+            default:
+              // Pour tous les autres événements
+              set({ user: session?.user || null });
+          }
+        }
+      );
+
+      // 3. Vérifier périodiquement que la session est valide (toutes les 5 min)
+      const checkSession = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session && get().user) {
+            // Session expirée, essayer de rafraîchir
+            const { data: { session: refreshedSession } } = await supabase.auth.refreshSession();
+            if (!refreshedSession) {
+              set({ user: null });
+            }
+          }
+        } catch (error) {
+          console.error("Session check error:", error);
+        }
+      };
+
+      // Vérifier la session toutes les 5 minutes
+      const intervalId = setInterval(checkSession, 5 * 60 * 1000);
+
+      // Vérifier aussi quand l'onglet redevient visible
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          checkSession();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      // Vérifier quand on revient online
+      const handleOnline = () => {
+        checkSession();
+      };
+      window.addEventListener('online', handleOnline);
+
+      // Cleanup function (pour React StrictMode)
+      return () => {
+        subscription?.unsubscribe();
+        clearInterval(intervalId);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+        window.removeEventListener('online', handleOnline);
+      };
+
     } catch (error) {
       console.error("Auth init error:", error);
-      set({ user: null, loading: false });
+      set({ user: null, loading: false, initialized: true });
+    }
+  },
+
+  // Rafraîchir manuellement la session
+  refreshSession: async () => {
+    try {
+      const { data: { session }, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error("Refresh session error:", error);
+        return { error };
+      }
+      set({ user: session?.user || null });
+      return { data: session };
+    } catch (error) {
+      console.error("Refresh session exception:", error);
+      return { error };
     }
   },
 
@@ -87,5 +190,10 @@ export const useAuthStore = create((set) => ({
     } catch (error) {
       console.error("Sign out error:", error);
     }
+  },
+
+  // Réinitialiser le store (utile pour les tests ou le logout forcé)
+  reset: () => {
+    set({ user: null, loading: false, initialized: false });
   },
 }));
