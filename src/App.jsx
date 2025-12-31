@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { useAuthStore } from "./store/authStore";
 
 // Pages
@@ -15,28 +15,34 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/layout/Layout";
 import Loader from "./components/ui/Loader";
 
-function App() {
-  const { initialize, loading } = useAuthStore();
+// Composant pour nettoyer l'URL apres OAuth
+function OAuthCleanup() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user } = useAuthStore();
 
   useEffect(() => {
-    initialize();
-  }, [initialize]);
+    // Si l'URL contient un token OAuth et qu'on est connecte, nettoyer
+    if (location.hash && location.hash.includes("access_token")) {
+      // Attendre un peu que Supabase traite le token
+      setTimeout(() => {
+        navigate("/", { replace: true });
+      }, 100);
+    }
+  }, [location.hash, navigate, user]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-darker">
-        <Loader size="lg" />
-      </div>
-    );
-  }
+  return null;
+}
 
+function AppContent() {
   return (
-    <BrowserRouter>
+    <>
+      <OAuthCleanup />
       <Routes>
         {/* Routes publiques */}
         <Route path="/login" element={<Login />} />
 
-        {/* Routes protégées */}
+        {/* Routes protegees */}
         <Route
           element={
             <ProtectedRoute>
@@ -55,6 +61,28 @@ function App() {
         {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
+    </>
+  );
+}
+
+function App() {
+  const { initialize, loading } = useAuthStore();
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-darker">
+        <Loader size="lg" />
+      </div>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }
