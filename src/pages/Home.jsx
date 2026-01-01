@@ -8,6 +8,7 @@ import {
   deleteDirectorNote 
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import DocumentViewer from "../components/DocumentViewer";
 import {
   DndContext,
   closestCenter,
@@ -130,46 +131,19 @@ function SortableScriptCard({ script, onDelete, onOpen }) {
 }
 
 /**
- * Carte pour le dossier Consignes Metteur en Scène
+ * Section Consignes Metteur en Scène - Expandable avec documents visibles
  */
-function DirectorNotesCard({ onClick, notesCount = 0 }) {
-  return (
-    <div
-      onClick={onClick}
-      className="card cursor-pointer hover:border-yellow-500/50 transition group"
-    >
-      <div className="flex items-center gap-4">
-        <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
-                        group-hover:bg-yellow-500/30 transition">
-          <span className="text-3xl">📁</span>
-        </div>
-        
-        <div className="flex-1">
-          <h3 className="font-semibold text-yellow-500">Consignes du metteur en scène</h3>
-          <p className="text-gray-500 text-sm">
-            {notesCount > 0 
-              ? `${notesCount} document${notesCount > 1 ? 's' : ''}`
-              : 'Aucun document pour le moment'
-            }
-          </p>
-        </div>
-        
-        <div className="text-gray-500 group-hover:text-yellow-500 transition">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Modal Consignes Metteur en Scène - CORRIGÉ
- */
-function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, uploading, error }) {
+function DirectorNotesSection({ 
+  notes, 
+  onUpload, 
+  onDelete, 
+  onViewDocument,
+  uploading, 
+  error,
+  expanded,
+  onToggleExpand 
+}) {
   const [dragActive, setDragActive] = useState(false);
-  const fileInputRef = useState(null);
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -193,128 +167,134 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       onUpload(e.target.files);
-      // Reset input pour permettre re-upload du même fichier
       e.target.value = '';
     }
   };
 
-  if (!isOpen) return null;
+  const getFileIcon = (note) => {
+    const name = note.file_name?.toLowerCase() || '';
+    const type = note.file_type || '';
+    
+    if (type.includes('pdf') || name.endsWith('.pdf')) return '📕';
+    if (type.includes('image') || /\.(jpg|jpeg|png|gif)$/.test(name)) return '🖼️';
+    if (type.includes('word') || /\.(doc|docx)$/.test(name)) return '📘';
+    if (type.includes('text') || name.endsWith('.txt')) return '📝';
+    return '📄';
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark rounded-xl w-full max-w-lg max-h-[80vh] overflow-hidden border border-gray-700">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">📁</span>
-            <h2 className="text-lg font-semibold text-yellow-500">
-              Consignes du metteur en scène
-            </h2>
+    <div className="mb-6">
+      {/* Header cliquable */}
+      <div
+        onClick={onToggleExpand}
+        className="card cursor-pointer hover:border-yellow-500/50 transition group"
+      >
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
+                          group-hover:bg-yellow-500/30 transition">
+            <span className="text-3xl">📁</span>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
-          >
-            ✕
-          </button>
+          
+          <div className="flex-1">
+            <h3 className="font-semibold text-yellow-500">Consignes du metteur en scène</h3>
+            <p className="text-gray-500 text-sm">
+              {notes.length > 0 
+                ? `${notes.length} document${notes.length > 1 ? 's' : ''}`
+                : 'Aucun document pour le moment'
+              }
+            </p>
+          </div>
+          
+          <div className={`text-gray-500 group-hover:text-yellow-500 transition transform ${expanded ? 'rotate-90' : ''}`}>
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
         </div>
+      </div>
 
-        {/* Zone d'upload */}
-        <div className="p-4 border-b border-gray-700">
+      {/* Contenu expandable */}
+      {expanded && (
+        <div className="mt-3 space-y-3 pl-4 border-l-2 border-yellow-500/30">
+          {/* Zone d'upload compacte */}
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
             className={`
-              border-2 border-dashed rounded-xl p-6 text-center transition
+              border-2 border-dashed rounded-xl p-4 text-center transition
               ${dragActive 
                 ? 'border-yellow-500 bg-yellow-500/10' 
-                : 'border-gray-600 hover:border-yellow-500/50'
+                : 'border-gray-700 hover:border-yellow-500/50'
               }
             `}
           >
             {uploading ? (
-              <div className="flex flex-col items-center gap-2">
+              <div className="flex items-center justify-center gap-2">
                 <Loader size="sm" />
-                <p className="text-gray-400">Upload en cours...</p>
+                <span className="text-gray-400">Upload...</span>
               </div>
             ) : (
-              <>
-                <span className="text-4xl">📤</span>
-                <p className="text-gray-300 mt-2">
-                  Glissez vos fichiers ici
-                </p>
-                <p className="text-gray-500 text-xs mt-1">PDF ou TXT</p>
-                <p className="text-gray-500 text-sm mt-1">ou</p>
-                <label className="btn-gold mt-3 cursor-pointer inline-block">
-                  Parcourir
-                  <input
-                    type="file"
-                    accept=".pdf,.txt"
-                    multiple
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </label>
-              </>
+              <label className="cursor-pointer flex items-center justify-center gap-2">
+                <span className="text-xl">📤</span>
+                <span className="text-gray-400 text-sm">Ajouter un document</span>
+                <input
+                  type="file"
+                  accept=".pdf,.txt,.doc,.docx,image/*"
+                  multiple
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </label>
             )}
           </div>
-          
-          {/* Message d'erreur */}
+
+          {/* Erreur */}
           {error && (
-            <div className="mt-3 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+            <div className="p-3 bg-red-500/10 border border-red-500 rounded-lg">
               <p className="text-red-400 text-sm">{error}</p>
             </div>
           )}
-        </div>
 
-        {/* Liste des documents */}
-        <div className="p-4 overflow-y-auto max-h-60">
+          {/* Liste des documents */}
           {notes.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">
-              Aucune consigne pour le moment
+            <p className="text-gray-500 text-sm text-center py-2">
+              Glissez des fichiers ou cliquez pour ajouter
             </p>
           ) : (
             <div className="space-y-2">
               {notes.map((note) => (
                 <div
                   key={note.id}
-                  className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg"
+                  className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition group"
                 >
-                  <span className="text-2xl">
-                    {note.filename?.toLowerCase().endsWith('.txt') ? '📝' : '📄'}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium truncate">{note.filename}</p>
+                  <span className="text-2xl">{getFileIcon(note)}</span>
+                  
+                  <div 
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => onViewDocument(note)}
+                  >
+                    <p className="text-white font-medium truncate group-hover:text-yellow-500 transition">
+                      {note.file_name}
+                    </p>
                     <p className="text-gray-500 text-xs">
-                      {new Date(note.created_at).toLocaleDateString('fr-FR')} • {
-                        note.file_size 
-                          ? `${(note.file_size / 1024).toFixed(1)} Ko`
-                          : ''
-                      }
+                      {new Date(note.created_at).toLocaleDateString('fr-FR')}
+                      {note.file_size && ` • ${(note.file_size / 1024).toFixed(0)} Ko`}
                     </p>
                   </div>
-                  <a
-                    href={note.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="p-2 text-gray-400 hover:text-blue-400 rounded-lg hover:bg-blue-500/10"
-                    title="Ouvrir"
+
+                  {/* Actions */}
+                  <button
+                    onClick={() => onViewDocument(note)}
+                    className="p-2 text-gray-400 hover:text-blue-400 rounded-lg hover:bg-blue-500/10 transition"
+                    title="Voir"
                   >
                     👁️
-                  </a>
-                  <a
-                    href={note.file_url}
-                    download={note.filename}
-                    className="p-2 text-gray-400 hover:text-green-400 rounded-lg hover:bg-green-500/10"
-                    title="Télécharger"
-                  >
-                    ⬇️
-                  </a>
+                  </button>
                   <button
                     onClick={() => onDelete(note.id)}
-                    className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/10"
+                    className="p-2 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition"
                     title="Supprimer"
                   >
                     🗑️
@@ -323,15 +303,13 @@ function DirectorNotesModal({ isOpen, onClose, notes, onUpload, onDelete, upload
               ))}
             </div>
           )}
-        </div>
 
-        {/* Footer info */}
-        <div className="p-4 border-t border-gray-700 bg-gray-800/50">
-          <p className="text-gray-500 text-sm text-center">
-            💡 Ces documents sont visibles par tous les comédiens de la troupe
+          {/* Info */}
+          <p className="text-gray-600 text-xs text-center">
+            💡 Visibles par tous les comédiens
           </p>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -357,10 +335,13 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   
   // États pour les consignes metteur en scène
-  const [showDirectorNotes, setShowDirectorNotes] = useState(false);
+  const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
   const [directorNotes, setDirectorNotes] = useState([]);
   const [uploadingNote, setUploadingNote] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  
+  // État pour le viewer de document
+  const [viewingDocument, setViewingDocument] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -408,6 +389,10 @@ function Home() {
     setLocalScripts(sorted);
   }, [scripts, sortBy]);
 
+  const handleOpenScript = (scriptId) => {
+    navigate(`/script/${scriptId}`);
+  };
+
   const handleDelete = (scriptId) => {
     setDeleteConfirm(scriptId);
   };
@@ -417,10 +402,6 @@ function Home() {
       await deleteScript(deleteConfirm);
       setDeleteConfirm(null);
     }
-  };
-
-  const handleOpenScript = (scriptId) => {
-    navigate(`/script/${scriptId}`);
   };
 
   const handleDragStart = (event) => {
@@ -452,45 +433,30 @@ function Home() {
       id: script.id,
       display_order: index + 1,
     }));
-    
-    await updateScriptOrder(updates);
-    
+
     setLocalScripts(prev => prev.map((script, index) => ({
       ...script,
-      display_order: index + 1
+      display_order: index + 1,
     })));
+
+    await updateScriptOrder(updates);
   };
 
-  // Upload de consigne metteur en scène - CORRIGÉ
+  // Gestion des consignes metteur en scène
   const handleUploadDirectorNote = async (files) => {
-    if (!user) {
-      setUploadError("Vous devez être connecté pour uploader des fichiers");
-      return;
-    }
+    if (!user) return;
     
     setUploadingNote(true);
     setUploadError(null);
-    
+
     try {
-      const fileArray = Array.from(files);
-      console.log('Uploading files:', fileArray.map(f => f.name));
-      
-      for (const file of fileArray) {
-        // Vérifier le type de fichier
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!['pdf', 'txt'].includes(ext)) {
-          setUploadError(`Format non supporté: ${file.name}. Utilisez PDF ou TXT.`);
-          continue;
-        }
-        
-        // Vérifier la taille (max 10Mo)
+      for (const file of files) {
         if (file.size > 10 * 1024 * 1024) {
           setUploadError(`Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`);
           continue;
         }
         
         const uploaded = await uploadDirectorNote(file, user.id);
-        console.log('Uploaded:', uploaded);
         setDirectorNotes(prev => [uploaded, ...prev]);
       }
     } catch (error) {
@@ -512,6 +478,10 @@ function Home() {
       console.error('Erreur suppression:', error);
       alert('Erreur lors de la suppression');
     }
+  };
+
+  const handleViewDocument = (note) => {
+    setViewingDocument(note);
   };
 
   const activeScript = activeId 
@@ -564,13 +534,17 @@ function Home() {
         </button>
       </div>
 
-      {/* Carte Consignes Metteur en Scène */}
-      <div className="mb-6">
-        <DirectorNotesCard 
-          onClick={() => setShowDirectorNotes(true)}
-          notesCount={directorNotes.length}
-        />
-      </div>
+      {/* Section Consignes Metteur en Scène - Expandable */}
+      <DirectorNotesSection
+        notes={directorNotes}
+        onUpload={handleUploadDirectorNote}
+        onDelete={handleDeleteDirectorNote}
+        onViewDocument={handleViewDocument}
+        uploading={uploadingNote}
+        error={uploadError}
+        expanded={directorNotesExpanded}
+        onToggleExpand={() => setDirectorNotesExpanded(!directorNotesExpanded)}
+      />
 
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">
@@ -685,6 +659,13 @@ function Home() {
         </DndContext>
       )}
 
+      {/* Footer avec crédit */}
+      <div className="mt-8 pt-4 border-t border-gray-800">
+        <p className="text-gray-600 text-xs text-center">
+          Fait avec ❤️ pour le Tpt par MLconseil
+        </p>
+      </div>
+
       {/* Modal de confirmation suppression */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -711,19 +692,13 @@ function Home() {
         </div>
       )}
 
-      {/* Modal Consignes Metteur en Scène */}
-      <DirectorNotesModal
-        isOpen={showDirectorNotes}
-        onClose={() => {
-          setShowDirectorNotes(false);
-          setUploadError(null);
-        }}
-        notes={directorNotes}
-        onUpload={handleUploadDirectorNote}
-        onDelete={handleDeleteDirectorNote}
-        uploading={uploadingNote}
-        error={uploadError}
-      />
+      {/* Viewer de document intégré */}
+      {viewingDocument && (
+        <DocumentViewer
+          document={viewingDocument}
+          onClose={() => setViewingDocument(null)}
+        />
+      )}
     </div>
   );
 }
