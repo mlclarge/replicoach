@@ -8,6 +8,7 @@ import {
   createTroupe,
   joinTroupe,
   leaveTroupe,
+  deleteTroupe,
   shareScript,
   unshareScript,
 } from "../lib/supabase";
@@ -39,6 +40,7 @@ function Shared() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [createdTroupeCode, setCreatedTroupeCode] = useState(null);
+  const [deleteTroupeConfirm, setDeleteTroupeConfirm] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -151,6 +153,24 @@ function Shared() {
     navigator.clipboard.writeText(code);
     setSuccess("Code copié : " + code);
     setTimeout(() => setSuccess(null), 2000);
+  };
+
+  // Supprimer une troupe
+  const handleDeleteTroupe = async () => {
+    if (!deleteTroupeConfirm) return;
+    
+    setActionLoading(true);
+    try {
+      await deleteTroupe(deleteTroupeConfirm.id);
+      setDeleteTroupeConfirm(null);
+      setSuccess("Troupe supprimée !");
+      setTimeout(() => setSuccess(null), 2000);
+      loadData();
+    } catch (err) {
+      alert("Erreur: " + err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (loading) {
@@ -317,6 +337,17 @@ function Shared() {
                           title="Quitter la troupe"
                         >
                           🚪
+                        </button>
+                      )}
+                      
+                      {/* Supprimer (si owner) */}
+                      {troupe.role === 'owner' && (
+                        <button
+                          onClick={() => setDeleteTroupeConfirm(troupe)}
+                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+                          title="Supprimer la troupe"
+                        >
+                          🗑️
                         </button>
                       )}
                     </div>
@@ -555,6 +586,46 @@ function Shared() {
           >
             Annuler
           </button>
+        </Modal>
+      )}
+
+      {/* Modal: Confirmer suppression troupe */}
+      {deleteTroupeConfirm && (
+        <Modal onClose={() => setDeleteTroupeConfirm(null)}>
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
+              <span className="text-4xl">🗑️</span>
+            </div>
+            
+            <h3 className="text-xl font-semibold text-white mb-2">
+              Supprimer la troupe ?
+            </h3>
+            
+            <p className="text-gray-400 mb-2">
+              <strong className="text-white">{deleteTroupeConfirm.name}</strong>
+            </p>
+            
+            <p className="text-red-400 text-sm mb-6">
+              ⚠️ Cette action est irréversible. Tous les membres seront retirés.
+            </p>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteTroupeConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDeleteTroupe}
+                disabled={actionLoading}
+                className="flex-1 bg-red-600 hover:bg-red-500 text-white 
+                           px-6 py-3 rounded-full font-semibold transition"
+              >
+                {actionLoading ? "..." : "🗑️ Supprimer"}
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
     </div>
