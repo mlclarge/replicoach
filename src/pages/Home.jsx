@@ -31,15 +31,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /**
- * Carte de script draggable - FOND COLORÉ + CONTRASTE RENFORCÉ
+ * Carte de script draggable - FOND BEIGE/CRÈME + CONTRASTE FORT
  */
 
-// Couleurs de fond pour les cartes (alternées)
+// Couleurs de fond CLAIRES pour les cartes (alternées)
 const CARD_BACKGROUNDS = [
-  'bg-gradient-to-r from-slate-800 to-slate-700',
-  'bg-gradient-to-r from-gray-800 to-gray-700',
-  'bg-gradient-to-r from-zinc-800 to-zinc-700',
-  'bg-gradient-to-r from-neutral-800 to-neutral-700',
+  { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900' },
+  { bg: 'bg-stone-100', border: 'border-stone-300', text: 'text-stone-900' },
+  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900' },
+  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900' },
 ];
 
 function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
@@ -60,26 +60,26 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
   };
 
   // Couleur de fond alternée selon l'index
-  const bgClass = CARD_BACKGROUNDS[index % CARD_BACKGROUNDS.length];
+  const colorScheme = CARD_BACKGROUNDS[index % CARD_BACKGROUNDS.length];
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
-      {/* ===== CARTE AVEC FOND COLORÉ VISIBLE ===== */}
+      {/* ===== CARTE AVEC FOND BEIGE/CRÈME ===== */}
       <div
-        className={`block transition rounded-xl border-2
+        className={`block transition rounded-xl border-2 shadow-md
           ${isDragging 
-            ? "shadow-lg ring-2 ring-gold-500 bg-slate-700 border-gold-500" 
-            : `${bgClass} border-slate-600 hover:border-primary-400 shadow-md`
+            ? "shadow-lg ring-2 ring-gold-500 bg-amber-100 border-gold-500" 
+            : `${colorScheme.bg} ${colorScheme.border} hover:border-primary-500 hover:shadow-lg`
           }`}
       >
         <div className="p-4">
           <div className="flex items-start gap-3">
-            {/* Poignée de drag - PLUS VISIBLE */}
+            {/* Poignée de drag - VISIBLE SUR FOND CLAIR */}
             <div
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-300 
-                         hover:text-gold-400 hover:bg-white/10 rounded-lg transition
+              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
+                         hover:text-primary-600 hover:bg-primary-100 rounded-lg transition
                          touch-none select-none"
               style={{ touchAction: 'none' }}
             >
@@ -94,14 +94,15 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
               onClick={() => onOpen(script.id)}
             >
               <div className="flex items-center gap-3">
-                <span className="text-gold-400 font-bold text-xl min-w-[2.5rem]">
+                {/* NUMÉRO - Fond coloré pour ressortir */}
+                <span className="bg-primary-600 text-white font-bold text-lg px-3 py-1 rounded-lg min-w-[2.5rem] text-center">
                   #{script.display_order || "?"}
                 </span>
                 <div className="flex-1">
-                  {/* TITRE - Bien visible */}
-                  <h3 className="font-bold text-white text-lg">{script.title}</h3>
-                  {/* SOUS-TITRE - Contraste renforcé */}
-                  <p className="text-gray-300 text-sm">
+                  {/* TITRE - Texte foncé sur fond clair */}
+                  <h3 className={`font-bold text-lg ${colorScheme.text}`}>{script.title}</h3>
+                  {/* SOUS-TITRE - Gris foncé */}
+                  <p className="text-gray-600 text-sm">
                     {script.characters?.length || 0} personnage
                     {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
                     {script.replicas?.length || 0} réplique
@@ -110,24 +111,25 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
                 </div>
               </div>
 
-              {/* TAGS PERSONNAGES - Contraste renforcé */}
+              {/* TAGS PERSONNAGES - Bien contrastés */}
               {script.characters && script.characters.length > 0 && (
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {script.characters.slice(0, 4).map((char) => (
                     <span
                       key={char.id}
-                      className="text-xs px-3 py-1 rounded-full font-medium border"
+                      className="text-xs px-3 py-1.5 rounded-full font-semibold border-2 shadow-sm"
                       style={{
-                        backgroundColor: char.color + "40",
-                        color: char.color,
-                        borderColor: char.color + "60",
+                        backgroundColor: char.color,
+                        color: 'white',
+                        borderColor: char.color,
+                        textShadow: '0 1px 2px rgba(0,0,0,0.3)',
                       }}
                     >
                       {char.name}
                     </span>
                   ))}
                   {script.characters.length > 4 && (
-                    <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-gray-200 font-medium">
+                    <span className="text-xs px-3 py-1.5 rounded-full bg-gray-600 text-white font-semibold">
                       +{script.characters.length - 4}
                     </span>
                   )}
@@ -135,31 +137,31 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
               )}
             </div>
 
-            {/* ===== BOUTONS D'ACTION - PLUS VISIBLES ===== */}
+            {/* ===== BOUTONS D'ACTION - TRÈS VISIBLES ===== */}
             <div className="flex flex-col gap-2">
-              {/* Bouton partager - PLUS GROS ET VISIBLE */}
+              {/* Bouton partager - FOND VERT SOLIDE */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onShare(script);
                 }}
-                className="p-2 text-xl bg-green-600/30 hover:bg-green-500/50 
-                           text-green-300 hover:text-green-100
-                           rounded-lg transition border border-green-500/30"
+                className="p-2.5 text-xl bg-green-500 hover:bg-green-600 
+                           text-white rounded-lg transition shadow-md
+                           border-2 border-green-600"
                 title="Partager avec ma troupe"
               >
                 👥
               </button>
               
-              {/* Bouton supprimer - PLUS VISIBLE */}
+              {/* Bouton supprimer - FOND ROUGE SOLIDE */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(script.id);
                 }}
-                className="p-2 text-xl bg-red-600/20 hover:bg-red-500/40 
-                           text-red-300 hover:text-red-100
-                           rounded-lg transition border border-red-500/20"
+                className="p-2.5 text-xl bg-red-500 hover:bg-red-600 
+                           text-white rounded-lg transition shadow-md
+                           border-2 border-red-600"
                 title="Supprimer"
               >
                 🗑️
