@@ -31,9 +31,18 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /**
- * Carte de script draggable - AVEC BOUTON PARTAGE ET FOND VISIBLE
+ * Carte de script draggable - FOND COLORÉ + CONTRASTE RENFORCÉ
  */
-function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
+
+// Couleurs de fond pour les cartes (alternées)
+const CARD_BACKGROUNDS = [
+  'bg-gradient-to-r from-slate-800 to-slate-700',
+  'bg-gradient-to-r from-gray-800 to-gray-700',
+  'bg-gradient-to-r from-zinc-800 to-zinc-700',
+  'bg-gradient-to-r from-neutral-800 to-neutral-700',
+];
+
+function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
   const {
     attributes,
     listeners,
@@ -50,24 +59,27 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
     zIndex: isDragging ? 50 : 1,
   };
 
+  // Couleur de fond alternée selon l'index
+  const bgClass = CARD_BACKGROUNDS[index % CARD_BACKGROUNDS.length];
+
   return (
     <div ref={setNodeRef} style={style} className="relative">
-      {/* ===== CARTE AVEC FOND VISIBLE - bg-gray-800/90 ===== */}
+      {/* ===== CARTE AVEC FOND COLORÉ VISIBLE ===== */}
       <div
-        className={`block transition rounded-xl border
+        className={`block transition rounded-xl border-2
           ${isDragging 
-            ? "shadow-lg ring-2 ring-gold-500 bg-gray-800" 
-            : "bg-gray-800/90 border-gray-700 hover:border-primary-500/50 hover:bg-gray-750"
+            ? "shadow-lg ring-2 ring-gold-500 bg-slate-700 border-gold-500" 
+            : `${bgClass} border-slate-600 hover:border-primary-400 shadow-md`
           }`}
       >
         <div className="p-4">
           <div className="flex items-start gap-3">
-            {/* Poignée de drag */}
+            {/* Poignée de drag - PLUS VISIBLE */}
             <div
               {...attributes}
               {...listeners}
-              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
-                         hover:text-gold-500 hover:bg-gray-700/50 rounded-lg transition
+              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-300 
+                         hover:text-gold-400 hover:bg-white/10 rounded-lg transition
                          touch-none select-none"
               style={{ touchAction: 'none' }}
             >
@@ -82,12 +94,14 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
               onClick={() => onOpen(script.id)}
             >
               <div className="flex items-center gap-3">
-                <span className="text-gold-500 font-bold text-lg min-w-[2rem]">
+                <span className="text-gold-400 font-bold text-xl min-w-[2.5rem]">
                   #{script.display_order || "?"}
                 </span>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-white">{script.title}</h3>
-                  <p className="text-gray-400 text-sm">
+                  {/* TITRE - Bien visible */}
+                  <h3 className="font-bold text-white text-lg">{script.title}</h3>
+                  {/* SOUS-TITRE - Contraste renforcé */}
+                  <p className="text-gray-300 text-sm">
                     {script.characters?.length || 0} personnage
                     {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
                     {script.replicas?.length || 0} réplique
@@ -96,22 +110,24 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
                 </div>
               </div>
 
+              {/* TAGS PERSONNAGES - Contraste renforcé */}
               {script.characters && script.characters.length > 0 && (
                 <div className="flex gap-2 mt-3 flex-wrap">
                   {script.characters.slice(0, 4).map((char) => (
                     <span
                       key={char.id}
-                      className="text-xs px-2 py-1 rounded-full"
+                      className="text-xs px-3 py-1 rounded-full font-medium border"
                       style={{
-                        backgroundColor: char.color + "20",
+                        backgroundColor: char.color + "40",
                         color: char.color,
+                        borderColor: char.color + "60",
                       }}
                     >
                       {char.name}
                     </span>
                   ))}
                   {script.characters.length > 4 && (
-                    <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">
+                    <span className="text-xs px-3 py-1 rounded-full bg-white/10 text-gray-200 font-medium">
                       +{script.characters.length - 4}
                     </span>
                   )}
@@ -119,29 +135,31 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
               )}
             </div>
 
-            {/* ===== BOUTONS D'ACTION ===== */}
-            <div className="flex flex-col gap-1">
-              {/* Bouton partager - ICÔNE 👥 */}
+            {/* ===== BOUTONS D'ACTION - PLUS VISIBLES ===== */}
+            <div className="flex flex-col gap-2">
+              {/* Bouton partager - PLUS GROS ET VISIBLE */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onShare(script);
                 }}
-                className="p-2 text-gray-400 hover:text-green-400 
-                           hover:bg-green-500/20 rounded-lg transition"
+                className="p-2 text-xl bg-green-600/30 hover:bg-green-500/50 
+                           text-green-300 hover:text-green-100
+                           rounded-lg transition border border-green-500/30"
                 title="Partager avec ma troupe"
               >
                 👥
               </button>
               
-              {/* Bouton supprimer */}
+              {/* Bouton supprimer - PLUS VISIBLE */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onDelete(script.id);
                 }}
-                className="p-2 text-gray-400 hover:text-red-400 
-                           hover:bg-red-500/20 rounded-lg transition"
+                className="p-2 text-xl bg-red-600/20 hover:bg-red-500/40 
+                           text-red-300 hover:text-red-100
+                           rounded-lg transition border border-red-500/20"
                 title="Supprimer"
               >
                 🗑️
@@ -705,11 +723,12 @@ function Home() {
             items={localScripts.map((s) => s.id)}
             strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-3">
-              {localScripts.map((script) => (
+            <div className="space-y-4">
+              {localScripts.map((script, index) => (
                 <SortableScriptCard
                   key={script.id}
                   script={script}
+                  index={index}
                   onDelete={handleDelete}
                   onOpen={handleOpenScript}
                   onShare={handleOpenShare}
