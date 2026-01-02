@@ -372,7 +372,6 @@ function Home() {
     updateScriptOrder 
   } = useScriptStore();
   
-  const [activeTab, setActiveTab] = useState("mine");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
   const [sortBy, setSortBy] = useState("order");
@@ -596,32 +595,6 @@ function Home() {
         >
           <span>➕</span> Nouveau texte
         </Link>
-      </div>
-
-      {/* Onglets */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveTab("mine")}
-          className={`flex-1 py-2 rounded-lg font-semibold transition
-            ${
-              activeTab === "mine"
-                ? "bg-primary-700 text-white"
-                : "bg-gray-800 text-gray-400"
-            }`}
-        >
-          🎭 Mes textes
-        </button>
-        <button
-          onClick={() => setActiveTab("shared")}
-          className={`flex-1 py-2 rounded-lg font-semibold transition
-            ${
-              activeTab === "shared"
-                ? "bg-primary-700 text-white"
-                : "bg-gray-800 text-gray-400"
-            }`}
-        >
-          👥 Partagés
-        </button>
       </div>
 
       {/* Section Consignes Metteur en Scène - Expandable */}

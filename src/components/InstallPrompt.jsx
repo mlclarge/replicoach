@@ -11,6 +11,7 @@ function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isInstalling, setIsInstalling] = useState(false);
 
   useEffect(() => {
     // Vérifier si déjà installé en mode standalone
@@ -67,6 +68,9 @@ function InstallPrompt() {
   const handleInstall = async () => {
     if (!deferredPrompt) return;
 
+    // Afficher l'état d'installation
+    setIsInstalling(true);
+
     // Afficher le prompt natif
     deferredPrompt.prompt();
     
@@ -74,8 +78,18 @@ function InstallPrompt() {
     const { outcome } = await deferredPrompt.userChoice;
     console.log('Choix utilisateur:', outcome);
     
-    setDeferredPrompt(null);
-    setShowPrompt(false);
+    if (outcome === 'accepted') {
+      // Garder le message d'installation quelques secondes
+      setTimeout(() => {
+        setIsInstalling(false);
+        setDeferredPrompt(null);
+        setShowPrompt(false);
+      }, 2000);
+    } else {
+      setIsInstalling(false);
+      setDeferredPrompt(null);
+      setShowPrompt(false);
+    }
   };
 
   const handleDismiss = () => {
@@ -87,6 +101,26 @@ function InstallPrompt() {
 
   // Ne rien afficher si déjà en standalone ou si pas de prompt à afficher
   if (isStandalone || !showPrompt) return null;
+
+  // État d'installation en cours
+  if (isInstalling) {
+    return (
+      <div className="fixed bottom-28 left-4 right-4 z-50 animate-slideUp">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden max-w-md mx-auto">
+          <div className="p-6 text-center">
+            <div className="w-16 h-16 mx-auto mb-4 relative">
+              {/* Spinner */}
+              <div className="absolute inset-0 border-4 border-primary-200 rounded-full"></div>
+              <div className="absolute inset-0 border-4 border-primary-600 rounded-full border-t-transparent animate-spin"></div>
+              <span className="absolute inset-0 flex items-center justify-center text-2xl">🎭</span>
+            </div>
+            <h3 className="text-gray-900 font-semibold text-lg">Installation en cours...</h3>
+            <p className="text-gray-500 text-sm mt-1">RépliCoach s'ajoute à votre écran d'accueil</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Tutoriel iOS
   if (isIOS && showIOSTutorial) {
