@@ -51,7 +51,7 @@ function App() {
           <Route path="/script/:id" element={<ScriptDetail />} />
           <Route path="/script/:id/audio" element={<AudioMode />} />
           <Route path="/shared" element={<Shared />} />
-          <Route path="/settings" element={<Profile />} />
+          <Route path="/profile" element={<Profile />} />
         </Route>
 
         {/* 404 */}
