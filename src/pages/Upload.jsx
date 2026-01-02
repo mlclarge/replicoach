@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
@@ -20,10 +20,19 @@ const ACCEPTED_FILE_TYPES = {
 // Extensions supportées pour l'affichage
 const SUPPORTED_EXTENSIONS = "PDF, Word (.doc, .docx), TXT";
 
+// Liste des emails autorisés à uploader (metteur en scène / développeur)
+const ADMIN_EMAILS = [
+  'moz2611@gmail.com',
+  // Ajouter d'autres emails d'admins ici
+];
+
 function Upload() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { createScript, addCharacter, addReplicas } = useScriptStore();
+
+  // Vérifier si l'utilisateur est admin
+  const isAdmin = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
 
   const [files, setFiles] = useState([]);
   const [processing, setProcessing] = useState(false);
@@ -231,6 +240,41 @@ function Upload() {
   const errorCount = results.filter((r) => !r.success).length;
   const warningCount = results.filter((r) => r.success && r.warning).length;
 
+  // Page d'accès refusé pour les non-admins
+  if (!isAdmin) {
+    return (
+      <div className="p-4 max-w-2xl mx-auto">
+        <div className="text-center py-12">
+          <p className="text-6xl mb-4">🔒</p>
+          <h1 className="text-2xl font-display text-gold-500 mb-4">
+            Accès réservé
+          </h1>
+          <p className="text-gray-400 mb-2">
+            L'importation de textes est réservée au metteur en scène.
+          </p>
+          <p className="text-gray-500 text-sm mb-6">
+            Demandez à votre metteur en scène d'importer les textes, <br />
+            puis de les partager avec vous via une troupe.
+          </p>
+          
+          <div className="bg-gray-800/50 rounded-xl p-4 mb-6 max-w-sm mx-auto">
+            <p className="text-gray-400 text-sm mb-2">💡 Comment ça marche ?</p>
+            <ol className="text-left text-gray-500 text-sm space-y-2">
+              <li>1. Le metteur en scène importe les textes</li>
+              <li>2. Il crée une troupe et vous invite</li>
+              <li>3. Il partage les textes avec la troupe</li>
+              <li>4. Vous recevez les textes dans "Partagés"</li>
+            </ol>
+          </div>
+          
+          <Link to="/shared" className="btn-gold inline-block">
+            👥 Voir les textes partagés
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-display text-gold-500 mb-6">
@@ -437,7 +481,7 @@ function Upload() {
                 </div>
                 {/* Warning OCR */}
                 {result.success && result.warning && (
-                  <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-sm">
+                  <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-sm whitespace-pre-line">
                     {result.warning}
                   </div>
                 )}

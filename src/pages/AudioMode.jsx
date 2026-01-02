@@ -201,7 +201,7 @@ function AudioMode() {
   const progress = replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
 
   return (
-    <div className="p-4 pb-40">
+    <div className="min-h-screen bg-amber-50 p-4 pb-40">
       {/* BOUTON STOP FLOTTANT - Toujours visible pendant la lecture */}
       {isPlaying && (
         <div className="fixed top-0 left-0 right-0 z-50 animate-slideDown">
@@ -241,17 +241,17 @@ function AudioMode() {
       )}
 
       <div className="flex items-center gap-3 mb-6">
-        <Link to={`/script/${id}`} className="text-gray-400 hover:text-white">
+        <Link to={`/script/${id}`} className="text-primary-700 hover:text-primary-900">
           ←
         </Link>
         <div>
-          <h1 className="text-xl font-display text-gold-500">🔊 Mode Audio</h1>
-          <p className="text-gray-500 text-sm">{title}</p>
+          <h1 className="text-xl font-display text-primary-800">🔊 Mode Audio</h1>
+          <p className="text-gray-600 text-sm">{title}</p>
         </div>
       </div>
 
-      <div className="card mb-6">
-        <h2 className="font-semibold text-white mb-3">
+      <div className="bg-white rounded-xl shadow-md p-4 mb-6 border border-gray-200">
+        <h2 className="font-semibold text-gray-800 mb-3">
           🎭 Voix des personnages
         </h2>
 
@@ -264,7 +264,7 @@ function AudioMode() {
                   className="w-3 h-3 rounded-full"
                   style={{ backgroundColor: char.color }}
                 />
-                <span className="text-gray-300 flex-1">
+                <span className="text-gray-700 flex-1">
                   {char.name}
                   <span className="text-xs text-gray-500 ml-2">
                     {gender === "female" ? "♀" : "♂"}
@@ -275,7 +275,7 @@ function AudioMode() {
                   onChange={(e) =>
                     updateCharacterVoice(char.id, e.target.value)
                   }
-                  className="input !w-auto !py-1 text-sm"
+                  className="bg-white border border-gray-300 text-gray-700 rounded-lg px-2 py-1 text-sm"
                 >
                   <optgroup
                     label={
@@ -303,10 +303,10 @@ function AudioMode() {
           })}
         </div>
 
-        <div className="mt-4 pt-4 border-t border-gray-700">
+        <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-gray-400 text-sm">Vitesse</span>
-            <span className="text-gold-500 font-semibold">{rate}x</span>
+            <span className="text-gray-600 text-sm">Vitesse</span>
+            <span className="text-primary-700 font-semibold">{rate}x</span>
           </div>
           <input
             type="range"
@@ -315,12 +315,12 @@ function AudioMode() {
             step="0.1"
             value={rate}
             onChange={(e) => setRate(parseFloat(e.target.value))}
-            className="w-full"
+            className="w-full accent-primary-600"
           />
         </div>
       </div>
 
-      <h2 className="font-semibold text-white mb-3">📜 Répliques</h2>
+      <h2 className="font-semibold text-gray-800 mb-3">📜 Répliques</h2>
 
       <div className="space-y-2">
         {replicas.map((replica, index) => {
@@ -335,16 +335,15 @@ function AudioMode() {
               key={replica.id}
               ref={isCurrentPlaying ? currentReplicaRef : null}
               onClick={() => playOne(index)}
-              className={`card cursor-pointer transition-all ${
+              className={`rounded-xl p-4 cursor-pointer transition-all shadow-md ${
                 isCurrentPlaying 
-                  ? "ring-2 ring-gold-500 bg-gold-500/20 scale-[1.02]" 
+                  ? "ring-2 ring-gold-500 scale-[1.02]" 
                   : isCurrent 
-                    ? "ring-1 ring-gold-500/50 bg-gold-500/5"
+                    ? "ring-1 ring-gold-500/50"
                     : ""
               }`}
               style={{
-                borderLeftColor: character?.color,
-                borderLeftWidth: "4px",
+                backgroundColor: character?.color ? `${character.color}dd` : '#6b7280',
               }}
             >
               <div className="flex items-start gap-3">
@@ -353,15 +352,12 @@ function AudioMode() {
                 </span>
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <p
-                      className="text-xs font-semibold"
-                      style={{ color: character?.color }}
-                    >
+                    <p className="text-xs font-semibold text-white drop-shadow">
                       {character?.name}
                     </p>
-                    <span className="text-xs text-gray-600">#{index + 1}</span>
+                    <span className="text-xs text-white/70">#{index + 1}</span>
                   </div>
-                  <p className="text-gray-300 text-sm line-clamp-2">
+                  <p className="text-white text-sm line-clamp-2">
                     {replica.text}
                   </p>
                 </div>
@@ -372,7 +368,7 @@ function AudioMode() {
       </div>
 
       {/* Barre de contrôle en bas */}
-      <div className="fixed bottom-24 left-0 right-0 p-4 bg-gradient-to-t from-darker via-darker to-transparent">
+      <div className="fixed bottom-24 left-0 right-0 p-4 bg-gradient-to-t from-amber-50 via-amber-50 to-transparent">
         <div className="flex gap-3 max-w-md mx-auto">
           {isPlaying ? (
             <button 
@@ -388,7 +384,7 @@ function AudioMode() {
                   setCurrentIndex(0);
                   playAll();
                 }}
-                className="btn-secondary flex-1"
+                className="bg-white border-2 border-primary-600 text-primary-700 px-6 py-3 rounded-full font-semibold flex-1 transition hover:bg-primary-50"
               >
                 ⏮️ Début
               </button>

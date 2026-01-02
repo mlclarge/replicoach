@@ -177,12 +177,12 @@ function evaluateQuality(confidence, text) {
   } else if (adjustedConfidence >= 50) {
     return {
       quality: 'medium',
-      warning: `⚠️ Qualité OCR moyenne (${confidence}%). Vérifiez le texte extrait.`
+      warning: `⚠️ Qualité OCR moyenne (${confidence}%). Vérifiez le texte extrait et corrigez si nécessaire.`
     };
   } else {
     return {
       quality: 'poor',
-      warning: `⚠️ Qualité OCR faible (${confidence}%). Le document est peut-être flou ou mal scanné. Vérifiez et corrigez le texte si nécessaire.`
+      warning: `⚠️ Qualité OCR faible (${confidence}%). Le document est peut-être flou ou mal scanné.\n\n💡 Conseil : Demandez au metteur en scène de vous fournir le texte en format .txt ou .docx pour un meilleur résultat.`
     };
   }
 }
