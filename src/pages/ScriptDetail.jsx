@@ -24,19 +24,12 @@ function ScriptDetail() {
   const [showOriginalFile, setShowOriginalFile] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
 
+  // ⚠️ TOUS LES HOOKS DOIVENT ÊTRE AVANT LES RETURNS CONDITIONNELS
+
   useEffect(() => {
     fetchScript(id);
     return () => clearCurrentScript();
   }, [id, fetchScript, clearCurrentScript]);
-
-  const handleDelete = async () => {
-    try {
-      await deleteScript(id);
-      navigate("/");
-    } catch (err) {
-      console.error("Delete error:", err);
-    }
-  };
 
   // Calculer l'index de position pour chaque personnage (pour alterner gauche/droite)
   const characterPositions = useMemo(() => {
@@ -47,6 +40,40 @@ function ScriptDetail() {
     });
     return positions;
   }, [currentScript?.characters]);
+
+  // URL du fichier original
+  const originalFileUrl = useMemo(() => {
+    if (!currentScript?.pdf_url) return null;
+    return getFileUrl(currentScript.pdf_url);
+  }, [currentScript?.pdf_url]);
+
+  // Compter les répliques par personnage - DOIT ÊTRE AVANT LES RETURNS
+  const replicaCountByCharacter = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const counts = {};
+    currentScript.replicas.forEach(r => {
+      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
+    });
+    return counts;
+  }, [currentScript?.replicas]);
+
+  // Répliques filtrées - DOIT ÊTRE AVANT LES RETURNS
+  const filteredReplicas = useMemo(() => {
+    if (!currentScript?.replicas) return [];
+    return selectedCharacter
+      ? currentScript.replicas.filter((r) => r.character_id === selectedCharacter)
+      : currentScript.replicas;
+  }, [currentScript?.replicas, selectedCharacter]);
+
+  // Handler pour supprimer
+  const handleDelete = async () => {
+    try {
+      await deleteScript(id);
+      navigate("/");
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
 
   // Handler pour sauvegarder les modifications d'une réplique
   const handleSaveReplica = async (replicaId, newCharacterId, newText) => {
@@ -63,16 +90,12 @@ function ScriptDetail() {
     }
   };
 
-  // URL du fichier original
-  const originalFileUrl = useMemo(() => {
-    if (!currentScript?.pdf_url) return null;
-    return getFileUrl(currentScript.pdf_url);
-  }, [currentScript?.pdf_url]);
-
   // Partager le script
   const handleShare = async () => {
     setShowShareModal(true);
   };
+
+  // ⚠️ RETURNS CONDITIONNELS APRÈS TOUS LES HOOKS
 
   if (loading) {
     return (
@@ -101,19 +124,6 @@ function ScriptDetail() {
     full_text,
     original_filename,
   } = currentScript;
-
-  const filteredReplicas = selectedCharacter
-    ? replicas.filter((r) => r.character_id === selectedCharacter)
-    : replicas;
-
-  // Compter les répliques par personnage
-  const replicaCountByCharacter = useMemo(() => {
-    const counts = {};
-    replicas.forEach(r => {
-      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
-    });
-    return counts;
-  }, [replicas]);
 
   return (
     <div className="p-4 pb-24">
@@ -336,6 +346,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit }) {
   
   // Créer une version claire de la couleur pour le fond
   const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(107, 114, 128, ${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
     const b = parseInt(hex.slice(5, 7), 16);
@@ -520,11 +531,11 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
           <div 
             className="p-3 rounded-lg"
             style={{ 
-              backgroundColor: `${selectedChar?.color}20`,
-              borderLeft: `4px solid ${selectedChar?.color}`,
+              backgroundColor: `${selectedChar?.color || '#666'}20`,
+              borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
             }}
           >
-            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color }}>
+            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
               {selectedChar?.name || "?"}
             </p>
             <p className="text-gray-300 text-sm">{text || "..."}</p>
