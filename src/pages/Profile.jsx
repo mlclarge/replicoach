@@ -244,6 +244,17 @@ function Profile() {
       {/* Actions */}
       <div className="space-y-3">
         <button
+          onClick={() => {
+            localStorage.removeItem('replicoach-onboarding-seen');
+            window.location.reload();
+          }}
+          className="w-full p-4 bg-gray-800 hover:bg-primary-900/30 text-gray-400 hover:text-primary-400 
+                     rounded-xl transition flex items-center justify-center gap-2"
+        >
+          📖 Revoir le tutoriel
+        </button>
+        
+        <button
           onClick={() => setShowLogoutConfirm(true)}
           className="w-full p-4 bg-gray-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 
                      rounded-xl transition flex items-center justify-center gap-2"

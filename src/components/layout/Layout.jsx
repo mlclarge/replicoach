@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Header from './Header'
 import BottomNav from './BottomNav'
 import InstallPrompt from '../InstallPrompt'
+import Onboarding from '../Onboarding'
 
 function Layout() {
   return (
@@ -14,6 +15,9 @@ function Layout() {
       
       {/* Prompt d'installation PWA */}
       <InstallPrompt />
+      
+      {/* Tutoriel première visite */}
+      <Onboarding />
     </div>
   )
 }

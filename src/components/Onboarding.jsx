@@ -1,0 +1,216 @@
+import { useState, useEffect } from 'react';
+
+/**
+ * Composant d'onboarding pour les nouveaux utilisateurs
+ * S'affiche uniquement à la première visite
+ */
+
+const ONBOARDING_SLIDES = [
+  {
+    icon: '🎭',
+    title: 'Bienvenue sur RépliCoach !',
+    description: 'L\'application qui vous aide à mémoriser vos répliques de théâtre.',
+    tip: 'Parcourez ce tutoriel pour découvrir les fonctionnalités',
+  },
+  {
+    icon: '📄',
+    title: 'Importez vos textes',
+    description: 'Uploadez vos scripts en PDF, Word ou TXT. L\'application détecte automatiquement les personnages et répliques.',
+    tip: '💡 Les fichiers .txt et .docx donnent les meilleurs résultats',
+  },
+  {
+    icon: '🎨',
+    title: 'Chaque personnage a sa couleur',
+    description: 'Les répliques sont affichées comme des bulles de conversation, avec une couleur unique par personnage.',
+    tip: '💡 Filtrez par personnage pour vous concentrer sur votre rôle',
+  },
+  {
+    icon: '📝',
+    title: 'Modes d\'apprentissage',
+    description: 'Trois modes pour progresser : texte complet, texte à trous (premières lettres), et mode répliques (indices uniquement).',
+    tip: '💡 Commencez par le mode complet, puis passez aux trous !',
+  },
+  {
+    icon: '🔊',
+    title: 'Écoute audio',
+    description: 'Faites lire les répliques à voix haute avec des voix différentes pour chaque personnage.',
+    tip: '💡 Parfait pour apprendre en écoutant pendant vos trajets',
+  },
+  {
+    icon: '👥',
+    title: 'Partagez avec votre troupe',
+    description: 'Créez une troupe, invitez vos partenaires de jeu, et partagez vos textes avec eux.',
+    tip: '💡 Le metteur en scène importe les textes et les partage',
+  },
+  {
+    icon: '📲',
+    title: 'Installez l\'application',
+    description: 'Ajoutez RépliCoach à votre écran d\'accueil pour un accès rapide, même hors connexion !',
+    tip: '💡 Sur Android : Menu ⋮ → "Installer l\'application"',
+  },
+  {
+    icon: '🚀',
+    title: 'C\'est parti !',
+    description: 'Vous êtes prêt à mémoriser vos répliques comme un pro. Bonne répétition !',
+    tip: '🎭 Merde ! (comme on dit au théâtre)',
+  },
+];
+
+function Onboarding() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    // Vérifier si l'utilisateur a déjà vu l'onboarding
+    const hasSeenOnboarding = localStorage.getItem('replicoach-onboarding-seen');
+    if (!hasSeenOnboarding) {
+      // Petit délai pour laisser l'app se charger
+      setTimeout(() => setShowOnboarding(true), 500);
+    }
+  }, []);
+
+  const handleNext = () => {
+    if (currentSlide < ONBOARDING_SLIDES.length - 1) {
+      setCurrentSlide(currentSlide + 1);
+    } else {
+      handleClose();
+    }
+  };
+
+  const handlePrevious = () => {
+    if (currentSlide > 0) {
+      setCurrentSlide(currentSlide - 1);
+    }
+  };
+
+  const handleClose = () => {
+    setIsExiting(true);
+    setTimeout(() => {
+      localStorage.setItem('replicoach-onboarding-seen', 'true');
+      setShowOnboarding(false);
+    }, 300);
+  };
+
+  const handleSkip = () => {
+    handleClose();
+  };
+
+  const goToSlide = (index) => {
+    setCurrentSlide(index);
+  };
+
+  if (!showOnboarding) return null;
+
+  const slide = ONBOARDING_SLIDES[currentSlide];
+  const isLastSlide = currentSlide === ONBOARDING_SLIDES.length - 1;
+  const isFirstSlide = currentSlide === 0;
+
+  return (
+    <div 
+      className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-300
+        ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+    >
+      {/* Backdrop */}
+      <div 
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+        onClick={handleSkip}
+      />
+      
+      {/* Modal */}
+      <div 
+        className={`relative bg-gradient-to-b from-gray-900 to-darker rounded-2xl 
+                    max-w-md w-full overflow-hidden shadow-2xl border border-gray-700
+                    transform transition-all duration-300
+                    ${isExiting ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}
+      >
+        {/* Bouton fermer */}
+        <button
+          onClick={handleSkip}
+          className="absolute top-4 right-4 text-gray-500 hover:text-white p-2 z-10"
+        >
+          ✕
+        </button>
+
+        {/* Contenu du slide */}
+        <div className="p-8 pt-12 text-center">
+          {/* Icône animée */}
+          <div className="text-6xl mb-6 animate-bounce">
+            {slide.icon}
+          </div>
+
+          {/* Titre */}
+          <h2 className="text-2xl font-display text-gold-500 mb-4">
+            {slide.title}
+          </h2>
+
+          {/* Description */}
+          <p className="text-gray-300 mb-4 leading-relaxed">
+            {slide.description}
+          </p>
+
+          {/* Astuce */}
+          <div className="bg-primary-900/30 border border-primary-700/50 rounded-lg p-3 mb-6">
+            <p className="text-primary-300 text-sm">
+              {slide.tip}
+            </p>
+          </div>
+
+          {/* Indicateurs de progression (dots) */}
+          <div className="flex justify-center gap-2 mb-6">
+            {ONBOARDING_SLIDES.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`w-2 h-2 rounded-full transition-all
+                  ${index === currentSlide 
+                    ? 'bg-gold-500 w-6' 
+                    : 'bg-gray-600 hover:bg-gray-500'}`}
+              />
+            ))}
+          </div>
+
+          {/* Boutons de navigation */}
+          <div className="flex gap-3">
+            {!isFirstSlide && (
+              <button
+                onClick={handlePrevious}
+                className="flex-1 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-full font-semibold transition"
+              >
+                ← Précédent
+              </button>
+            )}
+            
+            {isFirstSlide && (
+              <button
+                onClick={handleSkip}
+                className="flex-1 py-3 text-gray-400 hover:text-white transition"
+              >
+                Passer
+              </button>
+            )}
+
+            <button
+              onClick={handleNext}
+              className="flex-1 py-3 bg-gradient-to-r from-gold-600 to-gold-500 
+                         hover:from-gold-500 hover:to-gold-400 
+                         text-dark font-semibold rounded-full transition shadow-lg"
+            >
+              {isLastSlide ? 'Commencer 🎭' : 'Suivant →'}
+            </button>
+          </div>
+        </div>
+
+        {/* Barre de progression */}
+        <div className="h-1 bg-gray-800">
+          <div 
+            className="h-full bg-gradient-to-r from-primary-600 to-gold-500 transition-all duration-300"
+            style={{ width: `${((currentSlide + 1) / ONBOARDING_SLIDES.length) * 100}%` }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default Onboarding;
