@@ -5,7 +5,9 @@ import { useAuthStore } from "../store/authStore";
 import { 
   uploadDirectorNote, 
   fetchDirectorNotes, 
-  deleteDirectorNote 
+  deleteDirectorNote,
+  fetchUserTroupes,
+  shareScript as shareScriptToTroupe,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
@@ -29,9 +31,9 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 /**
- * Carte de script draggable
+ * Carte de script draggable - AVEC BOUTON PARTAGE ET FOND VISIBLE
  */
-function SortableScriptCard({ script, onDelete, onOpen }) {
+function SortableScriptCard({ script, onDelete, onOpen, onShare }) {
   const {
     attributes,
     listeners,
@@ -50,81 +52,102 @@ function SortableScriptCard({ script, onDelete, onOpen }) {
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
+      {/* ===== CARTE AVEC FOND VISIBLE - bg-gray-800/90 ===== */}
       <div
-        className={`card block transition ${
-          isDragging ? "shadow-lg ring-2 ring-gold-500" : "hover:border-gray-600"
-        }`}
+        className={`block transition rounded-xl border
+          ${isDragging 
+            ? "shadow-lg ring-2 ring-gold-500 bg-gray-800" 
+            : "bg-gray-800/90 border-gray-700 hover:border-primary-500/50 hover:bg-gray-750"
+          }`}
       >
-        <div className="flex items-start gap-3">
-          {/* Poignée de drag */}
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
-                       hover:text-gold-500 hover:bg-gray-700/50 rounded-lg transition
-                       touch-none select-none"
-            style={{ touchAction: 'none' }}
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-            </svg>
-          </div>
-
-          {/* Contenu cliquable */}
-          <div 
-            className="flex-1 cursor-pointer"
-            onClick={() => onOpen(script.id)}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-gold-500 font-bold text-lg min-w-[2rem]">
-                #{script.display_order || "?"}
-              </span>
-              <div className="flex-1">
-                <h3 className="font-semibold text-white">{script.title}</h3>
-                <p className="text-gray-500 text-sm">
-                  {script.characters?.length || 0} personnage
-                  {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
-                  {script.replicas?.length || 0} réplique
-                  {(script.replicas?.length || 0) > 1 ? "s" : ""}
-                </p>
-              </div>
+        <div className="p-4">
+          <div className="flex items-start gap-3">
+            {/* Poignée de drag */}
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
+                         hover:text-gold-500 hover:bg-gray-700/50 rounded-lg transition
+                         touch-none select-none"
+              style={{ touchAction: 'none' }}
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+              </svg>
             </div>
 
-            {script.characters && script.characters.length > 0 && (
-              <div className="flex gap-2 mt-3 flex-wrap">
-                {script.characters.slice(0, 4).map((char) => (
-                  <span
-                    key={char.id}
-                    className="text-xs px-2 py-1 rounded-full"
-                    style={{
-                      backgroundColor: char.color + "20",
-                      color: char.color,
-                    }}
-                  >
-                    {char.name}
-                  </span>
-                ))}
-                {script.characters.length > 4 && (
-                  <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">
-                    +{script.characters.length - 4}
-                  </span>
-                )}
+            {/* Contenu cliquable */}
+            <div 
+              className="flex-1 cursor-pointer"
+              onClick={() => onOpen(script.id)}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-gold-500 font-bold text-lg min-w-[2rem]">
+                  #{script.display_order || "?"}
+                </span>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-white">{script.title}</h3>
+                  <p className="text-gray-400 text-sm">
+                    {script.characters?.length || 0} personnage
+                    {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
+                    {script.replicas?.length || 0} réplique
+                    {(script.replicas?.length || 0) > 1 ? "s" : ""}
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Bouton supprimer */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(script.id);
-            }}
-            className="p-2 text-gray-500 hover:text-red-400 
-                       hover:bg-red-500/10 rounded-lg transition"
-            title="Supprimer"
-          >
-            🗑️
-          </button>
+              {script.characters && script.characters.length > 0 && (
+                <div className="flex gap-2 mt-3 flex-wrap">
+                  {script.characters.slice(0, 4).map((char) => (
+                    <span
+                      key={char.id}
+                      className="text-xs px-2 py-1 rounded-full"
+                      style={{
+                        backgroundColor: char.color + "20",
+                        color: char.color,
+                      }}
+                    >
+                      {char.name}
+                    </span>
+                  ))}
+                  {script.characters.length > 4 && (
+                    <span className="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-400">
+                      +{script.characters.length - 4}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ===== BOUTONS D'ACTION ===== */}
+            <div className="flex flex-col gap-1">
+              {/* Bouton partager - ICÔNE 👥 */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(script);
+                }}
+                className="p-2 text-gray-400 hover:text-green-400 
+                           hover:bg-green-500/20 rounded-lg transition"
+                title="Partager avec ma troupe"
+              >
+                👥
+              </button>
+              
+              {/* Bouton supprimer */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(script.id);
+                }}
+                className="p-2 text-gray-400 hover:text-red-400 
+                           hover:bg-red-500/20 rounded-lg transition"
+                title="Supprimer"
+              >
+                🗑️
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -343,6 +366,13 @@ function Home() {
   
   // État pour le viewer de document
   const [viewingDocument, setViewingDocument] = useState(null);
+  
+  // États pour le partage
+  const [scriptToShare, setScriptToShare] = useState(null);
+  const [shareTroupes, setShareTroupes] = useState([]);
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(null);
+  const [shareError, setShareError] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -483,6 +513,45 @@ function Home() {
 
   const handleViewDocument = (note) => {
     setViewingDocument(note);
+  };
+
+  // Handlers pour le partage
+  const handleOpenShare = async (script) => {
+    setScriptToShare(script);
+    setShareError(null);
+    setShareSuccess(null);
+    
+    try {
+      const troupes = await fetchUserTroupes(user.id);
+      setShareTroupes(troupes || []);
+    } catch (err) {
+      console.error("Erreur chargement troupes:", err);
+      setShareTroupes([]);
+    }
+  };
+
+  const handleConfirmShare = async (troupeId) => {
+    if (!scriptToShare || !user) return;
+    
+    setSharingLoading(true);
+    setShareError(null);
+    
+    try {
+      await shareScriptToTroupe(scriptToShare.id, troupeId, user.id);
+      setShareSuccess("✓ Texte partagé !");
+      setTimeout(() => {
+        setScriptToShare(null);
+        setShareSuccess(null);
+      }, 1500);
+    } catch (err) {
+      if (err.message?.includes("déjà partagé")) {
+        setShareError("Ce texte est déjà partagé avec cette troupe");
+      } else {
+        setShareError(err.message || "Erreur lors du partage");
+      }
+    } finally {
+      setSharingLoading(false);
+    }
   };
 
   const activeScript = activeId 
@@ -643,6 +712,7 @@ function Home() {
                   script={script}
                   onDelete={handleDelete}
                   onOpen={handleOpenScript}
+                  onShare={handleOpenShare}
                 />
               ))}
             </div>
@@ -702,6 +772,87 @@ function Home() {
           document={viewingDocument}
           onClose={() => setViewingDocument(null)}
         />
+      )}
+
+      {/* Modal de partage */}
+      {scriptToShare && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">
+            <div className="p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                👥 Partager "{scriptToShare.title}"
+              </h3>
+            </div>
+
+            <div className="p-4">
+              {shareTroupes.length === 0 ? (
+                <div className="text-center py-6">
+                  <span className="text-4xl mb-3 block">🎭</span>
+                  <p className="text-gray-400 mb-2">Vous n'avez pas encore de troupe</p>
+                  <p className="text-gray-500 text-sm mb-4">
+                    Créez ou rejoignez une troupe pour partager vos textes.
+                  </p>
+                  <Link 
+                    to="/shared" 
+                    onClick={() => setScriptToShare(null)}
+                    className="btn-gold inline-block"
+                  >
+                    Gérer mes troupes
+                  </Link>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-gray-400 text-sm">
+                    Choisissez une troupe :
+                  </p>
+
+                  <div className="space-y-2">
+                    {shareTroupes.map((troupe) => (
+                      <button
+                        key={troupe.id}
+                        onClick={() => handleConfirmShare(troupe.id)}
+                        disabled={sharingLoading}
+                        className="w-full p-4 bg-gray-800 hover:bg-primary-600/30 rounded-xl 
+                                   text-left transition flex items-center justify-between
+                                   border border-gray-700 hover:border-primary-500"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">🎭</span>
+                          <div>
+                            <p className="text-white font-medium">{troupe.name}</p>
+                            <p className="text-gray-500 text-xs">Code: {troupe.code}</p>
+                          </div>
+                        </div>
+                        <span className="text-primary-400 text-xl">→</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {shareSuccess && (
+                <div className="mt-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
+                  <p className="text-green-400 text-center font-medium">{shareSuccess}</p>
+                </div>
+              )}
+
+              {shareError && (
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+                  <p className="text-red-400 text-sm">{shareError}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-700">
+              <button 
+                onClick={() => setScriptToShare(null)} 
+                className="btn-secondary w-full"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

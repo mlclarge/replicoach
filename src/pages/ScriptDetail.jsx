@@ -1,12 +1,14 @@
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
-import { getFileUrl } from "../lib/supabase";
+import { useAuthStore } from "../store/authStore";
+import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const {
     currentScript,
     loading,
@@ -136,11 +138,6 @@ function ScriptDetail() {
     });
   };
 
-  // Partager le script
-  const handleShare = async () => {
-    setShowShareModal(true);
-  };
-
   // ⚠️ RETURNS CONDITIONNELS APRÈS TOUS LES HOOKS
 
   if (loading) {
@@ -172,149 +169,153 @@ function ScriptDetail() {
   } = currentScript;
 
   return (
-    <div className="p-4 pb-32">
-      {/* En-tête */}
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex-1">
-          <h1 className="text-xl font-display text-gold-500">{title}</h1>
-          <p className="text-gray-500 text-sm">
-            {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
-            {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="flex gap-1">
-          {/* Bouton voir fichier original */}
-          {(originalFileUrl || full_text) && (
+    <div className="pb-32">
+      {/* ===== EN-TÊTE AVEC FOND VISIBLE ===== */}
+      <div className="bg-gradient-to-b from-primary-900/80 to-darker p-4 mb-4 -mx-0 border-b border-primary-700/50">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <h1 className="text-2xl font-display text-gold-500 mb-1">{title}</h1>
+            <p className="text-gray-400 text-sm">
+              {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
+              {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex gap-1">
+            {/* Bouton voir fichier original */}
+            {(originalFileUrl || full_text) && (
+              <button
+                onClick={() => setShowOriginalFile(true)}
+                className="text-gray-400 hover:text-blue-400 p-2 rounded-lg hover:bg-blue-500/20 transition bg-white/5"
+                title="Voir le fichier original"
+              >
+                📄
+              </button>
+            )}
+            {/* Bouton partager - ICÔNE 👥 */}
             <button
-              onClick={() => setShowOriginalFile(true)}
-              className="text-gray-500 hover:text-blue-400 p-2 rounded-lg hover:bg-blue-500/10 transition"
-              title="Voir le fichier original"
+              onClick={() => setShowShareModal(true)}
+              className="text-gray-400 hover:text-green-400 p-2 rounded-lg hover:bg-green-500/20 transition bg-white/5"
+              title="Partager avec ma troupe"
             >
-              📄
+              👥
             </button>
-          )}
-          {/* Bouton partager */}
-          <button
-            onClick={handleShare}
-            className="text-gray-500 hover:text-green-400 p-2 rounded-lg hover:bg-green-500/10 transition"
-            title="Partager ce texte"
-          >
-            📤
-          </button>
-          {/* Bouton supprimer */}
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/10 transition"
-            title="Supprimer"
-          >
-            🗑️
-          </button>
+            {/* Bouton supprimer */}
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="text-gray-400 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/20 transition bg-white/5"
+              title="Supprimer"
+            >
+              🗑️
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Didascalies / Informations de scène */}
-      {stage_directions && (
-        <div className="mb-4 p-4 bg-gray-800/50 rounded-lg border-l-4 border-gray-600">
-          <p className="text-gray-400 italic text-sm whitespace-pre-line">
-            {stage_directions}
+      <div className="px-4">
+        {/* Didascalies / Informations de scène */}
+        {stage_directions && (
+          <div className="mb-4 p-4 bg-gray-800/50 rounded-lg border-l-4 border-gray-600">
+            <p className="text-gray-400 italic text-sm whitespace-pre-line">
+              {stage_directions}
+            </p>
+          </div>
+        )}
+
+        {/* Filtres personnages */}
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+          <button
+            onClick={() => setSelectedCharacter(null)}
+            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium
+              ${
+                !selectedCharacter
+                  ? "bg-gold-500 text-dark"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+              }`}
+          >
+            Tous ({replicas.length})
+          </button>
+          {characters.map((char) => (
+            <button
+              key={char.id}
+              onClick={() => setSelectedCharacter(char.id)}
+              className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
+              style={{
+                backgroundColor: selectedCharacter === char.id ? char.color : '#374151',
+                color: selectedCharacter === char.id ? 'white' : '#9CA3AF',
+              }}
+            >
+              {char.name} ({replicaCountByCharacter[char.id] || 0})
+            </button>
+          ))}
+        </div>
+
+        {/* Modes de vue */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setViewMode("full")}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+              ${
+                viewMode === "full"
+                  ? "bg-primary-700 text-white"
+                  : "bg-gray-800 text-gray-400"
+              }`}
+          >
+            📖 Complet
+          </button>
+          <button
+            onClick={() => setViewMode("gaps")}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+              ${
+                viewMode === "gaps"
+                  ? "bg-primary-700 text-white"
+                  : "bg-gray-800 text-gray-400"
+              }`}
+          >
+            🔤 Trous
+          </button>
+          <button
+            onClick={() => setViewMode("cue")}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+              ${
+                viewMode === "cue"
+                  ? "bg-primary-700 text-white"
+                  : "bg-gray-800 text-gray-400"
+              }`}
+          >
+            🎭 Répliques
+          </button>
+        </div>
+
+        {/* Liste des répliques - Style WhatsApp */}
+        <div className="space-y-3">
+          {filteredReplicas.map((replica, index) => {
+            const character = characters.find(
+              (c) => c.id === replica.character_id
+            );
+            const isRight = characterPositions[replica.character_id] === 1;
+            
+            return (
+              <ChatBubble
+                key={replica.id}
+                replica={replica}
+                character={character}
+                characters={characters}
+                viewMode={viewMode}
+                isRight={isRight}
+                number={index + 1}
+                onEdit={() => setEditingReplica(replica)}
+                onDelete={() => setDeleteReplicaConfirm(replica)}
+              />
+            );
+          })}
+        </div>
+
+        {filteredReplicas.length === 0 && (
+          <p className="text-center text-gray-500 py-8">
+            Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
           </p>
-        </div>
-      )}
-
-      {/* Filtres personnages */}
-      <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-        <button
-          onClick={() => setSelectedCharacter(null)}
-          className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium
-            ${
-              !selectedCharacter
-                ? "bg-gold-500 text-dark"
-                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
-            }`}
-        >
-          Tous ({replicas.length})
-        </button>
-        {characters.map((char) => (
-          <button
-            key={char.id}
-            onClick={() => setSelectedCharacter(char.id)}
-            className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
-            style={{
-              backgroundColor: selectedCharacter === char.id ? char.color : '#374151',
-              color: selectedCharacter === char.id ? 'white' : '#9CA3AF',
-            }}
-          >
-            {char.name} ({replicaCountByCharacter[char.id] || 0})
-          </button>
-        ))}
+        )}
       </div>
-
-      {/* Modes de vue */}
-      <div className="flex gap-2 mb-6">
-        <button
-          onClick={() => setViewMode("full")}
-          className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
-            ${
-              viewMode === "full"
-                ? "bg-primary-700 text-white"
-                : "bg-gray-800 text-gray-400"
-            }`}
-        >
-          📖 Complet
-        </button>
-        <button
-          onClick={() => setViewMode("gaps")}
-          className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
-            ${
-              viewMode === "gaps"
-                ? "bg-primary-700 text-white"
-                : "bg-gray-800 text-gray-400"
-            }`}
-        >
-          🔤 Trous
-        </button>
-        <button
-          onClick={() => setViewMode("cue")}
-          className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
-            ${
-              viewMode === "cue"
-                ? "bg-primary-700 text-white"
-                : "bg-gray-800 text-gray-400"
-            }`}
-        >
-          🎭 Répliques
-        </button>
-      </div>
-
-      {/* Liste des répliques - Style WhatsApp */}
-      <div className="space-y-3">
-        {filteredReplicas.map((replica, index) => {
-          const character = characters.find(
-            (c) => c.id === replica.character_id
-          );
-          const isRight = characterPositions[replica.character_id] === 1;
-          
-          return (
-            <ChatBubble
-              key={replica.id}
-              replica={replica}
-              character={character}
-              characters={characters}
-              viewMode={viewMode}
-              isRight={isRight}
-              number={index + 1}
-              onEdit={() => setEditingReplica(replica)}
-              onDelete={() => setDeleteReplicaConfirm(replica)}
-            />
-          );
-        })}
-      </div>
-
-      {filteredReplicas.length === 0 && (
-        <p className="text-center text-gray-500 py-8">
-          Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
-        </p>
-      )}
 
       {/* Boutons flottants */}
       <div className="fixed bottom-24 right-4 flex flex-col gap-3">
@@ -350,7 +351,7 @@ function ScriptDetail() {
         />
       )}
 
-      {/* Modal d'ajout de réplique */}
+      {/* Modal d'ajout de réplique - BOUTON VISIBLE */}
       {showAddReplica && (
         <AddReplicaModal
           characters={characters}
@@ -423,10 +424,11 @@ function ScriptDetail() {
         />
       )}
 
-      {/* Modal partage */}
+      {/* Modal partage - INTERNE avec sélection de troupe */}
       {showShareModal && (
-        <ShareModal
+        <ShareTroupeModal
           script={currentScript}
+          userId={user?.id}
           onClose={() => setShowShareModal(false)}
         />
       )}
@@ -573,7 +575,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
 }
 
 /**
- * Modal d'ajout d'une réplique
+ * Modal d'ajout d'une réplique - BOUTON BIEN VISIBLE
  */
 function AddReplicaModal({ characters, onAdd, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
@@ -590,81 +592,89 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
   const selectedChar = characters.find(c => c.id === selectedCharId);
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700">
-        <div className="p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">➕ Ajouter une réplique</h3>
+    <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
+      {/* Header fixe */}
+      <div className="p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">➕ Ajouter une réplique</h3>
+        <button 
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Contenu scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Sélection du personnage */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+          <div className="flex gap-2 flex-wrap">
+            {characters.map((char) => (
+              <button
+                key={char.id}
+                onClick={() => setSelectedCharId(char.id)}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={{
+                  backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                  color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                }}
+              >
+                {char.name}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Sélection du personnage */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
-            <div className="flex gap-2 flex-wrap">
-              {characters.map((char) => (
-                <button
-                  key={char.id}
-                  onClick={() => setSelectedCharId(char.id)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium transition"
-                  style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
-                  }}
-                >
-                  {char.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Texte de la réplique */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="input w-full h-32 resize-none"
-              placeholder="Entrez le texte de la réplique..."
-              autoFocus
-            />
-          </div>
-
-          {/* Prévisualisation */}
-          {text && (
-            <div 
-              className="p-3 rounded-lg"
-              style={{ 
-                backgroundColor: `${selectedChar?.color || '#666'}20`,
-                borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
-              }}
-            >
-              <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
-                {selectedChar?.name || "?"}
-              </p>
-              <p className="text-gray-300 text-sm">{text}</p>
-            </div>
-          )}
+        {/* Texte de la réplique */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="input w-full h-32 resize-none text-base"
+            placeholder="Entrez le texte de la réplique..."
+            autoFocus
+          />
         </div>
 
-        <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={saving}>
-            Annuler
-          </button>
-          <button 
-            onClick={handleAdd} 
-            className="btn-gold flex-1"
-            disabled={saving || !text.trim() || !selectedCharId}
+        {/* Prévisualisation */}
+        {text && (
+          <div 
+            className="p-4 rounded-lg"
+            style={{ 
+              backgroundColor: `${selectedChar?.color || '#666'}20`,
+              borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
+            }}
           >
-            {saving ? "Ajout..." : "➕ Ajouter"}
-          </button>
-        </div>
+            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
+              {selectedChar?.name || "?"}
+            </p>
+            <p className="text-gray-300">{text}</p>
+          </div>
+        )}
+      </div>
+
+      {/* ===== BOUTON FIXE EN BAS - TRÈS VISIBLE ===== */}
+      <div className="p-4 border-t border-gray-700 bg-dark safe-area-bottom">
+        <button 
+          onClick={handleAdd} 
+          className={`w-full py-4 rounded-xl text-lg font-bold transition
+            ${saving || !text.trim() || !selectedCharId
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              : 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg shadow-gold-500/30'
+            }`}
+          disabled={saving || !text.trim() || !selectedCharId}
+        >
+          {saving ? "⏳ Ajout en cours..." : "✓ AJOUTER LA RÉPLIQUE"}
+        </button>
       </div>
     </div>
   );
 }
 
 /**
- * Modal d'édition d'une réplique
+ * Modal d'édition d'une réplique - BOUTON BIEN VISIBLE
  */
 function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(replica.character_id);
@@ -681,71 +691,79 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const selectedChar = characters.find(c => c.id === selectedCharId);
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700">
-        <div className="p-4 border-b border-gray-700">
-          <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
-        </div>
+    <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
+      {/* Header fixe */}
+      <div className="p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+        <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
+        <button 
+          onClick={onClose}
+          className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+        >
+          ✕
+        </button>
+      </div>
 
-        <div className="p-4 space-y-4">
-          {/* Sélection du personnage */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
-            <div className="flex gap-2 flex-wrap">
-              {characters.map((char) => (
-                <button
-                  key={char.id}
-                  onClick={() => setSelectedCharId(char.id)}
-                  className="px-3 py-2 rounded-lg text-sm font-medium transition"
-                  style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
-                  }}
-                >
-                  {char.name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Texte de la réplique */}
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Texte</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="input w-full h-32 resize-none"
-              placeholder="Texte de la réplique..."
-            />
-          </div>
-
-          {/* Prévisualisation */}
-          <div 
-            className="p-3 rounded-lg"
-            style={{ 
-              backgroundColor: `${selectedChar?.color || '#666'}20`,
-              borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
-            }}
-          >
-            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
-              {selectedChar?.name || "?"}
-            </p>
-            <p className="text-gray-300 text-sm">{text || "..."}</p>
+      {/* Contenu scrollable */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Sélection du personnage */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+          <div className="flex gap-2 flex-wrap">
+            {characters.map((char) => (
+              <button
+                key={char.id}
+                onClick={() => setSelectedCharId(char.id)}
+                className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                style={{
+                  backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                  color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                }}
+              >
+                {char.name}
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={saving}>
-            Annuler
-          </button>
-          <button 
-            onClick={handleSave} 
-            className="btn-gold flex-1"
-            disabled={saving || !text.trim()}
-          >
-            {saving ? "Sauvegarde..." : "💾 Sauvegarder"}
-          </button>
+        {/* Texte de la réplique */}
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Texte</label>
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="input w-full h-32 resize-none text-base"
+            placeholder="Texte de la réplique..."
+          />
         </div>
+
+        {/* Prévisualisation */}
+        <div 
+          className="p-4 rounded-lg"
+          style={{ 
+            backgroundColor: `${selectedChar?.color || '#666'}20`,
+            borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
+          }}
+        >
+          <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
+            {selectedChar?.name || "?"}
+          </p>
+          <p className="text-gray-300">{text || "..."}</p>
+        </div>
+      </div>
+
+      {/* ===== BOUTON FIXE EN BAS - TRÈS VISIBLE ===== */}
+      <div className="p-4 border-t border-gray-700 bg-dark safe-area-bottom">
+        <button 
+          onClick={handleSave} 
+          className={`w-full py-4 rounded-xl text-lg font-bold transition
+            ${saving || !text.trim()
+              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              : 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg shadow-gold-500/30'
+            }`}
+          disabled={saving || !text.trim()}
+        >
+          {saving ? "⏳ Sauvegarde..." : "✓ SAUVEGARDER"}
+        </button>
       </div>
     </div>
   );
@@ -823,32 +841,54 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
 }
 
 /**
- * Modal de partage
+ * Modal de partage INTERNE - Sélection de troupe
  */
-function ShareModal({ script, onClose }) {
-  const [copied, setCopied] = useState(false);
+function ShareTroupeModal({ script, userId, onClose }) {
+  const [troupes, setTroupes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState(null);
 
-  const shareUrl = `${window.location.origin}/shared/${script.id}`;
+  useEffect(() => {
+    loadTroupes();
+  }, [userId]);
 
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(shareUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const loadTroupes = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    
+    try {
+      const userTroupes = await fetchUserTroupes(userId);
+      setTroupes(userTroupes || []);
+    } catch (err) {
+      console.error("Erreur chargement troupes:", err);
+      setTroupes([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const shareNative = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: script.title,
-          text: `Texte de théâtre : ${script.title}`,
-          url: shareUrl,
-        });
-      } catch (err) {
-        console.log("Partage annulé");
+  const handleShare = async (troupeId) => {
+    setSharing(true);
+    setError(null);
+    
+    try {
+      await shareScript(script.id, troupeId, userId);
+      setSuccess("✓ Texte partagé avec succès !");
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      if (err.message?.includes("déjà partagé")) {
+        setError("Ce texte est déjà partagé avec cette troupe");
+      } else {
+        setError(err.message || "Erreur lors du partage");
       }
-    } else {
-      copyToClipboard();
+    } finally {
+      setSharing(false);
     }
   };
 
@@ -857,31 +897,71 @@ function ShareModal({ script, onClose }) {
       <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">
         <div className="p-4 border-b border-gray-700">
           <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-            📤 Partager "{script.title}"
+            👥 Partager "{script.title}"
           </h3>
         </div>
 
-        <div className="p-4 space-y-4">
-          <p className="text-gray-400 text-sm">
-            Partagez ce texte avec les membres de votre troupe.
-          </p>
+        <div className="p-4">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader />
+            </div>
+          ) : troupes.length === 0 ? (
+            <div className="text-center py-6">
+              <span className="text-4xl mb-3 block">🎭</span>
+              <p className="text-gray-400 mb-2">Vous n'avez pas encore de troupe</p>
+              <p className="text-gray-500 text-sm mb-4">
+                Créez ou rejoignez une troupe pour partager vos textes.
+              </p>
+              <Link 
+                to="/shared" 
+                onClick={onClose}
+                className="btn-gold inline-block"
+              >
+                Gérer mes troupes
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-400 text-sm">
+                Choisissez une troupe pour partager ce texte :
+              </p>
 
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
-            <p className="text-yellow-500 text-sm flex items-center gap-2">
-              🚧 Fonctionnalité en développement
-            </p>
-            <p className="text-gray-400 text-xs mt-1">
-              Le partage entre utilisateurs sera bientôt disponible !
-            </p>
-          </div>
+              <div className="space-y-2">
+                {troupes.map((troupe) => (
+                  <button
+                    key={troupe.id}
+                    onClick={() => handleShare(troupe.id)}
+                    disabled={sharing}
+                    className="w-full p-4 bg-gray-800 hover:bg-primary-600/30 rounded-xl 
+                               text-left transition flex items-center justify-between
+                               border border-gray-700 hover:border-primary-500"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🎭</span>
+                      <div>
+                        <p className="text-white font-medium">{troupe.name}</p>
+                        <p className="text-gray-500 text-xs">Code: {troupe.code}</p>
+                      </div>
+                    </div>
+                    <span className="text-primary-400 text-xl">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <button
-            onClick={shareNative}
-            className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-lg 
-                       font-semibold transition flex items-center justify-center gap-2"
-          >
-            {copied ? "✓ Copié !" : "📱 Partager"}
-          </button>
+          {success && (
+            <div className="mt-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
+              <p className="text-green-400 text-center font-medium">{success}</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-700">

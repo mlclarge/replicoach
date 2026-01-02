@@ -38,6 +38,7 @@ function Shared() {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [createdTroupeCode, setCreatedTroupeCode] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -76,16 +77,24 @@ function Shared() {
     setError(null);
     
     try {
-      await createTroupe(newTroupeName.trim(), user.id);
-      setSuccess("Troupe créée avec succès !");
+      const newTroupe = await createTroupe(newTroupeName.trim(), user.id);
+      // Afficher le code généré
+      setCreatedTroupeCode(newTroupe.code);
       setNewTroupeName("");
-      setShowCreateModal(false);
       loadData();
     } catch (err) {
       setError(err.message || "Erreur lors de la création");
     } finally {
       setActionLoading(false);
     }
+  };
+
+  // Fermer le modal de création et reset
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setCreatedTroupeCode(null);
+    setNewTroupeName("");
+    setError(null);
   };
 
   // Rejoindre une troupe
@@ -236,23 +245,28 @@ function Shared() {
       {/* TAB: Mes troupes */}
       {activeTab === "troupes" && (
         <div>
-          {/* Boutons d'action */}
-          <div className="flex gap-3 mb-6">
+          {/* ===== BOUTONS D'ACTION PLUS VISIBLES ===== */}
+          <div className="grid grid-cols-2 gap-3 mb-6">
+            {/* Bouton Rejoindre */}
             <button
               onClick={() => setShowJoinModal(true)}
-              className="flex-1 p-3 bg-gray-800 hover:bg-gray-700 rounded-xl border-2 border-dashed 
-                         border-gray-600 hover:border-primary-500 transition flex items-center justify-center gap-2"
+              className="p-4 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-600 
+                         hover:border-primary-500 transition flex flex-col items-center gap-2"
             >
-              <span>🔑</span>
-              <span className="text-gray-300 text-sm">Rejoindre</span>
+              <span className="text-3xl">🔑</span>
+              <span className="text-gray-300 font-medium">Rejoindre</span>
+              <span className="text-gray-500 text-xs">Avec un code</span>
             </button>
+            
+            {/* ===== BOUTON CRÉER TRÈS VISIBLE ===== */}
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex-1 p-3 bg-gray-800 hover:bg-gray-700 rounded-xl border-2 border-dashed 
-                         border-gray-600 hover:border-gold-500 transition flex items-center justify-center gap-2"
+              className="p-4 bg-gold-500 hover:bg-gold-400 rounded-xl 
+                         transition flex flex-col items-center gap-2 shadow-lg shadow-gold-500/20"
             >
-              <span>➕</span>
-              <span className="text-gray-300 text-sm">Créer</span>
+              <span className="text-3xl">➕</span>
+              <span className="text-dark font-bold">Créer</span>
+              <span className="text-dark/70 text-xs">Nouvelle troupe</span>
             </button>
           </div>
 
@@ -261,18 +275,18 @@ function Shared() {
             <div className="text-center py-8">
               <span className="text-5xl mb-4 block">🎭</span>
               <p className="text-gray-400">Vous n'êtes dans aucune troupe</p>
-              <p className="text-gray-500 text-sm mt-1">
-                Rejoignez une troupe ou créez la vôtre !
+              <p className="text-gray-500 text-sm mt-2">
+                Créez une troupe et partagez le code avec vos camarades !
               </p>
             </div>
           ) : (
             <div className="space-y-3">
               {troupes.map((troupe) => (
-                <div key={troupe.id} className="card">
+                <div key={troupe.id} className="bg-gray-800/80 rounded-xl p-4 border border-gray-700">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gold-500/20 rounded-lg flex items-center justify-center">
-                        <span className="text-xl">🎭</span>
+                      <div className="w-12 h-12 bg-gold-500/20 rounded-xl flex items-center justify-center">
+                        <span className="text-2xl">🎭</span>
                       </div>
                       <div>
                         <h3 className="font-semibold text-white">{troupe.name}</h3>
@@ -283,14 +297,16 @@ function Shared() {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {/* Code de la troupe */}
+                      {/* Code de la troupe - PLUS VISIBLE */}
                       <button
                         onClick={() => copyTroupeCode(troupe.code)}
-                        className="px-3 py-1 bg-gray-700 rounded-lg text-xs font-mono text-gray-300 
-                                   hover:bg-gray-600 transition"
-                        title="Cliquer pour copier"
+                        className="px-4 py-2 bg-primary-600/30 hover:bg-primary-600/50 rounded-lg 
+                                   text-sm font-mono text-primary-300 border border-primary-500/30
+                                   hover:border-primary-500 transition flex items-center gap-2"
+                        title="Cliquer pour copier le code"
                       >
-                        {troupe.code}
+                        <span>📋</span>
+                        <span>{troupe.code}</span>
                       </button>
                       
                       {/* Quitter (si pas owner) */}
@@ -410,46 +426,96 @@ function Shared() {
         </Modal>
       )}
 
-      {/* Modal: Créer une troupe */}
+      {/* Modal: Créer une troupe - AVEC AFFICHAGE DU CODE */}
       {showCreateModal && (
-        <Modal onClose={() => setShowCreateModal(false)}>
-          <h3 className="text-lg font-semibold text-white mb-4">
-            ➕ Créer une troupe
-          </h3>
-          
-          <p className="text-gray-400 text-sm mb-4">
-            Donnez un nom à votre troupe
-          </p>
-          
-          <input
-            type="text"
-            value={newTroupeName}
-            onChange={(e) => setNewTroupeName(e.target.value)}
-            placeholder="Ex: Troupe du Théâtre Municipal"
-            className="input w-full mb-4"
-            maxLength={50}
-            autoFocus
-          />
+        <Modal onClose={closeCreateModal}>
+          {createdTroupeCode ? (
+            // ===== ÉCRAN DE SUCCÈS AVEC LE CODE =====
+            <div className="text-center">
+              <div className="w-20 h-20 mx-auto mb-4 bg-green-500/20 rounded-full flex items-center justify-center">
+                <span className="text-5xl">✓</span>
+              </div>
+              
+              <h3 className="text-xl font-semibold text-white mb-2">
+                Troupe créée !
+              </h3>
+              
+              <p className="text-gray-400 mb-6">
+                Partagez ce code avec les membres de votre troupe :
+              </p>
+              
+              {/* CODE EN GRAND */}
+              <div className="bg-primary-600/20 border-2 border-primary-500 rounded-xl p-6 mb-6">
+                <p className="text-4xl font-mono font-bold text-primary-300 tracking-widest">
+                  {createdTroupeCode}
+                </p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(createdTroupeCode);
+                  setSuccess("Code copié !");
+                  setTimeout(() => setSuccess(null), 2000);
+                }}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-xl 
+                           font-semibold transition flex items-center justify-center gap-2 mb-4"
+              >
+                📋 Copier le code
+              </button>
+              
+              {success && (
+                <p className="text-green-400 text-sm mb-4">{success}</p>
+              )}
+              
+              <button
+                onClick={closeCreateModal}
+                className="btn-secondary w-full"
+              >
+                Terminé
+              </button>
+            </div>
+          ) : (
+            // ===== FORMULAIRE DE CRÉATION =====
+            <>
+              <h3 className="text-lg font-semibold text-white mb-4">
+                ➕ Créer une troupe
+              </h3>
+              
+              <p className="text-gray-400 text-sm mb-4">
+                Donnez un nom à votre troupe. Un code unique sera généré automatiquement.
+              </p>
+              
+              <input
+                type="text"
+                value={newTroupeName}
+                onChange={(e) => setNewTroupeName(e.target.value)}
+                placeholder="Ex: Troupe du Théâtre Municipal"
+                className="input w-full mb-4"
+                maxLength={50}
+                autoFocus
+              />
 
-          {error && (
-            <p className="text-red-400 text-sm mb-4">{error}</p>
+              {error && (
+                <p className="text-red-400 text-sm mb-4">{error}</p>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={closeCreateModal}
+                  className="btn-secondary flex-1"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleCreateTroupe}
+                  className="btn-gold flex-1"
+                  disabled={!newTroupeName.trim() || actionLoading}
+                >
+                  {actionLoading ? "Création..." : "✓ Créer"}
+                </button>
+              </div>
+            </>
           )}
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setShowCreateModal(false)}
-              className="btn-secondary flex-1"
-            >
-              Annuler
-            </button>
-            <button
-              onClick={handleCreateTroupe}
-              className="btn-gold flex-1"
-              disabled={!newTroupeName.trim() || actionLoading}
-            >
-              {actionLoading ? "..." : "Créer"}
-            </button>
-          </div>
         </Modal>
       )}
 
