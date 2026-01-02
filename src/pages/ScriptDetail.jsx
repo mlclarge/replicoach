@@ -781,8 +781,35 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
  * Modal fichier original
  */
 function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
-  const [showText, setShowText] = useState(false);
+  // Détecter mobile
+  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  
+  const [showText, setShowText] = useState(isMobile); // Texte par défaut sur mobile
+  const [pdfError, setPdfError] = useState(false);
+  const [checkingPdf, setCheckingPdf] = useState(!isMobile);
   const isPdf = filename?.toLowerCase().endsWith('.pdf');
+
+  // Vérifier si le PDF existe vraiment (seulement sur desktop)
+  useEffect(() => {
+    if (fileUrl && isPdf && !isMobile) {
+      setCheckingPdf(true);
+      fetch(fileUrl, { method: 'HEAD' })
+        .then(res => {
+          if (!res.ok) {
+            setPdfError(true);
+            setShowText(true);
+          }
+          setCheckingPdf(false);
+        })
+        .catch(() => {
+          setPdfError(true);
+          setShowText(true);
+          setCheckingPdf(false);
+        });
+    } else {
+      setCheckingPdf(false);
+    }
+  }, [fileUrl, isPdf, isMobile]);
 
   return (
     <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
@@ -791,7 +818,8 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
           <h3 className="text-white font-semibold truncate">{filename || "Fichier original"}</h3>
         </div>
         <div className="flex items-center gap-2">
-          {fullText && fileUrl && (
+          {/* Bouton toggle PDF/Texte */}
+          {fullText && fileUrl && !pdfError && (
             <button
               onClick={() => setShowText(!showText)}
               className={`px-3 py-1 rounded-lg text-sm transition ${
@@ -801,11 +829,15 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
               {showText ? '📄 PDF' : '📝 Texte'}
             </button>
           )}
-          {fileUrl && (
+          {/* Bouton télécharger */}
+          {fileUrl && !pdfError && (
             <a
               href={fileUrl}
               download={filename}
+              target="_blank"
+              rel="noopener noreferrer"
               className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+              title="Télécharger / Ouvrir"
             >
               ⬇️
             </a>
@@ -820,14 +852,42 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
       </div>
 
       <div className="flex-1 overflow-auto p-4">
-        {showText || !fileUrl ? (
-          <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono bg-gray-900 p-4 rounded-lg">
-            {fullText || "Aucun texte disponible"}
-          </pre>
+        {checkingPdf ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-400">Chargement...</p>
+          </div>
+        ) : showText || !fileUrl || pdfError ? (
+          <div>
+            {pdfError && (
+              <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <p className="text-yellow-400 text-sm">
+                  ⚠️ Le fichier PDF original n'est plus disponible. Voici le texte extrait :
+                </p>
+              </div>
+            )}
+            {isMobile && !pdfError && fileUrl && (
+              <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center justify-between">
+                <p className="text-blue-400 text-sm">
+                  📱 Sur mobile, le PDF s'ouvre dans une nouvelle fenêtre
+                </p>
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg"
+                >
+                  Ouvrir PDF
+                </a>
+              </div>
+            )}
+            <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono bg-gray-900 p-4 rounded-lg">
+              {fullText || "Aucun texte disponible"}
+            </pre>
+          </div>
         ) : isPdf ? (
           <iframe
             src={fileUrl}
-            className="w-full h-full min-h-[60vh] rounded-lg"
+            className="w-full h-full min-h-[60vh] rounded-lg bg-white"
             title="PDF original"
           />
         ) : (
