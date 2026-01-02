@@ -1,12 +1,24 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { uploadFile } from "../lib/supabase";
-import { extractTextFromFile } from "../lib/pdfProcessor";
+import { extractTextFromPDF } from "../lib/pdfProcessor";
+import { extractTextFromWord, isWordDocument, isTextFile, extractTextFromTxt } from "../lib/docProcessor";
 import { parseScript } from "../lib/scriptParser";
 import Loader from "../components/ui/Loader";
+
+// Types de fichiers acceptés
+const ACCEPTED_FILE_TYPES = {
+  "application/pdf": [".pdf"],
+  "application/msword": [".doc"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "text/plain": [".txt"],
+};
+
+// Extensions supportées pour l'affichage
+const SUPPORTED_EXTENSIONS = "PDF, Word (.doc, .docx), TXT";
 
 function Upload() {
   const navigate = useNavigate();
@@ -22,28 +34,55 @@ function Upload() {
   const [results, setResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
 
+  const onDrop = useCallback((acceptedFiles) => {
+    if (acceptedFiles.length > 0) {
+      setFiles(acceptedFiles);
+      setError(null);
+      setResults([]);
+      setShowResults(false);
+    }
+  }, []);
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop: (acceptedFiles) => {
-      console.log("All dropped files:", acceptedFiles);
-      const validFiles = acceptedFiles.filter((file) => {
-        const ext = file.name.split(".").pop().toLowerCase();
-        return ["pdf", "txt"].includes(ext);
-      });
-      console.log("Valid files:", validFiles);
-      if (validFiles.length > 0) {
-        setFiles(validFiles);
-        setError(null);
-        setResults([]);
-        setShowResults(false);
-      } else if (acceptedFiles.length > 0) {
-        setError("Seuls les fichiers PDF et TXT sont acceptés");
-      }
-    },
+    onDrop,
+    accept: ACCEPTED_FILE_TYPES,
     maxFiles: 50,
     maxSize: 50 * 1024 * 1024,
-    accept: undefined,
-    useFsAccessApi: false,
   });
+
+  /**
+   * Extrait le texte selon le type de fichier
+   */
+  const extractText = async (file, onProgress) => {
+    const extension = file.name.toLowerCase().split('.').pop();
+    
+    if (extension === 'pdf') {
+      return await extractTextFromPDF(file, onProgress);
+    } else if (extension === 'docx' || extension === 'doc') {
+      return await extractTextFromWord(file, onProgress);
+    } else if (extension === 'txt') {
+      onProgress(0.5);
+      const text = await extractTextFromTxt(file);
+      onProgress(1);
+      return text;
+    } else {
+      throw new Error(`Format non supporté: .${extension}`);
+    }
+  };
+
+  /**
+   * Retourne l'icône selon le type de fichier
+   */
+  const getFileIcon = (filename) => {
+    const ext = filename.toLowerCase().split('.').pop();
+    switch (ext) {
+      case 'pdf': return '📕';
+      case 'doc':
+      case 'docx': return '📘';
+      case 'txt': return '📄';
+      default: return '📁';
+    }
+  };
 
   const processOneFile = async (file, fileIndex, totalFiles) => {
     const result = {
@@ -55,21 +94,21 @@ function Upload() {
 
     try {
       setCurrentFileName(file.name);
-      const fileExtension = file.name.split(".").pop().toLowerCase();
-      const isTextFile = fileExtension === "txt";
+      const extension = file.name.toLowerCase().split('.').pop();
 
+      // Étape 1: Extraction du texte
       const basePercent = (fileIndex / totalFiles) * 100;
       const filePercent = 100 / totalFiles;
 
       setProgress({
-        step: isTextFile ? "Lecture du fichier texte..." : "Extraction du texte...",
+        step: `Extraction du texte (${extension.toUpperCase()})...`,
         percent: basePercent + filePercent * 0.2,
       });
 
-      const text = await extractTextFromFile(file, (ocrProgress) => {
+      const text = await extractText(file, (extractProgress) => {
         setProgress({
-          step: "OCR en cours...",
-          percent: basePercent + filePercent * 0.2 + ocrProgress * filePercent * 0.3,
+          step: extension === 'pdf' ? `OCR en cours...` : `Lecture du fichier...`,
+          percent: basePercent + filePercent * 0.2 + extractProgress * filePercent * 0.3,
         });
       });
 
@@ -99,7 +138,7 @@ function Upload() {
         title: title,
         full_text: text,
         original_filename: file.name,
-        pdf_url: filePath,
+        pdf_url: filePath, // Garde le même nom de champ pour compatibilité
       });
 
       setProgress({
@@ -174,28 +213,8 @@ function Upload() {
     setError(null);
   };
 
-  const handleManualSelect = (e) => {
-    const selectedFiles = Array.from(e.target.files || []);
-    console.log("Manual selection:", selectedFiles);
-
-    const validFiles = selectedFiles.filter((file) => {
-      const ext = file.name.split(".").pop().toLowerCase();
-      return ["pdf", "txt"].includes(ext);
-    });
-
-    if (validFiles.length > 0) {
-      setFiles(validFiles);
-      setError(null);
-      setResults([]);
-      setShowResults(false);
-    }
-  };
-
   const successCount = results.filter((r) => r.success).length;
   const errorCount = results.filter((r) => !r.success).length;
-
-  const pdfCount = files.filter((f) => f.name.toLowerCase().endsWith(".pdf")).length;
-  const txtCount = files.filter((f) => f.name.toLowerCase().endsWith(".txt")).length;
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -203,14 +222,18 @@ function Upload() {
         📄 Importer des textes
       </h1>
 
+      {/* Zone de drop */}
       {!processing && !showResults && (
         <>
-          {/* Zone de drop */}
           <div
             {...getRootProps()}
             className={`
               border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
-              ${isDragActive ? "border-gold-500 bg-gold-500/10" : "border-gray-600 hover:border-primary-500"}
+              ${
+                isDragActive
+                  ? "border-gold-500 bg-gold-500/10"
+                  : "border-gray-600 hover:border-primary-500"
+              }
               ${files.length > 0 ? "border-green-500 bg-green-500/10" : ""}
             `}
           >
@@ -220,61 +243,43 @@ function Upload() {
               <div>
                 <p className="text-4xl mb-3">✅</p>
                 <p className="text-white font-semibold">
-                  {files.length} fichier{files.length > 1 ? "s" : ""} sélectionné{files.length > 1 ? "s" : ""}
+                  {files.length} fichier{files.length > 1 ? "s" : ""}{" "}
+                  sélectionné{files.length > 1 ? "s" : ""}
                 </p>
-                {(pdfCount > 0 || txtCount > 0) && (
-                  <p className="text-gray-400 text-sm mt-1">
-                    {pdfCount > 0 && `${pdfCount} PDF`}
-                    {pdfCount > 0 && txtCount > 0 && " • "}
-                    {txtCount > 0 && `${txtCount} TXT`}
-                  </p>
-                )}
                 <div className="mt-3 max-h-40 overflow-y-auto">
                   {files.map((file, index) => (
                     <p key={index} className="text-gray-400 text-sm flex items-center justify-center gap-2">
-                      <span>{file.name.toLowerCase().endsWith(".txt") ? "📝" : "📄"}</span>
+                      <span>{getFileIcon(file.name)}</span>
                       {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </p>
                   ))}
                 </div>
-                <p className="text-primary-400 text-sm mt-3">Cliquez pour modifier la sélection</p>
+                <p className="text-primary-400 text-sm mt-3">
+                  Cliquez pour modifier la sélection
+                </p>
               </div>
             ) : (
               <div>
                 <p className="text-5xl mb-4">📄</p>
                 <p className="text-gray-300 font-semibold">
-                  {isDragActive ? "Déposez les fichiers ici..." : "Glissez vos fichiers ici"}
+                  {isDragActive
+                    ? "Déposez les fichiers ici..."
+                    : "Glissez vos fichiers ici"}
                 </p>
-                <p className="text-gray-500 text-sm mt-2">ou cliquez pour sélectionner</p>
-                <div className="flex justify-center gap-4 mt-4">
-                  <span className="text-sm px-3 py-1 bg-gray-700 rounded-full text-gray-300">📄 PDF</span>
-                  <span className="text-sm px-3 py-1 bg-gray-700 rounded-full text-gray-300">📝 TXT</span>
+                <p className="text-gray-500 text-sm mt-2">
+                  ou cliquez pour sélectionner
+                </p>
+                {/* Formats supportés */}
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">📕 PDF</span>
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">📘 Word</span>
+                  <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs">📄 TXT</span>
                 </div>
-                <p className="text-gold-500 text-sm mt-3">📚 Jusqu'à 50 fichiers en une fois !</p>
+                <p className="text-gold-500 text-sm mt-3">
+                  📚 Jusqu'à 50 fichiers en une fois !
+                </p>
               </div>
             )}
-          </div>
-
-          {/* Bouton alternatif */}
-          <div className="mt-4 text-center">
-            <label className="inline-block cursor-pointer px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-full font-semibold">
-              📁 Sélectionner manuellement
-              <input
-                type="file"
-                multiple
-                accept=".pdf,.txt"
-                style={{ display: "none" }}
-                onChange={handleManualSelect}
-              />
-            </label>
-          </div>
-
-          {/* Info fichiers texte */}
-          <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-            <p className="text-blue-400 text-sm">
-              💡 <strong>Astuce :</strong> Les fichiers .txt sont recommandés pour les scripts scannés
-              qui ne sont pas reconnus correctement en PDF.
-            </p>
           </div>
 
           {error && (
@@ -296,13 +301,17 @@ function Upload() {
         </>
       )}
 
+      {/* Progression */}
       {processing && (
         <div className="text-center py-8">
           <Loader size="lg" text="" />
           <p className="text-white font-semibold mt-4">
             Fichier {currentFileIndex} / {files.length}
           </p>
-          <p className="text-gold-500 text-sm mt-1">{currentFileName}</p>
+          <p className="text-gold-500 text-sm mt-1 flex items-center justify-center gap-2">
+            <span>{getFileIcon(currentFileName)}</span>
+            {currentFileName}
+          </p>
           <p className="text-gray-400 mt-2">{progress.step}</p>
           <div className="w-full bg-gray-700 rounded-full h-2 mt-4">
             <div
@@ -310,28 +319,43 @@ function Upload() {
               style={{ width: `${progress.percent}%` }}
             />
           </div>
-          <p className="text-gray-500 text-sm mt-2">{Math.round(progress.percent)}%</p>
+          <p className="text-gray-500 text-sm mt-2">
+            {Math.round(progress.percent)}%
+          </p>
         </div>
       )}
 
+      {/* Résultats */}
       {showResults && (
         <div>
+          {/* Résumé */}
           <div className="card mb-4">
-            <h2 className="text-lg font-semibold text-white mb-3">📊 Résumé de l'import</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">
+              📊 Résumé de l'import
+            </h2>
             <div className="flex gap-4">
               <div className="flex-1 text-center p-3 bg-green-500/10 rounded-lg">
-                <p className="text-3xl font-bold text-green-500">{successCount}</p>
-                <p className="text-green-400 text-sm">Réussi{successCount > 1 ? "s" : ""}</p>
+                <p className="text-3xl font-bold text-green-500">
+                  {successCount}
+                </p>
+                <p className="text-green-400 text-sm">
+                  Réussi{successCount > 1 ? "s" : ""}
+                </p>
               </div>
               {errorCount > 0 && (
                 <div className="flex-1 text-center p-3 bg-red-500/10 rounded-lg">
-                  <p className="text-3xl font-bold text-red-500">{errorCount}</p>
-                  <p className="text-red-400 text-sm">Erreur{errorCount > 1 ? "s" : ""}</p>
+                  <p className="text-3xl font-bold text-red-500">
+                    {errorCount}
+                  </p>
+                  <p className="text-red-400 text-sm">
+                    Erreur{errorCount > 1 ? "s" : ""}
+                  </p>
                 </div>
               )}
             </div>
           </div>
 
+          {/* Détails */}
           <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
             {results.map((result, index) => (
               <div
@@ -342,13 +366,20 @@ function Upload() {
               >
                 <span className="text-xl">{result.success ? "✅" : "❌"}</span>
                 <div className="flex-1">
-                  <p className={`font-medium ${result.success ? "text-green-400" : "text-red-400"}`}>
+                  <p
+                    className={`font-medium flex items-center gap-2 ${
+                      result.success ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    <span>{getFileIcon(result.filename)}</span>
                     {result.title || result.filename}
                   </p>
                   {result.success ? (
                     <p className="text-gray-500 text-sm">
-                      {result.charactersCount} personnage{result.charactersCount > 1 ? "s" : ""} •{" "}
-                      {result.replicasCount} réplique{result.replicasCount > 1 ? "s" : ""}
+                      {result.charactersCount} personnage
+                      {result.charactersCount > 1 ? "s" : ""} •{" "}
+                      {result.replicasCount} réplique
+                      {result.replicasCount > 1 ? "s" : ""}
                     </p>
                   ) : (
                     <p className="text-red-400 text-sm">{result.error}</p>
@@ -358,6 +389,7 @@ function Upload() {
             ))}
           </div>
 
+          {/* Actions */}
           <div className="flex gap-3">
             <button onClick={handleReset} className="btn-secondary flex-1">
               📄 Importer d'autres fichiers
