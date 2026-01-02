@@ -1,32 +1,41 @@
 import { useEffect, useState, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import Loader from "../components/ui/Loader";
 
-/**
- * Mode Audio - Version améliorée pour Android/iOS
- * - Meilleure détection des voix
- * - UI/UX claire
- * - Bouton retour visible
- */
+// Prénoms pour détection du genre
+const MALE_NAMES = [
+  "maurice", "jean", "christophe", "pierre", "paul", "jacques", "michel",
+  "philippe", "alain", "bernard", "françois", "patrick", "daniel", "nicolas",
+  "marc", "david", "thomas", "louis", "antoine", "charles", "henri", "robert",
+];
+
+const FEMALE_NAMES = [
+  "valérie", "fabienne", "audrey", "marie", "anne", "sophie", "christine",
+  "nathalie", "isabelle", "catherine", "sylvie", "martine", "françoise",
+  "claire", "julie", "céline", "amavi", "laura", "emma", "léa", "sarah",
+];
+
+function detectGender(name) {
+  const lowerName = name.toLowerCase().split("-")[0].trim();
+  if (MALE_NAMES.includes(lowerName)) return "male";
+  if (FEMALE_NAMES.includes(lowerName)) return "female";
+  if (lowerName.endsWith("e") || lowerName.endsWith("a")) return "female";
+  return "male";
+}
 
 function AudioMode() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const { currentScript, loading, fetchScript } = useScriptStore();
 
-  const [voices, setVoices] = useState([]);
-  const [frenchVoices, setFrenchVoices] = useState([]);
+  const [voices, setVoices] = useState({ male: [], female: [] });
   const [characterVoices, setCharacterVoices] = useState({});
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rate, setRate] = useState(1);
-  const [showVoiceSettings, setShowVoiceSettings] = useState(false);
-  const [testingVoice, setTestingVoice] = useState(null);
-  const [selectedCharacter, setSelectedCharacter] = useState(null);
 
   const playingRef = useRef(false);
-  const utteranceRef = useRef(null);
+  const currentReplicaRef = useRef(null);
 
   useEffect(() => {
     if (!currentScript || currentScript.id !== id) {
@@ -34,146 +43,117 @@ function AudioMode() {
     }
   }, [id, currentScript, fetchScript]);
 
-  // Charger les voix - Compatible Android/iOS/Desktop
+  // Charger et trier les voix par genre
   useEffect(() => {
     const loadVoices = () => {
-      const availableVoices = window.speechSynthesis.getVoices();
-      
-      if (availableVoices.length === 0) return;
-      
-      setVoices(availableVoices);
-      
-      // Filtrer les voix françaises
-      const frVoices = availableVoices.filter(v => 
-        v.lang.includes('fr-FR') || 
-        v.lang.includes('fr_FR') || 
-        v.lang.includes('fr-CA') ||
-        v.lang === 'fr'
+      const availableVoices = speechSynthesis.getVoices();
+      const frenchVoices = availableVoices.filter((v) =>
+        v.lang.startsWith("fr")
       );
-      
-      // Si pas de voix FR, prendre toutes les voix
-      const voicesToUse = frVoices.length > 0 ? frVoices : availableVoices;
-      
-      console.log("Voix françaises trouvées:", voicesToUse.map(v => ({
-        name: v.name,
-        lang: v.lang,
-        local: v.localService
-      })));
-      
-      setFrenchVoices(voicesToUse);
+      const voicesToUse =
+        frenchVoices.length > 0 ? frenchVoices : availableVoices;
+
+      const maleVoices = voicesToUse.filter(
+        (v) =>
+          v.name.toLowerCase().includes("male") ||
+          v.name.toLowerCase().includes("homme") ||
+          v.name.toLowerCase().includes("paul") ||
+          v.name.toLowerCase().includes("thomas") ||
+          (!v.name.toLowerCase().includes("female") &&
+            !v.name.toLowerCase().includes("femme") &&
+            !v.name.toLowerCase().includes("julie") &&
+            !v.name.toLowerCase().includes("marie"))
+      );
+
+      const femaleVoices = voicesToUse.filter(
+        (v) =>
+          v.name.toLowerCase().includes("female") ||
+          v.name.toLowerCase().includes("femme") ||
+          v.name.toLowerCase().includes("julie") ||
+          v.name.toLowerCase().includes("marie") ||
+          v.name.toLowerCase().includes("hortense") ||
+          v.name.toLowerCase().includes("amélie")
+      );
+
+      setVoices({
+        male: maleVoices.length > 0 ? maleVoices : voicesToUse,
+        female: femaleVoices.length > 0 ? femaleVoices : voicesToUse,
+        all: voicesToUse,
+      });
     };
 
-    // Charger immédiatement
     loadVoices();
-    
-    // Et aussi quand les voix changent (nécessaire pour Chrome/Android)
-    window.speechSynthesis.onvoiceschanged = loadVoices;
+    speechSynthesis.onvoiceschanged = loadVoices;
 
     return () => {
-      window.speechSynthesis.cancel();
+      speechSynthesis.cancel();
     };
   }, []);
 
-  // Assigner automatiquement des voix aux personnages
+  // Assigner automatiquement des voix selon le genre du personnage
   useEffect(() => {
-    if (currentScript?.characters && frenchVoices.length > 0) {
+    if (currentScript?.characters && voices.all?.length > 0) {
       const autoVoices = {};
-      
-      currentScript.characters.forEach((char, index) => {
-        // Distribuer les voix disponibles entre les personnages
-        const voiceIndex = index % frenchVoices.length;
-        autoVoices[char.id] = frenchVoices[voiceIndex]?.name || frenchVoices[0]?.name;
+      let maleIndex = 0;
+      let femaleIndex = 0;
+
+      currentScript.characters.forEach((char) => {
+        const gender = char.gender || detectGender(char.name);
+
+        if (gender === "female" && voices.female.length > 0) {
+          autoVoices[char.id] =
+            voices.female[femaleIndex % voices.female.length]?.name;
+          femaleIndex++;
+        } else if (voices.male.length > 0) {
+          autoVoices[char.id] =
+            voices.male[maleIndex % voices.male.length]?.name;
+          maleIndex++;
+        } else {
+          autoVoices[char.id] = voices.all[0]?.name;
+        }
       });
 
       setCharacterVoices(autoVoices);
     }
-  }, [currentScript, frenchVoices]);
+  }, [currentScript, voices]);
 
-  // Nettoyer le texte pour la synthèse vocale
-  const cleanTextForSpeech = (text) => {
-    return text
-      // Supprimer les didascalies entre parenthèses
-      .replace(/\([^)]*\)/g, '')
-      // Supprimer les caractères spéciaux problématiques
-      .replace(/[—–\-]{2,}/g, ' ')
-      .replace(/[\/\\|_]/g, ' ')
-      .replace(/[«»""„]/g, '')
-      .replace(/\.{3,}/g, '...')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
+  // Scroll automatique vers la réplique en cours
+  useEffect(() => {
+    if (isPlaying && currentReplicaRef.current) {
+      currentReplicaRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [currentIndex, isPlaying]);
 
   const speak = (text, voiceName) => {
     return new Promise((resolve) => {
-      // Annuler toute synthèse en cours
-      window.speechSynthesis.cancel();
-      
-      const cleanedText = cleanTextForSpeech(text);
-      if (!cleanedText) {
-        resolve();
-        return;
-      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voice = voices.all?.find((v) => v.name === voiceName);
 
-      const utterance = new SpeechSynthesisUtterance(cleanedText);
-      utteranceRef.current = utterance;
-      
-      // Trouver la voix
-      const voice = voices.find((v) => v.name === voiceName);
       if (voice) utterance.voice = voice;
-      
       utterance.rate = rate;
       utterance.lang = "fr-FR";
-      utterance.pitch = 1;
 
-      utterance.onend = () => resolve();
-      utterance.onerror = (e) => {
-        console.error("Erreur synthèse:", e);
-        resolve();
-      };
+      utterance.onend = resolve;
+      utterance.onerror = resolve;
 
-      // Workaround pour Android - pause/resume
-      window.speechSynthesis.speak(utterance);
-      
-      // Fix pour Chrome Android qui s'arrête après 15s
-      const resumeInterval = setInterval(() => {
-        if (!window.speechSynthesis.speaking) {
-          clearInterval(resumeInterval);
-        } else {
-          window.speechSynthesis.pause();
-          window.speechSynthesis.resume();
-        }
-      }, 10000);
-
-      utterance.onend = () => {
-        clearInterval(resumeInterval);
-        resolve();
-      };
+      speechSynthesis.speak(utterance);
     });
-  };
-
-  const testVoice = async (voiceName) => {
-    setTestingVoice(voiceName);
-    await speak("Bonjour, ceci est un test de voix.", voiceName);
-    setTestingVoice(null);
   };
 
   const playAll = async () => {
     if (!currentScript?.replicas) return;
 
-    const replicasToPlay = selectedCharacter
-      ? currentScript.replicas.filter(r => r.character_id === selectedCharacter)
-      : currentScript.replicas;
-
-    if (replicasToPlay.length === 0) return;
-
     setIsPlaying(true);
     playingRef.current = true;
 
-    for (let i = currentIndex; i < replicasToPlay.length; i++) {
+    for (let i = currentIndex; i < currentScript.replicas.length; i++) {
       if (!playingRef.current) break;
 
       setCurrentIndex(i);
-      const replica = replicasToPlay[i];
+      const replica = currentScript.replicas[i];
       const voiceName = characterVoices[replica.character_id];
 
       await speak(replica.text, voiceName);
@@ -184,7 +164,7 @@ function AudioMode() {
   };
 
   const stop = () => {
-    window.speechSynthesis.cancel();
+    speechSynthesis.cancel();
     setIsPlaying(false);
     playingRef.current = false;
   };
@@ -197,11 +177,7 @@ function AudioMode() {
     setIsPlaying(true);
     playingRef.current = true;
 
-    const replicasToPlay = selectedCharacter
-      ? currentScript.replicas.filter(r => r.character_id === selectedCharacter)
-      : currentScript.replicas;
-
-    const replica = replicasToPlay[index];
+    const replica = currentScript.replicas[index];
     const voiceName = characterVoices[replica.character_id];
 
     await speak(replica.text, voiceName);
@@ -222,204 +198,169 @@ function AudioMode() {
   }
 
   const { title, characters = [], replicas = [] } = currentScript;
-
-  const filteredReplicas = selectedCharacter
-    ? replicas.filter((r) => r.character_id === selectedCharacter)
-    : replicas;
-
-  // Compter les répliques par personnage
-  const replicaCountByChar = {};
-  replicas.forEach(r => {
-    replicaCountByChar[r.character_id] = (replicaCountByChar[r.character_id] || 0) + 1;
-  });
+  const progress = replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-darker">
-      {/* Header fixe avec bouton retour VISIBLE */}
-      <div className="sticky top-0 z-40 bg-gradient-to-b from-darker via-darker to-transparent pb-4">
-        <div className="bg-primary-800 p-4">
-          <div className="flex items-center gap-3">
-            {/* Bouton retour bien visible */}
-            <button
-              onClick={() => navigate(`/script/${id}`)}
-              className="flex items-center justify-center w-10 h-10 bg-white/20 hover:bg-white/30 
-                         rounded-full transition text-white font-bold text-lg"
-            >
-              ←
-            </button>
-            
-            <div className="flex-1">
-              <h1 className="text-lg font-display text-white flex items-center gap-2">
-                🔊 Mode Audio
-              </h1>
-              <p className="text-primary-200 text-sm truncate">{title}</p>
+    <div className="p-4 pb-40">
+      {/* BOUTON STOP FLOTTANT - Toujours visible pendant la lecture */}
+      {isPlaying && (
+        <div className="fixed top-0 left-0 right-0 z-50 animate-slideDown">
+          {/* Barre de progression */}
+          <div className="h-1 bg-gray-800">
+            <div 
+              className="h-full bg-gold-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          
+          {/* Bandeau Stop */}
+          <div className="bg-red-600 shadow-lg">
+            <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl animate-pulse">🔊</span>
+                <div>
+                  <p className="text-white font-semibold text-sm">
+                    Lecture en cours...
+                  </p>
+                  <p className="text-red-200 text-xs">
+                    Réplique {currentIndex + 1} / {replicas.length}
+                  </p>
+                </div>
+              </div>
+              
+              <button
+                onClick={stop}
+                className="flex items-center gap-2 bg-white text-red-600 px-4 py-2 rounded-full font-bold shadow-lg hover:bg-red-100 transition active:scale-95"
+              >
+                <span className="text-xl">⏹</span>
+                STOP
+              </button>
             </div>
-
-            {/* Bouton paramètres voix - Icône améliorée */}
-            <button
-              onClick={() => setShowVoiceSettings(!showVoiceSettings)}
-              className={`flex items-center justify-center w-10 h-10 rounded-full transition
-                ${showVoiceSettings 
-                  ? 'bg-gold-500 text-dark' 
-                  : 'bg-white/20 hover:bg-white/30 text-white'
-                }`}
-              title="Paramètres des voix"
-            >
-              🎙️
-            </button>
           </div>
         </div>
+      )}
 
-        {/* Panneau paramètres voix */}
-        {showVoiceSettings && (
-          <div className="mx-4 mt-2 p-4 bg-gray-800 rounded-xl border border-gray-700 shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-semibold text-white flex items-center gap-2">
-                🎙️ Voix des personnages
-              </h2>
-              <span className="text-xs text-gray-500">
-                {frenchVoices.length} voix disponibles
-              </span>
-            </div>
+      <div className="flex items-center gap-3 mb-6">
+        <Link to={`/script/${id}`} className="text-gray-400 hover:text-white">
+          ←
+        </Link>
+        <div>
+          <h1 className="text-xl font-display text-gold-500">🔊 Mode Audio</h1>
+          <p className="text-gray-500 text-sm">{title}</p>
+        </div>
+      </div>
 
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {characters.map((char) => (
-                <div key={char.id} className="flex items-center gap-3">
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: char.color }}
-                  />
-                  <span className="text-gray-300 text-sm flex-1 truncate">
-                    {char.name}
+      <div className="card mb-6">
+        <h2 className="font-semibold text-white mb-3">
+          🎭 Voix des personnages
+        </h2>
+
+        <div className="space-y-3">
+          {characters.map((char) => {
+            const gender = char.gender || detectGender(char.name);
+            return (
+              <div key={char.id} className="flex items-center gap-3">
+                <span
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: char.color }}
+                />
+                <span className="text-gray-300 flex-1">
+                  {char.name}
+                  <span className="text-xs text-gray-500 ml-2">
+                    {gender === "female" ? "♀" : "♂"}
                   </span>
-                  
-                  <select
-                    value={characterVoices[char.id] || ""}
-                    onChange={(e) => updateCharacterVoice(char.id, e.target.value)}
-                    className="input !w-auto !py-1 text-xs max-w-[140px]"
+                </span>
+                <select
+                  value={characterVoices[char.id] || ""}
+                  onChange={(e) =>
+                    updateCharacterVoice(char.id, e.target.value)
+                  }
+                  className="input !w-auto !py-1 text-sm"
+                >
+                  <optgroup
+                    label={
+                      gender === "female" ? "Voix féminines" : "Voix masculines"
+                    }
                   >
-                    {frenchVoices.map((voice) => (
-                      <option key={voice.name} value={voice.name}>
-                        {voice.name.replace(/Microsoft|Google|Speech|Synthesis/gi, "").trim().substring(0, 20)}
+                    {(gender === "female" ? voices.female : voices.male)?.map(
+                      (voice) => (
+                        <option key={voice.name} value={voice.name}>
+                          {voice.name.replace(/Microsoft|Google/gi, "").trim()}
+                        </option>
+                      )
+                    )}
+                  </optgroup>
+                  <optgroup label="Toutes les voix">
+                    {voices.all?.map((voice) => (
+                      <option key={voice.name + "_all"} value={voice.name}>
+                        {voice.name.replace(/Microsoft|Google/gi, "").trim()}
                       </option>
                     ))}
-                  </select>
-
-                  {/* Bouton test voix */}
-                  <button
-                    onClick={() => testVoice(characterVoices[char.id])}
-                    disabled={testingVoice !== null}
-                    className={`p-1.5 rounded-lg text-xs transition ${
-                      testingVoice === characterVoices[char.id]
-                        ? 'bg-gold-500 text-dark'
-                        : 'bg-gray-700 text-gray-400 hover:text-white'
-                    }`}
-                    title="Tester cette voix"
-                  >
-                    {testingVoice === characterVoices[char.id] ? '🔊' : '▶️'}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Vitesse */}
-            <div className="mt-4 pt-4 border-t border-gray-700">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-400 text-sm">Vitesse</span>
-                <span className="text-gold-500 font-semibold">{rate}x</span>
+                  </optgroup>
+                </select>
               </div>
-              <input
-                type="range"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={rate}
-                onChange={(e) => setRate(parseFloat(e.target.value))}
-                className="w-full accent-gold-500"
-              />
-            </div>
+            );
+          })}
+        </div>
 
-            {/* Info Android */}
-            <p className="text-gray-500 text-xs mt-3">
-              💡 Sur Android, testez chaque voix avec ▶️ pour trouver celle qui vous convient
-            </p>
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-gray-400 text-sm">Vitesse</span>
+            <span className="text-gold-500 font-semibold">{rate}x</span>
           </div>
-        )}
-      </div>
-
-      {/* Filtres personnages */}
-      <div className="px-4 mb-4">
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-          <button
-            onClick={() => {
-              setSelectedCharacter(null);
-              setCurrentIndex(0);
-            }}
-            className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition flex items-center gap-1
-              ${!selectedCharacter
-                ? "bg-gold-500 text-dark font-semibold"
-                : "bg-gray-800 text-gray-400"
-              }`}
-          >
-            Tous
-            <span className="text-xs opacity-70">({replicas.length})</span>
-          </button>
-          
-          {characters.map((char) => (
-            <button
-              key={char.id}
-              onClick={() => {
-                setSelectedCharacter(char.id);
-                setCurrentIndex(0);
-              }}
-              className={`px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition flex items-center gap-1
-                ${selectedCharacter === char.id
-                  ? "font-semibold"
-                  : "bg-gray-800 text-gray-400"
-                }`}
-              style={
-                selectedCharacter === char.id
-                  ? { backgroundColor: char.color, color: "white" }
-                  : {}
-              }
-            >
-              {char.name}
-              <span className="text-xs opacity-70">({replicaCountByChar[char.id] || 0})</span>
-            </button>
-          ))}
+          <input
+            type="range"
+            min="0.5"
+            max="2"
+            step="0.1"
+            value={rate}
+            onChange={(e) => setRate(parseFloat(e.target.value))}
+            className="w-full"
+          />
         </div>
       </div>
 
-      {/* Liste des répliques */}
-      <div className="px-4 pb-40 space-y-2">
-        {filteredReplicas.map((replica, index) => {
-          const character = characters.find((c) => c.id === replica.character_id);
-          const isCurrent = index === currentIndex && isPlaying;
+      <h2 className="font-semibold text-white mb-3">📜 Répliques</h2>
+
+      <div className="space-y-2">
+        {replicas.map((replica, index) => {
+          const character = characters.find(
+            (c) => c.id === replica.character_id
+          );
+          const isCurrent = index === currentIndex;
+          const isCurrentPlaying = isCurrent && isPlaying;
 
           return (
             <div
               key={replica.id}
+              ref={isCurrentPlaying ? currentReplicaRef : null}
               onClick={() => playOne(index)}
-              className={`p-3 rounded-xl cursor-pointer transition-all ${
-                isCurrent 
-                  ? "ring-2 ring-gold-500 bg-gold-500/10" 
-                  : "bg-gray-800/50 hover:bg-gray-800"
+              className={`card cursor-pointer transition-all ${
+                isCurrentPlaying 
+                  ? "ring-2 ring-gold-500 bg-gold-500/20 scale-[1.02]" 
+                  : isCurrent 
+                    ? "ring-1 ring-gold-500/50 bg-gold-500/5"
+                    : ""
               }`}
               style={{
-                borderLeft: `4px solid ${character?.color || '#666'}`,
+                borderLeftColor: character?.color,
+                borderLeftWidth: "4px",
               }}
             >
               <div className="flex items-start gap-3">
-                <span className={`text-lg ${isCurrent ? "animate-pulse" : ""}`}>
-                  {isCurrent ? "🔊" : "▶️"}
+                <span className={`text-lg ${isCurrentPlaying ? "animate-pulse" : ""}`}>
+                  {isCurrentPlaying ? "🔊" : "▶️"}
                 </span>
-                <div className="flex-1 min-w-0">
-                  <p
-                    className="text-xs font-semibold mb-1"
-                    style={{ color: character?.color }}
-                  >
-                    {character?.name}
-                  </p>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p
+                      className="text-xs font-semibold"
+                      style={{ color: character?.color }}
+                    >
+                      {character?.name}
+                    </p>
+                    <span className="text-xs text-gray-600">#{index + 1}</span>
+                  </div>
                   <p className="text-gray-300 text-sm line-clamp-2">
                     {replica.text}
                   </p>
@@ -428,24 +369,17 @@ function AudioMode() {
             </div>
           );
         })}
-
-        {filteredReplicas.length === 0 && (
-          <p className="text-center text-gray-500 py-8">
-            Aucune réplique pour ce personnage
-          </p>
-        )}
       </div>
 
-      {/* Contrôles de lecture fixes en bas */}
-      <div className="fixed bottom-20 left-0 right-0 p-4 bg-gradient-to-t from-darker via-darker to-transparent">
+      {/* Barre de contrôle en bas */}
+      <div className="fixed bottom-24 left-0 right-0 p-4 bg-gradient-to-t from-darker via-darker to-transparent">
         <div className="flex gap-3 max-w-md mx-auto">
           {isPlaying ? (
             <button 
               onClick={stop} 
-              className="flex-1 py-4 bg-red-600 hover:bg-red-500 text-white font-semibold 
-                         rounded-full transition flex items-center justify-center gap-2 text-lg"
+              className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1 transition flex items-center justify-center gap-2 shadow-lg"
             >
-              <span className="text-2xl">🔇</span> STOP
+              <span className="text-xl">⏹</span> Arrêter
             </button>
           ) : (
             <>
@@ -454,20 +388,34 @@ function AudioMode() {
                   setCurrentIndex(0);
                   playAll();
                 }}
-                className="btn-secondary flex-1 py-4"
+                className="btn-secondary flex-1"
               >
                 ⏮️ Début
               </button>
-              <button 
-                onClick={playAll} 
-                className="btn-gold flex-1 py-4 flex items-center justify-center gap-2"
-              >
+              <button onClick={playAll} className="btn-gold flex-1">
                 ▶️ Lecture
               </button>
             </>
           )}
         </div>
       </div>
+
+      {/* Style pour l'animation */}
+      <style>{`
+        @keyframes slideDown {
+          from {
+            transform: translateY(-100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateY(0);
+            opacity: 1;
+          }
+        }
+        .animate-slideDown {
+          animation: slideDown 0.3s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
