@@ -48,6 +48,9 @@ export const uploadPDF = async (file, userId) => {
   return data.path
 }
 
+// Alias pour compatibilité avec Upload.jsx
+export const uploadFile = uploadPDF
+
 export const getFileUrl = (path) => {
   if (!path) return null
   const { data } = supabase.storage
