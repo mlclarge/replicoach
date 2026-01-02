@@ -229,6 +229,17 @@ export const leaveTroupe = async (troupeId, userId) => {
   if (error) throw error
 }
 
+// Supprimer une troupe (owner uniquement)
+export const deleteTroupe = async (troupeId) => {
+  // La suppression cascade supprimera aussi les membres (ON DELETE CASCADE)
+  const { error } = await supabase
+    .from('troupes')
+    .delete()
+    .eq('id', troupeId)
+  
+  if (error) throw error
+}
+
 // Récupérer les membres d'une troupe
 export const fetchTroupeMembers = async (troupeId) => {
   const { data, error } = await supabase
