@@ -15,6 +15,8 @@ function ScriptDetail() {
     deleteScript,
     clearCurrentScript,
     updateReplica,
+    addSingleReplica,
+    deleteReplica,
   } = useScriptStore();
 
   const [viewMode, setViewMode] = useState("full");
@@ -23,6 +25,8 @@ function ScriptDetail() {
   const [editingReplica, setEditingReplica] = useState(null);
   const [showOriginalFile, setShowOriginalFile] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showAddReplica, setShowAddReplica] = useState(false);
+  const [deleteReplicaConfirm, setDeleteReplicaConfirm] = useState(null);
 
   // ⚠️ TOUS LES HOOKS DOIVENT ÊTRE AVANT LES RETURNS CONDITIONNELS
 
@@ -47,7 +51,7 @@ function ScriptDetail() {
     return getFileUrl(currentScript.pdf_url);
   }, [currentScript?.pdf_url]);
 
-  // Compter les répliques par personnage - DOIT ÊTRE AVANT LES RETURNS
+  // Compter les répliques par personnage
   const replicaCountByCharacter = useMemo(() => {
     if (!currentScript?.replicas) return {};
     const counts = {};
@@ -57,7 +61,7 @@ function ScriptDetail() {
     return counts;
   }, [currentScript?.replicas]);
 
-  // Répliques filtrées - DOIT ÊTRE AVANT LES RETURNS
+  // Répliques filtrées
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
     return selectedCharacter
@@ -65,7 +69,7 @@ function ScriptDetail() {
       : currentScript.replicas;
   }, [currentScript?.replicas, selectedCharacter]);
 
-  // Handler pour supprimer
+  // Handler pour supprimer le script
   const handleDelete = async () => {
     try {
       await deleteScript(id);
@@ -83,11 +87,53 @@ function ScriptDetail() {
         text: newText,
       });
       setEditingReplica(null);
-      fetchScript(id);
     } catch (err) {
       console.error("Error updating replica:", err);
       alert("Erreur lors de la mise à jour de la réplique");
     }
+  };
+
+  // Handler pour ajouter une nouvelle réplique
+  const handleAddReplica = async (characterId, text, afterIndex) => {
+    try {
+      const newOrderIndex = afterIndex !== undefined 
+        ? afterIndex + 0.5 
+        : (currentScript?.replicas?.length || 0);
+      
+      await addSingleReplica({
+        script_id: id,
+        character_id: characterId,
+        text: text,
+        order_index: newOrderIndex,
+        text_gaps: generateGapsText(text),
+        cue_words: '',
+      });
+      
+      setShowAddReplica(false);
+      // Rafraîchir pour avoir le bon ordre
+      fetchScript(id);
+    } catch (err) {
+      console.error("Error adding replica:", err);
+      alert("Erreur lors de l'ajout de la réplique");
+    }
+  };
+
+  // Handler pour supprimer une réplique
+  const handleDeleteReplica = async (replicaId) => {
+    try {
+      await deleteReplica(replicaId);
+      setDeleteReplicaConfirm(null);
+    } catch (err) {
+      console.error("Error deleting replica:", err);
+      alert("Erreur lors de la suppression de la réplique");
+    }
+  };
+
+  // Générer le texte à trous
+  const generateGapsText = (text) => {
+    return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
+      return first + '_'.repeat(Math.min(rest.length, 5));
+    });
   };
 
   // Partager le script
@@ -126,7 +172,7 @@ function ScriptDetail() {
   } = currentScript;
 
   return (
-    <div className="p-4 pb-24">
+    <div className="p-4 pb-32">
       {/* En-tête */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
@@ -175,7 +221,7 @@ function ScriptDetail() {
         </div>
       )}
 
-      {/* Filtres personnages - Style pills avec compteur */}
+      {/* Filtres personnages */}
       <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
         <button
           onClick={() => setSelectedCharacter(null)}
@@ -258,6 +304,7 @@ function ScriptDetail() {
               isRight={isRight}
               number={index + 1}
               onEdit={() => setEditingReplica(replica)}
+              onDelete={() => setDeleteReplicaConfirm(replica)}
             />
           );
         })}
@@ -269,15 +316,29 @@ function ScriptDetail() {
         </p>
       )}
 
-      {/* Bouton Audio flottant */}
-      <Link
-        to={`/script/${id}/audio`}
-        className="fixed bottom-24 right-4 w-14 h-14 bg-gold-500 rounded-full
-                   flex items-center justify-center text-2xl shadow-lg hover:bg-gold-400
-                   transition transform hover:scale-110"
-      >
-        🔊
-      </Link>
+      {/* Boutons flottants */}
+      <div className="fixed bottom-24 right-4 flex flex-col gap-3">
+        {/* Bouton Ajouter réplique */}
+        <button
+          onClick={() => setShowAddReplica(true)}
+          className="w-14 h-14 bg-green-600 hover:bg-green-500 rounded-full
+                     flex items-center justify-center text-2xl shadow-lg
+                     transition transform hover:scale-110"
+          title="Ajouter une réplique"
+        >
+          ➕
+        </button>
+        
+        {/* Bouton Audio */}
+        <Link
+          to={`/script/${id}/audio`}
+          className="w-14 h-14 bg-gold-500 rounded-full
+                     flex items-center justify-center text-2xl shadow-lg hover:bg-gold-400
+                     transition transform hover:scale-110"
+        >
+          🔊
+        </Link>
+      </div>
 
       {/* Modal d'édition de réplique */}
       {editingReplica && (
@@ -289,12 +350,49 @@ function ScriptDetail() {
         />
       )}
 
-      {/* Modal de confirmation suppression */}
+      {/* Modal d'ajout de réplique */}
+      {showAddReplica && (
+        <AddReplicaModal
+          characters={characters}
+          onAdd={handleAddReplica}
+          onClose={() => setShowAddReplica(false)}
+        />
+      )}
+
+      {/* Modal de confirmation suppression réplique */}
+      {deleteReplicaConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer cette réplique ?
+            </h3>
+            <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+              "{deleteReplicaConfirm.text}"
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteReplicaConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteReplica(deleteReplicaConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation suppression script */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
             <h3 className="text-lg font-semibold text-white mb-2">
-              Supprimer ?
+              Supprimer ce texte ?
             </h3>
             <p className="text-gray-400 mb-6">Cette action est irréversible.</p>
             <div className="flex gap-3">
@@ -339,12 +437,11 @@ function ScriptDetail() {
 /**
  * Bulle de chat style WhatsApp
  */
-function ChatBubble({ replica, character, viewMode, isRight, number, onEdit }) {
+function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onDelete }) {
   const [revealed, setRevealed] = useState(false);
 
   const bubbleColor = character?.color || '#6B7280';
   
-  // Créer une version claire de la couleur pour le fond
   const hexToRgba = (hex, alpha) => {
     if (!hex) return `rgba(107, 114, 128, ${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
@@ -425,19 +522,14 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit }) {
 
           {/* En-tête avec nom et numéro */}
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span
-              className="text-sm font-bold"
-              style={{ color: bubbleColor }}
-            >
+            <span className="text-sm font-bold" style={{ color: bubbleColor }}>
               {character?.name || "Inconnu"}
             </span>
             <span className="text-xs text-gray-500">#{number}</span>
           </div>
 
           {/* Contenu */}
-          <div className="text-sm">
-            {renderContent()}
-          </div>
+          <div className="text-sm">{renderContent()}</div>
 
           {/* Indicateur mode */}
           {isClickable && (
@@ -449,23 +541,123 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit }) {
           )}
         </div>
 
-        {/* Bouton éditer (visible au hover/touch) */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit();
-          }}
-          className={`
-            absolute -top-2 ${isRight ? '-left-2' : '-right-2'}
-            w-8 h-8 bg-gray-700 hover:bg-primary-600 
-            rounded-full flex items-center justify-center text-sm
-            opacity-0 group-hover:opacity-100 transition-opacity shadow-lg
-            active:opacity-100
-          `}
-          title="Modifier"
-        >
-          ✏️
-        </button>
+        {/* Boutons d'action (visible au hover/touch) */}
+        <div className={`absolute -top-2 ${isRight ? '-left-2' : '-right-2'} flex gap-1 
+                        opacity-0 group-hover:opacity-100 transition-opacity`}>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            className="w-7 h-7 bg-gray-700 hover:bg-primary-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Modifier"
+          >
+            ✏️
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete();
+            }}
+            className="w-7 h-7 bg-gray-700 hover:bg-red-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Supprimer"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal d'ajout d'une réplique
+ */
+function AddReplicaModal({ characters, onAdd, onClose }) {
+  const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!text.trim() || !selectedCharId) return;
+    setSaving(true);
+    await onAdd(selectedCharId, text.trim());
+    setSaving(false);
+  };
+
+  const selectedChar = characters.find(c => c.id === selectedCharId);
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white">➕ Ajouter une réplique</h3>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Sélection du personnage */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <div className="flex gap-2 flex-wrap">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharId(char.id)}
+                  className="px-3 py-2 rounded-lg text-sm font-medium transition"
+                  style={{
+                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                  }}
+                >
+                  {char.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Texte de la réplique */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="input w-full h-32 resize-none"
+              placeholder="Entrez le texte de la réplique..."
+              autoFocus
+            />
+          </div>
+
+          {/* Prévisualisation */}
+          {text && (
+            <div 
+              className="p-3 rounded-lg"
+              style={{ 
+                backgroundColor: `${selectedChar?.color || '#666'}20`,
+                borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
+              }}
+            >
+              <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
+                {selectedChar?.name || "?"}
+              </p>
+              <p className="text-gray-300 text-sm">{text}</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-700 flex gap-3">
+          <button onClick={onClose} className="btn-secondary flex-1" disabled={saving}>
+            Annuler
+          </button>
+          <button 
+            onClick={handleAdd} 
+            className="btn-gold flex-1"
+            disabled={saving || !text.trim() || !selectedCharId}
+          >
+            {saving ? "Ajout..." : "➕ Ajouter"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -568,7 +760,6 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-dark">
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-semibold truncate">{filename || "Fichier original"}</h3>
@@ -602,7 +793,6 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
         </div>
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto p-4">
         {showText || !fileUrl ? (
           <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono bg-gray-900 p-4 rounded-lg">
@@ -676,7 +866,6 @@ function ShareModal({ script, onClose }) {
             Partagez ce texte avec les membres de votre troupe.
           </p>
 
-          {/* Fonctionnalité en développement */}
           <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
             <p className="text-yellow-500 text-sm flex items-center gap-2">
               🚧 Fonctionnalité en développement
@@ -686,7 +875,6 @@ function ShareModal({ script, onClose }) {
             </p>
           </div>
 
-          {/* Bouton partage natif (fonctionne déjà) */}
           <button
             onClick={shareNative}
             className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-lg 

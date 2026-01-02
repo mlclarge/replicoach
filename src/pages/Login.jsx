@@ -13,6 +13,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -47,18 +48,16 @@ function Login() {
             setError(signUpError.message);
           }
         } else {
-          setSuccess(
-            "Compte créé avec succès ! Vous pouvez maintenant vous connecter."
-          );
-          setIsSignUp(false);
-          setPassword("");
-          setConfirmPassword("");
+          // Afficher la page de confirmation
+          setShowConfirmation(true);
         }
       } else {
         const { error: signInError } = await signIn(email, password);
         if (signInError) {
           if (signInError.message.includes("Invalid login")) {
             setError("Email ou mot de passe incorrect");
+          } else if (signInError.message.includes("Email not confirmed")) {
+            setError("Veuillez d'abord confirmer votre email en cliquant sur le lien reçu");
           } else {
             setError(signInError.message);
           }
@@ -88,6 +87,80 @@ function Login() {
       setLoading(false);
     }
   };
+
+  // Page de confirmation après inscription
+  if (showConfirmation) {
+    return (
+      <div className="min-h-screen bg-darker flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="card text-center">
+            {/* Icône email */}
+            <div className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full 
+                            flex items-center justify-center">
+              <span className="text-5xl">📧</span>
+            </div>
+
+            <h2 className="text-xl font-semibold text-white mb-3">
+              Vérifiez votre boîte mail !
+            </h2>
+
+            <p className="text-gray-400 mb-6">
+              Un email de confirmation a été envoyé à :
+            </p>
+
+            <p className="text-gold-500 font-semibold mb-6 break-all">
+              {email}
+            </p>
+
+            <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
+              <h3 className="text-white font-medium mb-2 flex items-center gap-2">
+                📋 Étapes suivantes :
+              </h3>
+              <ol className="text-gray-400 text-sm space-y-2">
+                <li className="flex items-start gap-2">
+                  <span className="text-gold-500 font-bold">1.</span>
+                  <span>Ouvrez votre boîte mail</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-gold-500 font-bold">2.</span>
+                  <span>Cherchez l'email de RépliCoach</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-gold-500 font-bold">3.</span>
+                  <span>Cliquez sur le lien de confirmation</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-gold-500 font-bold">4.</span>
+                  <span>Revenez ici pour vous connecter</span>
+                </li>
+              </ol>
+            </div>
+
+            <p className="text-gray-500 text-xs mb-6">
+              💡 Pensez à vérifier vos spams si vous ne trouvez pas l'email
+            </p>
+
+            <button
+              onClick={() => {
+                setShowConfirmation(false);
+                setIsSignUp(false);
+                setPassword("");
+                setConfirmPassword("");
+              }}
+              className="btn-gold w-full"
+            >
+              ← Retour à la connexion
+            </button>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <p className="text-gray-600 text-sm mt-8">
+          Une application pour les comédiens 🎭
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-darker flex flex-col items-center justify-center p-4">

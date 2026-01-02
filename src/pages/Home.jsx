@@ -9,6 +9,7 @@ import {
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
+import PublicLibrary from "../components/PublicLibrary";
 import {
   DndContext,
   closestCenter,
@@ -545,6 +546,9 @@ function Home() {
         expanded={directorNotesExpanded}
         onToggleExpand={() => setDirectorNotesExpanded(!directorNotesExpanded)}
       />
+
+      {/* Bibliothèque publique */}
+      <PublicLibrary />
 
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">

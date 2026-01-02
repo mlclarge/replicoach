@@ -7,334 +7,283 @@ export const useScriptStore = create((set, get) => ({
   loading: false,
   error: null,
 
-  // Récupérer tous les scripts de l'utilisateur
   fetchScripts: async (userId) => {
     set({ loading: true, error: null });
-
-    const { data: scripts, error } = await supabase
-      .from("scripts")
-      .select(
+    try {
+      const { data, error } = await supabase
+        .from("scripts")
+        .select(
+          `
+          *,
+          characters (*),
+          replicas (*)
         `
-        *,
-        characters (*)
-      `
-      )
-      .eq("user_id", userId)
-      .order("display_order", { ascending: true });
+        )
+        .eq("user_id", userId)
+        .order("display_order", { ascending: true });
 
-    if (error) {
+      if (error) throw error;
+      set({ scripts: data || [], loading: false });
+    } catch (error) {
+      console.error("Fetch scripts error:", error);
       set({ error: error.message, loading: false });
-      return;
     }
-
-    set({ scripts: scripts || [], loading: false });
   },
 
-  // Récupérer un script avec ses personnages et répliques
   fetchScript: async (scriptId) => {
     set({ loading: true, error: null });
-
-    const { data: script, error } = await supabase
-      .from("scripts")
-      .select(
+    try {
+      const { data, error } = await supabase
+        .from("scripts")
+        .select(
+          `
+          *,
+          characters (*),
+          replicas (*)
         `
-        *,
-        characters (*),
-        replicas (*)
-      `
-      )
-      .eq("id", scriptId)
-      .single();
+        )
+        .eq("id", scriptId)
+        .single();
 
-    if (error) {
+      if (error) throw error;
+
+      // Trier les répliques par order_index
+      if (data.replicas) {
+        data.replicas.sort((a, b) => a.order_index - b.order_index);
+      }
+
+      set({ currentScript: data, loading: false });
+    } catch (error) {
+      console.error("Fetch script error:", error);
       set({ error: error.message, loading: false });
-      return;
     }
-
-    // Trier les répliques par order_index
-    if (script.replicas) {
-      script.replicas.sort((a, b) => a.order_index - b.order_index);
-    }
-
-    set({ currentScript: script, loading: false });
   },
 
-  // Créer un nouveau script
   createScript: async (scriptData) => {
-    // Récupérer le prochain display_order
-    const { data: existingScripts } = await supabase
-      .from("scripts")
-      .select("display_order")
-      .eq("user_id", scriptData.user_id)
-      .order("display_order", { ascending: false })
-      .limit(1);
+    try {
+      // Récupérer le plus grand display_order actuel
+      const { data: existingScripts } = await supabase
+        .from("scripts")
+        .select("display_order")
+        .eq("user_id", scriptData.user_id)
+        .order("display_order", { ascending: false })
+        .limit(1);
 
-    const nextOrder =
-      existingScripts && existingScripts.length > 0
-        ? (existingScripts[0].display_order || 0) + 1
-        : 1;
+      const nextOrder = (existingScripts?.[0]?.display_order || 0) + 1;
 
-    const { data, error } = await supabase
-      .from("scripts")
-      .insert([{ ...scriptData, display_order: nextOrder }])
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from("scripts")
+        .insert([{ ...scriptData, display_order: nextOrder }])
+        .select()
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    set((state) => ({
-      scripts: [...state.scripts, { ...data, characters: [] }],
-    }));
+      set((state) => ({
+        scripts: [...state.scripts, data],
+      }));
 
-    return data;
+      return data;
+    } catch (error) {
+      console.error("Create script error:", error);
+      throw error;
+    }
   },
 
-  // Mettre à jour un script
-  updateScript: async (scriptId, updates) => {
-    const { data, error } = await supabase
-      .from("scripts")
-      .update(updates)
-      .eq("id", scriptId)
-      .select()
-      .single();
+  updateScriptOrder: async (updates) => {
+    try {
+      // Mettre à jour chaque script avec son nouvel ordre
+      for (const update of updates) {
+        const { error } = await supabase
+          .from("scripts")
+          .update({ display_order: update.display_order })
+          .eq("id", update.id);
 
-    if (error) throw error;
+        if (error) throw error;
+      }
 
-    set((state) => ({
-      scripts: state.scripts.map((s) =>
-        s.id === scriptId ? { ...s, ...data } : s
-      ),
-      currentScript:
-        state.currentScript?.id === scriptId
-          ? { ...state.currentScript, ...data }
-          : state.currentScript,
-    }));
-
-    return data;
+      // Mettre à jour le state local
+      set((state) => ({
+        scripts: state.scripts.map((script) => {
+          const update = updates.find((u) => u.id === script.id);
+          if (update) {
+            return { ...script, display_order: update.display_order };
+          }
+          return script;
+        }),
+      }));
+    } catch (error) {
+      console.error("Update script order error:", error);
+      throw error;
+    }
   },
 
-  // Supprimer un script
   deleteScript: async (scriptId) => {
-    const { error } = await supabase
-      .from("scripts")
-      .delete()
-      .eq("id", scriptId);
+    try {
+      const { error } = await supabase
+        .from("scripts")
+        .delete()
+        .eq("id", scriptId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    set((state) => ({
-      scripts: state.scripts.filter((s) => s.id !== scriptId),
-      currentScript:
-        state.currentScript?.id === scriptId ? null : state.currentScript,
-    }));
+      set((state) => ({
+        scripts: state.scripts.filter((s) => s.id !== scriptId),
+      }));
+    } catch (error) {
+      console.error("Delete script error:", error);
+      throw error;
+    }
   },
 
-  // Ajouter un personnage
   addCharacter: async (scriptId, characterData) => {
-    const { data, error } = await supabase
-      .from("characters")
-      .insert([{ script_id: scriptId, ...characterData }])
-      .select()
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from("characters")
+        .insert([{ script_id: scriptId, ...characterData }])
+        .select()
+        .single();
 
-    if (error) throw error;
-
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
-            ...state.currentScript,
-            characters: [...(state.currentScript.characters || []), data],
-          }
-        : null,
-    }));
-
-    return data;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Add character error:", error);
+      throw error;
+    }
   },
 
-  // Mettre à jour un personnage
-  updateCharacter: async (characterId, updates) => {
-    const { data, error } = await supabase
-      .from("characters")
-      .update(updates)
-      .eq("id", characterId)
-      .select()
-      .single();
+  addReplicas: async (replicas) => {
+    try {
+      const { data, error } = await supabase
+        .from("replicas")
+        .insert(replicas)
+        .select();
 
-    if (error) throw error;
-
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
-            ...state.currentScript,
-            characters: state.currentScript.characters.map((c) =>
-              c.id === characterId ? { ...c, ...data } : c
-            ),
-          }
-        : null,
-    }));
-
-    return data;
-  },
-
-  // Ajouter des répliques en lot
-  addReplicas: async (replicasData) => {
-    const { data, error } = await supabase
-      .from("replicas")
-      .insert(replicasData)
-      .select();
-
-    if (error) throw error;
-
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
-            ...state.currentScript,
-            replicas: [
-              ...(state.currentScript.replicas || []),
-              ...data,
-            ].sort((a, b) => a.order_index - b.order_index),
-          }
-        : null,
-    }));
-
-    return data;
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error("Add replicas error:", error);
+      throw error;
+    }
   },
 
   // Ajouter une seule réplique
-  addReplica: async (replicaData) => {
-    const { data, error } = await supabase
-      .from("replicas")
-      .insert([replicaData])
-      .select()
-      .single();
+  addSingleReplica: async (replicaData) => {
+    try {
+      const { data, error } = await supabase
+        .from("replicas")
+        .insert([replicaData])
+        .select()
+        .single();
 
-    if (error) throw error;
+      if (error) throw error;
 
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        const updatedReplicas = [...(state.currentScript.replicas || []), data];
+        updatedReplicas.sort((a, b) => a.order_index - b.order_index);
+        
+        return {
+          currentScript: {
             ...state.currentScript,
-            replicas: [...(state.currentScript.replicas || []), data].sort(
-              (a, b) => a.order_index - b.order_index
-            ),
-          }
-        : null,
-    }));
+            replicas: updatedReplicas,
+          },
+        };
+      });
 
-    return data;
+      return data;
+    } catch (error) {
+      console.error("Add single replica error:", error);
+      throw error;
+    }
   },
 
-  // Mettre à jour une réplique
+  // Modifier une réplique
   updateReplica: async (replicaId, updates) => {
-    // Générer le texte à trous si le texte change
-    if (updates.text) {
-      updates.text_gaps = generateGapsText(updates.text);
-    }
+    try {
+      const { data, error } = await supabase
+        .from("replicas")
+        .update(updates)
+        .eq("id", replicaId)
+        .select()
+        .single();
 
-    const { data, error } = await supabase
-      .from("replicas")
-      .update(updates)
-      .eq("id", replicaId)
-      .select()
-      .single();
+      if (error) throw error;
 
-    if (error) throw error;
-
-    // Mettre à jour le state local immédiatement
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        const updatedReplicas = state.currentScript.replicas.map((r) =>
+          r.id === replicaId ? { ...r, ...data } : r
+        );
+        
+        return {
+          currentScript: {
             ...state.currentScript,
-            replicas: state.currentScript.replicas.map((r) =>
-              r.id === replicaId ? { ...r, ...data } : r
-            ),
-          }
-        : null,
-    }));
+            replicas: updatedReplicas,
+          },
+        };
+      });
 
-    return data;
+      return data;
+    } catch (error) {
+      console.error("Update replica error:", error);
+      throw error;
+    }
   },
 
   // Supprimer une réplique
   deleteReplica: async (replicaId) => {
-    const { error } = await supabase
-      .from("replicas")
-      .delete()
-      .eq("id", replicaId);
+    try {
+      const { error } = await supabase
+        .from("replicas")
+        .delete()
+        .eq("id", replicaId);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
             ...state.currentScript,
-            replicas: state.currentScript.replicas.filter(
-              (r) => r.id !== replicaId
-            ),
-          }
-        : null,
-    }));
+            replicas: state.currentScript.replicas.filter((r) => r.id !== replicaId),
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Delete replica error:", error);
+      throw error;
+    }
   },
 
   // Réordonner les répliques
   reorderReplicas: async (scriptId, replicaIds) => {
-    const updates = replicaIds.map((id, index) => ({
-      id,
-      order_index: index,
-    }));
+    try {
+      // Mettre à jour l'order_index de chaque réplique
+      for (let i = 0; i < replicaIds.length; i++) {
+        const { error } = await supabase
+          .from("replicas")
+          .update({ order_index: i })
+          .eq("id", replicaIds[i]);
 
-    for (const update of updates) {
-      await supabase
-        .from("replicas")
-        .update({ order_index: update.order_index })
-        .eq("id", update.id);
+        if (error) throw error;
+      }
+
+      // Rafraîchir le script
+      await get().fetchScript(scriptId);
+    } catch (error) {
+      console.error("Reorder replicas error:", error);
+      throw error;
     }
-
-    set((state) => ({
-      currentScript: state.currentScript
-        ? {
-            ...state.currentScript,
-            replicas: state.currentScript.replicas
-              .map((r) => {
-                const newIndex = replicaIds.indexOf(r.id);
-                return newIndex !== -1 ? { ...r, order_index: newIndex } : r;
-              })
-              .sort((a, b) => a.order_index - b.order_index),
-          }
-        : null,
-    }));
   },
 
-  // Mettre à jour l'ordre des scripts
-  updateScriptOrder: async (updates) => {
-    for (const update of updates) {
-      await supabase
-        .from("scripts")
-        .update({ display_order: update.display_order })
-        .eq("id", update.id);
-    }
-
-    set((state) => ({
-      scripts: state.scripts
-        .map((script) => {
-          const update = updates.find((u) => u.id === script.id);
-          return update
-            ? { ...script, display_order: update.display_order }
-            : script;
-        })
-        .sort((a, b) => (a.display_order || 0) - (b.display_order || 0)),
-    }));
-  },
-
-  // Vider le script courant
   clearCurrentScript: () => {
     set({ currentScript: null });
   },
 }));
-
-// Helper pour générer le texte à trous
-function generateGapsText(text) {
-  return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
-    return first + "_".repeat(Math.min(rest.length, 5));
-  });
-}
