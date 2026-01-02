@@ -169,40 +169,47 @@ function ScriptDetail() {
   } = currentScript;
 
   return (
-    <div className="pb-32">
-      {/* ===== EN-TÊTE AVEC FOND VISIBLE ===== */}
-      <div className="bg-gradient-to-b from-primary-900/80 to-darker p-4 mb-4 -mx-0 border-b border-primary-700/50">
+    <div className="pb-32 min-h-screen bg-amber-50">
+      {/* ===== EN-TÊTE AVEC FOND COLORÉ ===== */}
+      <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 mb-4 border-b-2 border-primary-600 shadow-lg">
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <h1 className="text-2xl font-display text-gold-500 mb-1">{title}</h1>
-            <p className="text-gray-400 text-sm">
+            <h1 className="text-2xl font-display text-gold-400 mb-1">{title}</h1>
+            <p className="text-gray-300 text-sm">
               {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-1">
-            {/* Bouton voir fichier original */}
+          {/* ===== ICÔNES HEADER AVEC FOND SOLIDE ===== */}
+          <div className="flex gap-2">
+            {/* Bouton voir fichier original - BLEU */}
             {(originalFileUrl || full_text) && (
               <button
                 onClick={() => setShowOriginalFile(true)}
-                className="text-gray-400 hover:text-blue-400 p-2 rounded-lg hover:bg-blue-500/20 transition bg-white/5"
+                className="p-2.5 rounded-lg transition shadow-md
+                           bg-blue-500 hover:bg-blue-600 text-white
+                           border-2 border-blue-600"
                 title="Voir le fichier original"
               >
                 📄
               </button>
             )}
-            {/* Bouton partager - ICÔNE 👥 */}
+            {/* Bouton partager - VERT */}
             <button
               onClick={() => setShowShareModal(true)}
-              className="text-gray-400 hover:text-green-400 p-2 rounded-lg hover:bg-green-500/20 transition bg-white/5"
+              className="p-2.5 rounded-lg transition shadow-md
+                         bg-green-500 hover:bg-green-600 text-white
+                         border-2 border-green-600"
               title="Partager avec ma troupe"
             >
               👥
             </button>
-            {/* Bouton supprimer */}
+            {/* Bouton supprimer - ROUGE */}
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="text-gray-400 hover:text-red-400 p-2 rounded-lg hover:bg-red-500/20 transition bg-white/5"
+              className="p-2.5 rounded-lg transition shadow-md
+                         bg-red-500 hover:bg-red-600 text-white
+                         border-2 border-red-600"
               title="Supprimer"
             >
               🗑️
@@ -214,8 +221,8 @@ function ScriptDetail() {
       <div className="px-4">
         {/* Didascalies / Informations de scène */}
         {stage_directions && (
-          <div className="mb-4 p-4 bg-gray-800/50 rounded-lg border-l-4 border-gray-600">
-            <p className="text-gray-400 italic text-sm whitespace-pre-line">
+          <div className="mb-4 p-4 bg-white/80 rounded-lg border-l-4 border-amber-400 shadow">
+            <p className="text-gray-700 italic text-sm whitespace-pre-line">
               {stage_directions}
             </p>
           </div>
@@ -225,11 +232,11 @@ function ScriptDetail() {
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
           <button
             onClick={() => setSelectedCharacter(null)}
-            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium
+            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow
               ${
                 !selectedCharacter
                   ? "bg-gold-500 text-dark"
-                  : "bg-gray-800 text-gray-400 hover:bg-gray-700"
+                  : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
               }`}
           >
             Tous ({replicas.length})
@@ -238,10 +245,11 @@ function ScriptDetail() {
             <button
               key={char.id}
               onClick={() => setSelectedCharacter(char.id)}
-              className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium"
+              className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
               style={{
-                backgroundColor: selectedCharacter === char.id ? char.color : '#374151',
-                color: selectedCharacter === char.id ? 'white' : '#9CA3AF',
+                backgroundColor: selectedCharacter === char.id ? char.color : 'white',
+                color: selectedCharacter === char.id ? 'white' : '#4B5563',
+                border: selectedCharacter === char.id ? `2px solid ${char.color}` : '1px solid #D1D5DB',
               }}
             >
               {char.name} ({replicaCountByCharacter[char.id] || 0})
@@ -249,37 +257,37 @@ function ScriptDetail() {
           ))}
         </div>
 
-        {/* Modes de vue */}
+        {/* Modes de vue - Adaptés au fond beige */}
         <div className="flex gap-2 mb-6">
           <button
             onClick={() => setViewMode("full")}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "full"
                   ? "bg-primary-700 text-white"
-                  : "bg-gray-800 text-gray-400"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
               }`}
           >
             📖 Complet
           </button>
           <button
             onClick={() => setViewMode("gaps")}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "gaps"
                   ? "bg-primary-700 text-white"
-                  : "bg-gray-800 text-gray-400"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
               }`}
           >
             🔤 Trous
           </button>
           <button
             onClick={() => setViewMode("cue")}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "cue"
                   ? "bg-primary-700 text-white"
-                  : "bg-gray-800 text-gray-400"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
               }`}
           >
             🎭 Répliques
@@ -311,7 +319,7 @@ function ScriptDetail() {
         </div>
 
         {filteredReplicas.length === 0 && (
-          <p className="text-center text-gray-500 py-8">
+          <p className="text-center text-gray-600 py-8 bg-white/50 rounded-lg">
             Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
           </p>
         )}
@@ -456,10 +464,10 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
     switch (viewMode) {
       case "gaps":
         if (revealed) {
-          return <p className="text-gray-100">{replica.text}</p>;
+          return <p className="text-white">{replica.text}</p>;
         } else {
           return (
-            <p className="text-gray-300 font-mono text-sm tracking-wide">
+            <p className="text-white/80 font-mono text-sm tracking-wide">
               {replica.text_gaps || replica.text}
             </p>
           );
@@ -469,14 +477,14 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         return (
           <div>
             {replica.cue_words && (
-              <p className="text-gray-400 italic text-xs mb-2 pb-2 border-b border-white/10">
+              <p className="text-white/70 italic text-xs mb-2 pb-2 border-b border-white/20">
                 💬 {replica.cue_words}
               </p>
             )}
             {revealed ? (
-              <p className="text-gray-100">{replica.text}</p>
+              <p className="text-white">{replica.text}</p>
             ) : (
-              <p className="text-gray-400 text-sm text-center py-2">
+              <p className="text-white/70 text-sm text-center py-2">
                 👆 Toucher pour révéler
               </p>
             )}
@@ -484,7 +492,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         );
 
       default:
-        return <p className="text-gray-100 leading-relaxed">{replica.text}</p>;
+        return <p className="text-white leading-relaxed">{replica.text}</p>;
     }
   };
 
@@ -500,43 +508,43 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         `}
         onClick={() => isClickable && setRevealed(!revealed)}
       >
-        {/* Bulle principale */}
+        {/* Bulle principale - OMBRE POUR FOND BEIGE */}
         <div
           className={`
-            px-4 py-3 rounded-2xl relative
+            px-4 py-3 rounded-2xl relative shadow-lg
             ${isRight ? 'rounded-br-md' : 'rounded-bl-md'}
           `}
           style={{
-            backgroundColor: hexToRgba(bubbleColor, 0.2),
-            border: `1px solid ${hexToRgba(bubbleColor, 0.3)}`,
+            backgroundColor: hexToRgba(bubbleColor, 0.85),
+            border: `2px solid ${hexToRgba(bubbleColor, 0.9)}`,
           }}
         >
           {/* Triangle de la bulle */}
           <div
             className={`absolute bottom-0 w-3 h-3 ${isRight ? '-right-1.5' : '-left-1.5'}`}
             style={{
-              backgroundColor: hexToRgba(bubbleColor, 0.2),
+              backgroundColor: hexToRgba(bubbleColor, 0.85),
               clipPath: isRight 
                 ? 'polygon(0 0, 100% 100%, 0 100%)' 
                 : 'polygon(100% 0, 100% 100%, 0 100%)',
             }}
           />
 
-          {/* En-tête avec nom et numéro */}
+          {/* En-tête avec nom et numéro - TEXTE BLANC POUR CONTRASTE */}
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-sm font-bold" style={{ color: bubbleColor }}>
+            <span className="text-sm font-bold text-white drop-shadow">
               {character?.name || "Inconnu"}
             </span>
-            <span className="text-xs text-gray-500">#{number}</span>
+            <span className="text-xs text-white/70">#{number}</span>
           </div>
 
-          {/* Contenu */}
-          <div className="text-sm">{renderContent()}</div>
+          {/* Contenu - TEXTE BLANC */}
+          <div className="text-sm text-white">{renderContent()}</div>
 
           {/* Indicateur mode */}
           {isClickable && (
             <div className="flex justify-end mt-1">
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-white/60">
                 {revealed ? "✓ Visible" : "👆"}
               </span>
             </div>
