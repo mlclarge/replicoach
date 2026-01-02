@@ -17,10 +17,20 @@ import Loader from "../components/ui/Loader";
 /**
  * Page des textes partagés et gestion des troupes
  */
+
+// Liste des emails autorisés à créer des troupes (metteur en scène + dev)
+const ADMIN_EMAILS = [
+  'moz2611@gmail.com',  // Moz - développeur
+  // Ajoute ici les emails des metteurs en scène
+];
+
 function Shared() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { scripts, fetchScripts } = useScriptStore();
+  
+  // Vérifie si l'utilisateur peut créer des troupes
+  const canCreateTroupe = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
   
   const [loading, setLoading] = useState(true);
   const [troupes, setTroupes] = useState([]);
@@ -278,16 +288,25 @@ function Shared() {
               <span className="text-gray-500 text-xs">Avec un code</span>
             </button>
             
-            {/* ===== BOUTON CRÉER TRÈS VISIBLE ===== */}
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="p-4 bg-gold-500 hover:bg-gold-400 rounded-xl 
-                         transition flex flex-col items-center gap-2 shadow-lg shadow-gold-500/20"
-            >
-              <span className="text-3xl">➕</span>
-              <span className="text-dark font-bold">Créer</span>
-              <span className="text-dark/70 text-xs">Nouvelle troupe</span>
-            </button>
+            {/* ===== BOUTON CRÉER - SEULEMENT POUR ADMINS ===== */}
+            {canCreateTroupe ? (
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="p-4 bg-gold-500 hover:bg-gold-400 rounded-xl 
+                           transition flex flex-col items-center gap-2 shadow-lg shadow-gold-500/20"
+              >
+                <span className="text-3xl">➕</span>
+                <span className="text-dark font-bold">Créer</span>
+                <span className="text-dark/70 text-xs">Nouvelle troupe</span>
+              </button>
+            ) : (
+              <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 
+                              flex flex-col items-center gap-2 opacity-50">
+                <span className="text-3xl">🔒</span>
+                <span className="text-gray-400 font-medium">Créer</span>
+                <span className="text-gray-500 text-xs">Réservé au metteur en scène</span>
+              </div>
+            )}
           </div>
 
           {/* Liste des troupes */}
@@ -296,7 +315,7 @@ function Shared() {
               <span className="text-5xl mb-4 block">🎭</span>
               <p className="text-gray-400">Vous n'êtes dans aucune troupe</p>
               <p className="text-gray-500 text-sm mt-2">
-                Créez une troupe et partagez le code avec vos camarades !
+                Demandez le code à votre metteur en scène pour rejoindre !
               </p>
             </div>
           ) : (
