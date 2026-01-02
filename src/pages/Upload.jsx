@@ -52,19 +52,22 @@ function Upload() {
 
   /**
    * Extrait le texte selon le type de fichier
+   * Retourne { text, confidence, usedOCR, quality, warning }
    */
   const extractText = async (file, onProgress) => {
     const extension = file.name.toLowerCase().split('.').pop();
     
     if (extension === 'pdf') {
+      // extractTextFromPDF retourne maintenant un objet avec métadonnées
       return await extractTextFromPDF(file, onProgress);
     } else if (extension === 'docx' || extension === 'doc') {
-      return await extractTextFromWord(file, onProgress);
+      const text = await extractTextFromWord(file, onProgress);
+      return { text, confidence: 100, usedOCR: false, quality: 'good', warning: null };
     } else if (extension === 'txt') {
       onProgress(0.5);
       const text = await extractTextFromTxt(file);
       onProgress(1);
-      return text;
+      return { text, confidence: 100, usedOCR: false, quality: 'good', warning: null };
     } else {
       throw new Error(`Format non supporté: .${extension}`);
     }
@@ -90,6 +93,10 @@ function Upload() {
       success: false,
       error: null,
       title: "",
+      warning: null,
+      quality: null,
+      usedOCR: false,
+      confidence: null,
     };
 
     try {
@@ -105,12 +112,19 @@ function Upload() {
         percent: basePercent + filePercent * 0.2,
       });
 
-      const text = await extractText(file, (extractProgress) => {
+      const extraction = await extractText(file, (extractProgress) => {
         setProgress({
           step: extension === 'pdf' ? `OCR en cours...` : `Lecture du fichier...`,
           percent: basePercent + filePercent * 0.2 + extractProgress * filePercent * 0.3,
         });
       });
+
+      // Récupérer le texte et les métadonnées de qualité
+      const text = extraction.text;
+      result.warning = extraction.warning;
+      result.quality = extraction.quality;
+      result.usedOCR = extraction.usedOCR;
+      result.confidence = extraction.confidence;
 
       if (!text || text.trim().length === 0) {
         throw new Error("Aucun texte extrait");
@@ -215,6 +229,7 @@ function Upload() {
 
   const successCount = results.filter((r) => r.success).length;
   const errorCount = results.filter((r) => !r.success).length;
+  const warningCount = results.filter((r) => r.success && r.warning).length;
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
@@ -336,19 +351,29 @@ function Upload() {
             <div className="flex gap-4">
               <div className="flex-1 text-center p-3 bg-green-500/10 rounded-lg">
                 <p className="text-3xl font-bold text-green-500">
-                  {successCount}
+                  {successCount - warningCount}
                 </p>
                 <p className="text-green-400 text-sm">
-                  Réussi{successCount > 1 ? "s" : ""}
+                  ✅ Parfait{(successCount - warningCount) > 1 ? "s" : ""}
                 </p>
               </div>
+              {warningCount > 0 && (
+                <div className="flex-1 text-center p-3 bg-yellow-500/10 rounded-lg">
+                  <p className="text-3xl font-bold text-yellow-500">
+                    {warningCount}
+                  </p>
+                  <p className="text-yellow-400 text-sm">
+                    ⚠️ À vérifier
+                  </p>
+                </div>
+              )}
               {errorCount > 0 && (
                 <div className="flex-1 text-center p-3 bg-red-500/10 rounded-lg">
                   <p className="text-3xl font-bold text-red-500">
                     {errorCount}
                   </p>
                   <p className="text-red-400 text-sm">
-                    Erreur{errorCount > 1 ? "s" : ""}
+                    ❌ Erreur{errorCount > 1 ? "s" : ""}
                   </p>
                 </div>
               )}
@@ -360,31 +385,62 @@ function Upload() {
             {results.map((result, index) => (
               <div
                 key={index}
-                className={`p-3 rounded-lg flex items-center gap-3 ${
-                  result.success ? "bg-green-500/10" : "bg-red-500/10"
+                className={`p-3 rounded-lg ${
+                  !result.success 
+                    ? "bg-red-500/10" 
+                    : result.warning 
+                      ? "bg-yellow-500/10" 
+                      : "bg-green-500/10"
                 }`}
               >
-                <span className="text-xl">{result.success ? "✅" : "❌"}</span>
-                <div className="flex-1">
-                  <p
-                    className={`font-medium flex items-center gap-2 ${
-                      result.success ? "text-green-400" : "text-red-400"
-                    }`}
-                  >
-                    <span>{getFileIcon(result.filename)}</span>
-                    {result.title || result.filename}
-                  </p>
-                  {result.success ? (
-                    <p className="text-gray-500 text-sm">
-                      {result.charactersCount} personnage
-                      {result.charactersCount > 1 ? "s" : ""} •{" "}
-                      {result.replicasCount} réplique
-                      {result.replicasCount > 1 ? "s" : ""}
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">
+                    {!result.success ? "❌" : result.warning ? "⚠️" : "✅"}
+                  </span>
+                  <div className="flex-1">
+                    <p
+                      className={`font-medium flex items-center gap-2 ${
+                        !result.success 
+                          ? "text-red-400" 
+                          : result.warning 
+                            ? "text-yellow-400" 
+                            : "text-green-400"
+                      }`}
+                    >
+                      <span>{getFileIcon(result.filename)}</span>
+                      {result.title || result.filename}
+                      {result.usedOCR && (
+                        <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
+                          OCR
+                        </span>
+                      )}
                     </p>
-                  ) : (
-                    <p className="text-red-400 text-sm">{result.error}</p>
-                  )}
+                    {result.success ? (
+                      <p className="text-gray-500 text-sm">
+                        {result.charactersCount} personnage
+                        {result.charactersCount > 1 ? "s" : ""} •{" "}
+                        {result.replicasCount} réplique
+                        {result.replicasCount > 1 ? "s" : ""}
+                        {result.confidence !== null && result.usedOCR && (
+                          <span className={`ml-2 ${
+                            result.confidence >= 70 ? 'text-green-500' :
+                            result.confidence >= 50 ? 'text-yellow-500' : 'text-red-500'
+                          }`}>
+                            • Confiance: {result.confidence}%
+                          </span>
+                        )}
+                      </p>
+                    ) : (
+                      <p className="text-red-400 text-sm">{result.error}</p>
+                    )}
+                  </div>
                 </div>
+                {/* Warning OCR */}
+                {result.success && result.warning && (
+                  <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-sm">
+                    {result.warning}
+                  </div>
+                )}
               </div>
             ))}
           </div>

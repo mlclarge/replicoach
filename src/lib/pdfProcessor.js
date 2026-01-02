@@ -4,76 +4,42 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 /**
- * Extrait le texte d'un fichier (PDF ou TXT)
+ * Résultat de l'extraction avec métadonnées de qualité
+ * @typedef {Object} ExtractionResult
+ * @property {string} text - Le texte extrait
+ * @property {number} confidence - Score de confiance (0-100), 100 si texte natif
+ * @property {boolean} usedOCR - true si OCR utilisé
+ * @property {string} quality - 'good', 'medium', 'poor'
+ * @property {string|null} warning - Message d'avertissement si qualité faible
  */
-export async function extractTextFromFile(file, onOCRProgress = () => {}) {
-  const fileExtension = file.name.split(".").pop().toLowerCase();
-
-  if (fileExtension === "txt") {
-    return await extractTextFromTXT(file);
-  }
-
-  return await extractTextFromPDF(file, onOCRProgress);
-}
 
 /**
- * Extrait le texte d'un fichier TXT
- */
-async function extractTextFromTXT(file) {
-  // Essayer d'abord de lire le contenu brut
-  const arrayBuffer = await file.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  console.log("File size in bytes:", uint8Array.length);
-  console.log("First 20 bytes:", Array.from(uint8Array.slice(0, 20)));
-
-  // Essayer différents encodages
-  const encodings = ["UTF-8", "ISO-8859-1", "windows-1252"];
-
-  for (const encoding of encodings) {
-    try {
-      const decoder = new TextDecoder(encoding);
-      const text = decoder.decode(uint8Array);
-
-      if (text && text.trim().length > 0) {
-        console.log(
-          `Successfully decoded with ${encoding}, length: ${text.length}`
-        );
-        return text;
-      }
-    } catch (e) {
-      console.log(`Failed to decode with ${encoding}:`, e);
-    }
-  }
-
-  // Fallback avec FileReader
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const text = event.target.result;
-      console.log("FileReader result length:", text.length);
-      resolve(text);
-    };
-    reader.onerror = () => reject(new Error("Erreur de lecture"));
-    reader.readAsText(file);
-  });
-}
-
-/**
- * Extrait le texte d'un fichier PDF
+ * Extrait le texte d'un PDF avec informations de qualité
+ * @param {File} file - Le fichier PDF
+ * @param {Function} onOCRProgress - Callback de progression
+ * @returns {Promise<ExtractionResult>}
  */
 export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const text = await extractNativeText(arrayBuffer);
+    const nativeResult = await extractNativeText(arrayBuffer);
 
-    if (text.trim().length < 100) {
-      console.log("Peu de texte natif trouvé, tentative OCR...");
-      const freshBuffer = await file.arrayBuffer();
-      return await extractWithOCR(freshBuffer, onOCRProgress);
+    // Si suffisamment de texte natif, pas besoin d'OCR
+    if (nativeResult.text.trim().length >= 100) {
+      return {
+        text: nativeResult.text,
+        confidence: 100,
+        usedOCR: false,
+        quality: 'good',
+        warning: null
+      };
     }
 
-    return text;
+    // Sinon, utiliser l'OCR
+    console.log("Peu de texte natif trouvé, tentative OCR...");
+    const freshBuffer = await file.arrayBuffer();
+    return await extractWithOCR(freshBuffer, onOCRProgress);
+    
   } catch (error) {
     console.error("Erreur extraction native:", error);
     const freshBuffer = await file.arrayBuffer();
@@ -81,6 +47,9 @@ export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
   }
 }
 
+/**
+ * Extraction du texte natif (PDF avec texte intégré)
+ */
 async function extractNativeText(arrayBuffer) {
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = "";
@@ -92,15 +61,21 @@ async function extractNativeText(arrayBuffer) {
     fullText += pageText + "\n\n";
   }
 
-  return fullText.trim();
+  return { text: fullText.trim() };
 }
 
+/**
+ * Extraction avec OCR (Tesseract.js)
+ * Retourne le texte avec le score de confiance
+ */
 async function extractWithOCR(arrayBuffer, onProgress) {
   const Tesseract = await import("tesseract.js");
 
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   const numPages = pdf.numPages;
   let fullText = "";
+  let totalConfidence = 0;
+  let pageCount = 0;
 
   const worker = await Tesseract.createWorker("fra", 1, {
     logger: (m) => {
@@ -116,6 +91,7 @@ async function extractWithOCR(arrayBuffer, onProgress) {
   try {
     for (let i = 1; i <= numPages; i++) {
       const page = await pdf.getPage(i);
+
       const viewport = page.getViewport({ scale: 2.0 });
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
@@ -127,18 +103,95 @@ async function extractWithOCR(arrayBuffer, onProgress) {
         viewport: viewport,
       }).promise;
 
-      const {
-        data: { text },
-      } = await worker.recognize(canvas);
-      fullText += text + "\n\n";
+      const { data } = await worker.recognize(canvas);
+      
+      fullText += data.text + "\n\n";
+      
+      // Accumuler la confiance moyenne
+      if (data.confidence) {
+        totalConfidence += data.confidence;
+        pageCount++;
+      }
 
       onProgress(i / numPages);
     }
 
     await worker.terminate();
-    return fullText.trim();
+    
+    // Calculer la confiance moyenne
+    const avgConfidence = pageCount > 0 ? Math.round(totalConfidence / pageCount) : 0;
+    
+    // Déterminer la qualité et le warning
+    const { quality, warning } = evaluateQuality(avgConfidence, fullText);
+    
+    return {
+      text: fullText.trim(),
+      confidence: avgConfidence,
+      usedOCR: true,
+      quality,
+      warning
+    };
+    
   } catch (error) {
     await worker.terminate();
     throw error;
   }
+}
+
+/**
+ * Évalue la qualité de l'extraction
+ * @param {number} confidence - Score de confiance OCR (0-100)
+ * @param {string} text - Texte extrait
+ * @returns {{ quality: string, warning: string|null }}
+ */
+function evaluateQuality(confidence, text) {
+  // Vérifications supplémentaires sur le texte
+  const textLength = text.trim().length;
+  const wordCount = text.trim().split(/\s+/).length;
+  
+  // Ratio de caractères "bizarres" (indicateur de mauvais OCR)
+  const weirdCharsCount = (text.match(/[^\w\s\u00C0-\u017Fàâäéèêëïîôùûüÿœæç.,;:!?'"()\-–—«»\n]/gi) || []).length;
+  const weirdCharRatio = textLength > 0 ? weirdCharsCount / textLength : 0;
+  
+  // Score ajusté
+  let adjustedConfidence = confidence;
+  
+  // Pénaliser si beaucoup de caractères bizarres
+  if (weirdCharRatio > 0.1) {
+    adjustedConfidence -= 20;
+  } else if (weirdCharRatio > 0.05) {
+    adjustedConfidence -= 10;
+  }
+  
+  // Pénaliser si très peu de mots
+  if (wordCount < 50) {
+    adjustedConfidence -= 15;
+  }
+  
+  // Déterminer la qualité
+  if (adjustedConfidence >= 70) {
+    return {
+      quality: 'good',
+      warning: null
+    };
+  } else if (adjustedConfidence >= 50) {
+    return {
+      quality: 'medium',
+      warning: `⚠️ Qualité OCR moyenne (${confidence}%). Vérifiez le texte extrait.`
+    };
+  } else {
+    return {
+      quality: 'poor',
+      warning: `⚠️ Qualité OCR faible (${confidence}%). Le document est peut-être flou ou mal scanné. Vérifiez et corrigez le texte si nécessaire.`
+    };
+  }
+}
+
+/**
+ * Version simplifiée pour compatibilité (retourne juste le texte)
+ * @deprecated Utiliser extractTextFromPDF qui retourne plus d'infos
+ */
+export async function extractTextSimple(file, onOCRProgress = () => {}) {
+  const result = await extractTextFromPDF(file, onOCRProgress);
+  return result.text;
 }
