@@ -1191,24 +1191,24 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             </div>
           )}
 
-          {/* Bouton menu - rond blanc avec + gris */}
+          {/* Bouton menu - rond blanc avec + gris - EN HAUT de la bulle */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className={`absolute ${isRight ? '-left-3 top-1/2 -translate-y-1/2' : '-right-3 top-1/2 -translate-y-1/2'}
+            className={`absolute -top-2 -right-2
                        w-7 h-7 rounded-full flex items-center justify-center
                        bg-white border-2 border-gray-300 shadow-md
-                       hover:border-gray-400 hover:shadow-lg
-                       transition-all`}
+                       hover:border-primary-400 hover:shadow-lg
+                       transition-all z-10`}
             title="Options"
           >
-            <span className="text-gray-400 text-lg font-bold leading-none">+</span>
+            <span className="text-gray-400 text-sm font-bold leading-none">⋯</span>
           </button>
         </div>
 
-        {/* Menu contextuel */}
+        {/* Menu contextuel - positionné sous le bouton */}
         {showMenu && (
           <>
             {/* Overlay pour fermer */}
@@ -1220,9 +1220,9 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               }}
             />
             
-            {/* Menu */}
+            {/* Menu - s'ouvre vers le bas */}
             <div 
-              className={`absolute z-50 ${isRight ? 'left-0' : 'right-0'} top-0
+              className={`absolute z-50 right-0 top-6
                          bg-gray-900 border border-gray-700 rounded-xl shadow-xl
                          py-2 min-w-[160px]`}
             >

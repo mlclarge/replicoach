@@ -443,3 +443,132 @@ export const incrementDownloadCount = async (documentId) => {
     throw error
   }
 }
+
+// =====================================================
+// SYSTÈME DE TAGS
+// =====================================================
+
+// Récupérer tous les tags de l'utilisateur
+export const fetchUserTags = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_tags')
+    .select('*')
+    .eq('user_id', userId)
+    .order('name')
+  
+  if (error) {
+    console.error('Error fetching tags:', error)
+    return []
+  }
+  return data || []
+}
+
+// Créer un nouveau tag
+export const createTag = async (userId, name, color = '#6B7280') => {
+  const { data, error } = await supabase
+    .from('user_tags')
+    .insert([{ user_id: userId, name, color }])
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Supprimer un tag
+export const deleteTag = async (tagId) => {
+  const { error } = await supabase
+    .from('user_tags')
+    .delete()
+    .eq('id', tagId)
+  
+  if (error) throw error
+}
+
+// Modifier un tag
+export const updateTag = async (tagId, updates) => {
+  const { data, error } = await supabase
+    .from('user_tags')
+    .update(updates)
+    .eq('id', tagId)
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Récupérer les tags d'un script
+export const fetchScriptTags = async (scriptId) => {
+  const { data, error } = await supabase
+    .from('script_tags')
+    .select(`
+      id,
+      tag_id,
+      user_tags (
+        id,
+        name,
+        color
+      )
+    `)
+    .eq('script_id', scriptId)
+  
+  if (error) {
+    console.error('Error fetching script tags:', error)
+    return []
+  }
+  return data?.map(st => st.user_tags) || []
+}
+
+// Ajouter un tag à un script
+export const addTagToScript = async (scriptId, tagId) => {
+  const { data, error } = await supabase
+    .from('script_tags')
+    .insert([{ script_id: scriptId, tag_id: tagId }])
+    .select()
+    .single()
+  
+  if (error) throw error
+  return data
+}
+
+// Retirer un tag d'un script
+export const removeTagFromScript = async (scriptId, tagId) => {
+  const { error } = await supabase
+    .from('script_tags')
+    .delete()
+    .eq('script_id', scriptId)
+    .eq('tag_id', tagId)
+  
+  if (error) throw error
+}
+
+// Récupérer tous les scripts avec leurs tags
+export const fetchScriptsWithTags = async (userId) => {
+  const { data: scripts, error: scriptsError } = await supabase
+    .from('scripts')
+    .select(`
+      *,
+      characters (*),
+      script_tags (
+        user_tags (
+          id,
+          name,
+          color
+        )
+      )
+    `)
+    .eq('user_id', userId)
+    .order('display_order', { ascending: true })
+  
+  if (scriptsError) {
+    console.error('Error fetching scripts with tags:', scriptsError)
+    return []
+  }
+  
+  // Transformer les données pour avoir les tags directement
+  return scripts?.map(script => ({
+    ...script,
+    tags: script.script_tags?.map(st => st.user_tags).filter(Boolean) || []
+  })) || []
+}

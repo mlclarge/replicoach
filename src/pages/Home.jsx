@@ -8,10 +8,13 @@ import {
   deleteDirectorNote,
   fetchUserTroupes,
   shareScript as shareScriptToTroupe,
+  fetchUserTags,
+  fetchScriptTags,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
 import PublicLibrary from "../components/PublicLibrary";
+import { ScriptTagsModal, ScriptTagBadges, TagFilter } from "../components/TagManager";
 import {
   DndContext,
   closestCenter,
@@ -42,7 +45,7 @@ const CARD_BACKGROUNDS = [
   { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900' },
 ];
 
-function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0, notesCount = 0 }) {
+function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, index = 0, notesCount = 0 }) {
   const {
     attributes,
     listeners,
@@ -116,6 +119,25 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0, note
                 </div>
               </div>
 
+              {/* TAGS DU SCRIPT */}
+              {script.tags && script.tags.length > 0 && (
+                <div className="flex gap-1.5 mt-2 flex-wrap">
+                  {script.tags.map((tag) => (
+                    <span
+                      key={tag.id}
+                      className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{
+                        backgroundColor: `${tag.color}25`,
+                        color: tag.color,
+                        border: `1px solid ${tag.color}50`,
+                      }}
+                    >
+                      {tag.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
               {/* TAGS PERSONNAGES - Bien contrastés */}
               {script.characters && script.characters.length > 0 && (
                 <div className="flex gap-2 mt-3 flex-wrap">
@@ -144,6 +166,20 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0, note
 
             {/* ===== BOUTONS D'ACTION - TRÈS VISIBLES ===== */}
             <div className="flex flex-col gap-2">
+              {/* Bouton tags - FOND VIOLET */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onManageTags(script);
+                }}
+                className="p-2.5 text-xl bg-purple-500 hover:bg-purple-600 
+                           text-white rounded-lg transition shadow-md
+                           border-2 border-purple-600"
+                title="Gérer les tags"
+              >
+                🏷️
+              </button>
+              
               {/* Bouton partager - FOND VERT SOLIDE */}
               <button
                 onClick={(e) => {
@@ -400,6 +436,12 @@ function Home() {
   const [shareSuccess, setShareSuccess] = useState(null);
   const [shareError, setShareError] = useState(null);
 
+  // États pour les TAGS
+  const [userTags, setUserTags] = useState([]);
+  const [selectedTagFilter, setSelectedTagFilter] = useState(null);
+  const [scriptTagsMap, setScriptTagsMap] = useState({}); // { scriptId: [tags] }
+  const [managingTagsFor, setManagingTagsFor] = useState(null); // script en cours d'édition tags
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -416,8 +458,44 @@ function Home() {
       fetchScripts(user.id);
       loadDirectorNotes();
       loadNotesCounts();
+      loadUserTags();
     }
   }, [user, fetchScripts]);
+
+  // Charger les tags de l'utilisateur
+  const loadUserTags = async () => {
+    if (!user) return;
+    try {
+      const tags = await fetchUserTags(user.id);
+      setUserTags(tags || []);
+    } catch (err) {
+      console.error("Erreur chargement tags:", err);
+    }
+  };
+
+  // Charger les tags de chaque script
+  const loadScriptsTags = async () => {
+    if (!user || scripts.length === 0) return;
+    try {
+      const tagsMap = {};
+      await Promise.all(
+        scripts.map(async (script) => {
+          const tags = await fetchScriptTags(script.id);
+          tagsMap[script.id] = tags || [];
+        })
+      );
+      setScriptTagsMap(tagsMap);
+    } catch (err) {
+      console.error("Erreur chargement tags scripts:", err);
+    }
+  };
+
+  // Charger les tags quand les scripts changent
+  useEffect(() => {
+    if (scripts.length > 0) {
+      loadScriptsTags();
+    }
+  }, [scripts]);
 
   // Charger le nombre de notes par script
   const loadNotesCounts = async () => {
@@ -443,6 +521,14 @@ function Home() {
   useEffect(() => {
     let sorted = [...scripts];
 
+    // Filtrer par tag si sélectionné
+    if (selectedTagFilter) {
+      sorted = sorted.filter(script => {
+        const scriptTags = scriptTagsMap[script.id] || [];
+        return scriptTags.some(tag => tag.id === selectedTagFilter);
+      });
+    }
+
     switch (sortBy) {
       case "alpha":
         sorted.sort((a, b) => a.title.localeCompare(b.title));
@@ -456,7 +542,7 @@ function Home() {
     }
 
     setLocalScripts(sorted);
-  }, [scripts, sortBy]);
+  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap]);
 
   const handleOpenScript = (scriptId) => {
     navigate(`/script/${scriptId}`);
@@ -687,8 +773,19 @@ function Home() {
         </div>
       </div>
 
+      {/* Filtre par Tags */}
+      {userTags.length > 0 && (
+        <div className="mb-4">
+          <TagFilter 
+            tags={userTags}
+            selectedTagId={selectedTagFilter}
+            onSelect={setSelectedTagFilter}
+          />
+        </div>
+      )}
+
       {/* Indication drag & drop */}
-      {sortBy === "order" && localScripts.length > 1 && (
+      {sortBy === "order" && localScripts.length > 1 && !selectedTagFilter && (
         <p className="text-gray-500 text-xs mb-3 flex items-center gap-1">
           <span>💡</span> Maintenez appuyé sur ⋮⋮ pour réorganiser
         </p>
@@ -721,11 +818,15 @@ function Home() {
               {localScripts.map((script, index) => (
                 <SortableScriptCard
                   key={script.id}
-                  script={script}
+                  script={{
+                    ...script,
+                    tags: scriptTagsMap[script.id] || []
+                  }}
                   index={index}
                   onDelete={handleDelete}
                   onOpen={handleOpenScript}
                   onShare={handleOpenShare}
+                  onManageTags={(s) => setManagingTagsFor(s)}
                   notesCount={notesCounts[script.id] || 0}
                 />
               ))}
@@ -867,6 +968,21 @@ function Home() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal gestion des tags */}
+      {managingTagsFor && (
+        <ScriptTagsModal
+          scriptId={managingTagsFor.id}
+          scriptTitle={managingTagsFor.title}
+          userId={user?.id}
+          onClose={() => {
+            setManagingTagsFor(null);
+            // Recharger les tags du script modifié
+            loadScriptsTags();
+            loadUserTags();
+          }}
+        />
       )}
     </div>
   );

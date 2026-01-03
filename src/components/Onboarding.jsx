@@ -31,6 +31,12 @@ const ONBOARDING_SLIDES = [
     tip: '💡 Cliquez sur 📝 après une réplique pour y ajouter votre note',
   },
   {
+    icon: '🏷️',
+    title: 'Organisez avec des tags',
+    description: 'Créez des tags pour catégoriser vos textes : "Comédie", "À réviser", "Maîtrisé"... Retrouvez-les facilement en filtrant par tag.',
+    tip: '💡 Parfait quand vous avez beaucoup de textes à gérer',
+  },
+  {
     icon: '🎨',
     title: 'Chaque personnage a sa couleur',
     description: 'Les répliques sont affichées comme des bulles de conversation, avec une couleur unique par personnage.',
@@ -59,6 +65,13 @@ const ONBOARDING_SLIDES = [
     title: 'Installez l\'application',
     description: 'Ajoutez RépliCoach à votre écran d\'accueil pour un accès rapide, même hors connexion !',
     tip: '💡 Sur Android : Menu ⋮ → "Installer l\'application"',
+  },
+  {
+    icon: '🚧',
+    title: 'Bientôt disponible...',
+    description: 'Nous travaillons sur de nouvelles fonctionnalités passionnantes pour améliorer votre expérience !',
+    tip: '🎙️ Enregistrer vos répliques • 🎬 Uploader des vidéos • 🎭 Répliques à l\'italienne en audio',
+    isFuture: true,
   },
   {
     icon: '🚀',
@@ -162,8 +175,12 @@ function Onboarding() {
           </p>
 
           {/* Astuce */}
-          <div className="bg-primary-900/30 border border-primary-700/50 rounded-lg p-3 mb-6">
-            <p className="text-primary-300 text-sm">
+          <div className={`rounded-lg p-3 mb-6 ${
+            slide.isFuture 
+              ? 'bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/50' 
+              : 'bg-primary-900/30 border border-primary-700/50'
+          }`}>
+            <p className={`text-sm ${slide.isFuture ? 'text-purple-200' : 'text-primary-300'}`}>
               {slide.tip}
             </p>
           </div>
