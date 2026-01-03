@@ -194,11 +194,14 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const [category, setCategory] = useState("script");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files?.[0];
+    console.log("Fichier sélectionné:", selectedFile);
     if (selectedFile) {
       setFile(selectedFile);
+      setError(null);
       // Auto-remplir le titre avec le nom du fichier si vide
       if (!title) {
         const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
@@ -208,20 +211,56 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   };
 
   const handleUpload = async () => {
-    if (!file || !title.trim()) return;
+    console.log("=== Début upload ===");
+    console.log("File:", file);
+    console.log("Title:", title);
+    console.log("Category:", category);
+    console.log("UserId:", userId);
+
+    if (!file) {
+      setError("Veuillez sélectionner un fichier");
+      return;
+    }
+    if (!title.trim()) {
+      setError("Veuillez entrer un titre");
+      return;
+    }
+    if (!userId) {
+      setError("Vous devez être connecté");
+      return;
+    }
 
     setUploading(true);
     setError(null);
 
     try {
-      await uploadPublicDocument(file, { title, description, category }, userId);
-      onSuccess();
+      console.log("Appel uploadPublicDocument...");
+      const result = await uploadPublicDocument(file, { title, description, category }, userId);
+      console.log("Upload réussi:", result);
+      setSuccess(true);
+      setTimeout(() => {
+        onSuccess();
+      }, 1500);
     } catch (err) {
+      console.error("Erreur upload:", err);
       setError(err.message || "Erreur lors de l'upload");
     } finally {
       setUploading(false);
     }
   };
+
+  // État succès
+  if (success) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="bg-dark rounded-xl max-w-md w-full border border-green-500 p-8 text-center">
+          <span className="text-6xl block mb-4">✅</span>
+          <h3 className="text-xl font-bold text-green-400 mb-2">Document envoyé !</h3>
+          <p className="text-gray-400">Il sera visible après validation par un modérateur.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
