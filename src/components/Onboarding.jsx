@@ -19,6 +19,12 @@ const ONBOARDING_SLIDES = [
     tip: '💡 Les fichiers .txt et .docx donnent les meilleurs résultats',
   },
   {
+    icon: '✏️',
+    title: 'Corrigez si nécessaire',
+    description: 'Après l\'import, vous pouvez modifier, ajouter ou supprimer des répliques. Cliquez sur une réplique pour l\'éditer, ou utilisez le bouton + pour en ajouter.',
+    tip: '💡 Glissez les répliques pour réorganiser l\'ordre si besoin',
+  },
+  {
     icon: '🎨',
     title: 'Chaque personnage a sa couleur',
     description: 'Les répliques sont affichées comme des bulles de conversation, avec une couleur unique par personnage.',
