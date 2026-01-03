@@ -410,6 +410,28 @@ export const getPublicDocumentUrl = (path) => {
   return data.publicUrl
 }
 
+// Supprimer un document public (seulement par son propriétaire)
+export const deletePublicDocument = async (documentId, filePath) => {
+  // Supprimer le fichier du storage
+  if (filePath) {
+    const { error: storageError } = await supabase.storage
+      .from('public-documents')
+      .remove([filePath])
+    
+    if (storageError) {
+      console.error('Erreur suppression storage:', storageError)
+    }
+  }
+  
+  // Supprimer l'entrée dans la table
+  const { error } = await supabase
+    .from('public_documents')
+    .delete()
+    .eq('id', documentId)
+  
+  if (error) throw error
+}
+
 // Incrémenter le compteur de téléchargement
 export const incrementDownloadCount = async (documentId) => {
   const { error } = await supabase.rpc('increment_download_count', {

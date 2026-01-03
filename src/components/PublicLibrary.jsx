@@ -4,8 +4,8 @@ import {
   fetchPublicDocuments,
   uploadPublicDocument,
   getPublicDocumentUrl,
+  deletePublicDocument,
 } from "../lib/supabase";
-import DocumentViewer from "./DocumentViewer";
 import Loader from "./ui/Loader";
 
 /**
@@ -18,7 +18,6 @@ function PublicLibrary() {
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [viewingDoc, setViewingDoc] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
@@ -120,25 +119,32 @@ function PublicLibrary() {
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {documents.map((doc) => (
-                <div
+                <PublicDocItem 
                   key={doc.id}
-                  onClick={() => setViewingDoc(doc)}
-                  className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 
-                             rounded-lg cursor-pointer transition"
-                >
-                  <span className="text-xl">{getFileIcon(doc.file_type)}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-medium truncate">{doc.title}</p>
-                    {doc.description && (
-                      <p className="text-gray-500 text-xs truncate">{doc.description}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-gray-500 text-xs">
-                      {doc.download_count || 0} 📥
-                    </span>
-                  </div>
-                </div>
+                  doc={doc}
+                  userId={user?.id}
+                  onView={() => {
+                    const url = getPublicDocumentUrl(doc.file_path);
+                    console.log("Opening document:", url);
+                    if (url) {
+                      window.open(url, '_blank');
+                    } else {
+                      alert("Impossible d'ouvrir ce document");
+                    }
+                  }}
+                  onDelete={async () => {
+                    if (confirm(`Supprimer "${doc.title}" ?`)) {
+                      try {
+                        await deletePublicDocument(doc.id, doc.file_path);
+                        loadDocuments();
+                      } catch (err) {
+                        console.error("Erreur suppression:", err);
+                        alert("Erreur lors de la suppression");
+                      }
+                    }
+                  }}
+                  getFileIcon={getFileIcon}
+                />
               ))}
             </div>
           )}
@@ -154,19 +160,6 @@ function PublicLibrary() {
             <span>Proposer un document</span>
           </button>
         </div>
-      )}
-
-      {/* Modal de visualisation */}
-      {viewingDoc && (
-        <DocumentViewer
-          file={{
-            name: viewingDoc.file_name,
-            url: getPublicDocumentUrl(viewingDoc.file_path),
-            type: viewingDoc.file_type === 'pdf' ? 'application/pdf' : 
-                  viewingDoc.file_type === 'image' ? 'image/jpeg' : 'text/plain',
-          }}
-          onClose={() => setViewingDoc(null)}
-        />
       )}
 
       {/* Modal d'upload */}
@@ -377,6 +370,61 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
             {uploading ? "Upload..." : "📤 Envoyer"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Item de document public avec boutons d'action
+ */
+function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
+  const isOwner = userId && doc.uploaded_by === userId;
+  
+  return (
+    <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 
+                    rounded-lg transition group">
+      {/* Icône et infos - cliquable pour ouvrir */}
+      <div 
+        className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+        onClick={onView}
+      >
+        <span className="text-xl">{getFileIcon(doc.file_type)}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-white text-sm font-medium truncate">{doc.title}</p>
+          {doc.description && (
+            <p className="text-gray-500 text-xs truncate">{doc.description}</p>
+          )}
+        </div>
+      </div>
+      
+      {/* Boutons d'action */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500 text-xs">
+          {doc.download_count || 0} 📥
+        </span>
+        
+        {/* Bouton ouvrir */}
+        <button
+          onClick={onView}
+          className="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-700 
+                     rounded-lg transition"
+          title="Ouvrir"
+        >
+          👁️
+        </button>
+        
+        {/* Bouton supprimer (seulement pour le propriétaire) */}
+        {isOwner && (
+          <button
+            onClick={onDelete}
+            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 
+                       rounded-lg transition"
+            title="Supprimer"
+          >
+            🗑️
+          </button>
+        )}
       </div>
     </div>
   );
