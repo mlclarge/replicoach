@@ -696,51 +696,13 @@ function ScriptDetail() {
         )}
       </div>
 
-      {/* Boutons flottants */}
-      <div className="fixed bottom-24 right-4 flex flex-col gap-3">
-        {/* Bouton Ajouter note */}
-        <button
-          onClick={() => setShowAddNote({ afterReplicaId: null })}
-          className="w-14 h-14 bg-amber-500 hover:bg-amber-400 rounded-full
-                     flex items-center justify-center text-2xl shadow-lg
-                     transition transform hover:scale-110"
-          title="Ajouter une note personnelle"
-        >
-          📝
-        </button>
-        
-        {/* Bouton Ajouter personnage */}
-        <button
-          onClick={() => setShowAddCharacter(true)}
-          className="w-14 h-14 bg-purple-600 hover:bg-purple-500 rounded-full
-                     flex items-center justify-center text-2xl shadow-lg
-                     transition transform hover:scale-110"
-          title="Ajouter un personnage"
-        >
-          👤
-        </button>
-        
-        {/* Bouton Ajouter/Éditer réplique */}
-        <button
-          onClick={() => setShowAddReplica(true)}
-          className="w-14 h-14 bg-green-600 hover:bg-green-500 rounded-full
-                     flex items-center justify-center text-2xl shadow-lg
-                     transition transform hover:scale-110"
-          title="Ajouter une réplique"
-        >
-          ✏️
-        </button>
-        
-        {/* Bouton Audio */}
-        <Link
-          to={`/script/${id}/audio`}
-          className="w-14 h-14 bg-gold-500 rounded-full
-                     flex items-center justify-center text-2xl shadow-lg hover:bg-gold-400
-                     transition transform hover:scale-110"
-        >
-          🔊
-        </Link>
-      </div>
+      {/* Bouton flottant unique avec menu */}
+      <FloatingActionMenu
+        onAddNote={() => setShowAddNote({ afterReplicaId: null })}
+        onAddCharacter={() => setShowAddCharacter(true)}
+        onAddReplica={() => setShowAddReplica(true)}
+        audioLink={`/script/${id}/audio`}
+      />
 
       {/* Modal d'édition de réplique */}
       {editingReplica && (
@@ -963,6 +925,108 @@ function ScriptDetail() {
 }
 
 /**
+ * Menu flottant unique avec actions
+ */
+function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="fixed bottom-24 right-4 z-40">
+      {/* Menu déployé */}
+      {isOpen && (
+        <>
+          {/* Overlay pour fermer */}
+          <div 
+            className="fixed inset-0 bg-black/30 -z-10"
+            onClick={() => setIsOpen(false)}
+          />
+          
+          {/* Options du menu */}
+          <div className="absolute bottom-16 right-0 flex flex-col gap-3 items-end mb-3">
+            {/* Audio */}
+            <Link
+              to={audioLink}
+              className="flex items-center gap-3 animate-fade-in"
+              onClick={() => setIsOpen(false)}
+            >
+              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
+                Mode audio
+              </span>
+              <div className="w-12 h-12 bg-gold-500 rounded-full flex items-center justify-center text-xl shadow-lg">
+                🔊
+              </div>
+            </Link>
+            
+            {/* Ajouter réplique */}
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onAddReplica();
+              }}
+              className="flex items-center gap-3 animate-fade-in"
+              style={{ animationDelay: '50ms' }}
+            >
+              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
+                Ajouter réplique
+              </span>
+              <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center text-xl shadow-lg">
+                💬
+              </div>
+            </button>
+            
+            {/* Ajouter personnage */}
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onAddCharacter();
+              }}
+              className="flex items-center gap-3 animate-fade-in"
+              style={{ animationDelay: '100ms' }}
+            >
+              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
+                Ajouter personnage
+              </span>
+              <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-xl shadow-lg">
+                👤
+              </div>
+            </button>
+            
+            {/* Ajouter note */}
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                onAddNote();
+              }}
+              className="flex items-center gap-3 animate-fade-in"
+              style={{ animationDelay: '150ms' }}
+            >
+              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
+                Ajouter note
+              </span>
+              <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-xl shadow-lg">
+                📝
+              </div>
+            </button>
+          </div>
+        </>
+      )}
+      
+      {/* Bouton principal */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg
+                   transition-all duration-300 transform
+                   ${isOpen 
+                     ? 'bg-gray-700 rotate-45' 
+                     : 'bg-primary-600 hover:bg-primary-500 hover:scale-110'}`}
+      >
+        ➕
+      </button>
+    </div>
+  );
+}
+
+/**
  * Bulle de réplique draggable (pour le mode édition)
  */
 function SortableReplicaBubble({ replica, character, characters, viewMode, isRight, number, editMode, onEdit, onDelete, onSplit, onAddNote }) {
@@ -1018,6 +1082,7 @@ function SortableReplicaBubble({ replica, character, characters, viewMode, isRig
  */
 function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onDelete, onSplit, onAddNote }) {
   const [revealed, setRevealed] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
 
   const bubbleColor = character?.color || '#6B7280';
   
@@ -1067,17 +1132,24 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
 
   const isClickable = viewMode !== "full";
 
+  // Fermer le menu quand on clique ailleurs
+  const handleBubbleClick = () => {
+    if (isClickable) {
+      setRevealed(!revealed);
+    }
+  };
+
   return (
     <div className={`flex ${isRight ? 'justify-end' : 'justify-start'} mb-1`}>
       <div
         className={`
-          relative max-w-[85%] group
+          relative max-w-[85%]
           ${isClickable ? 'cursor-pointer active:scale-[0.98]' : ''}
           transition-transform duration-150
         `}
-        onClick={() => isClickable && setRevealed(!revealed)}
+        onClick={handleBubbleClick}
       >
-        {/* Bulle principale - OMBRE POUR FOND BEIGE */}
+        {/* Bulle principale */}
         <div
           className={`
             px-4 py-3 rounded-2xl relative shadow-lg
@@ -1099,7 +1171,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             }}
           />
 
-          {/* En-tête avec nom et numéro - TEXTE BLANC POUR CONTRASTE */}
+          {/* En-tête avec nom et numéro */}
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="text-sm font-bold text-white drop-shadow">
               {character?.name || "Inconnu"}
@@ -1107,7 +1179,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             <span className="text-xs text-white/70">#{number}</span>
           </div>
 
-          {/* Contenu - TEXTE BLANC */}
+          {/* Contenu */}
           <div className="text-sm text-white">{renderContent()}</div>
 
           {/* Indicateur mode */}
@@ -1118,56 +1190,89 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               </span>
             </div>
           )}
+
+          {/* Bouton menu (icône translucide dans le coin) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className={`absolute ${isRight ? 'top-1 left-1' : 'top-1 right-1'}
+                       w-6 h-6 rounded-full flex items-center justify-center
+                       text-white/40 hover:text-white/80 hover:bg-white/20
+                       transition-all text-xs`}
+            title="Options"
+          >
+            ⋯
+          </button>
         </div>
 
-        {/* Boutons d'action - TOUJOURS VISIBLES SUR MOBILE */}
-        <div className={`absolute -top-2 ${isRight ? '-left-2' : '-right-2'} flex gap-1 
-                        sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            className="w-8 h-8 bg-gray-800 hover:bg-primary-600 border border-gray-600
-                       rounded-full flex items-center justify-center text-sm shadow-lg"
-            title="Modifier"
-          >
-            ✏️
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onAddNote();
-            }}
-            className="w-8 h-8 bg-gray-800 hover:bg-amber-600 border border-gray-600
-                       rounded-full flex items-center justify-center text-sm shadow-lg"
-            title="Ajouter une note"
-          >
-            📝
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplit();
-            }}
-            className="w-8 h-8 bg-gray-800 hover:bg-orange-600 border border-gray-600
-                       rounded-full flex items-center justify-center text-sm shadow-lg"
-            title="Diviser en deux"
-          >
-            ✂️
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            className="w-8 h-8 bg-gray-800 hover:bg-red-600 border border-gray-600
-                       rounded-full flex items-center justify-center text-sm shadow-lg"
-            title="Supprimer"
-          >
-            🗑️
-          </button>
-        </div>
+        {/* Menu contextuel */}
+        {showMenu && (
+          <>
+            {/* Overlay pour fermer */}
+            <div 
+              className="fixed inset-0 z-40" 
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+              }}
+            />
+            
+            {/* Menu */}
+            <div 
+              className={`absolute z-50 ${isRight ? 'left-0' : 'right-0'} top-0
+                         bg-gray-900 border border-gray-700 rounded-xl shadow-xl
+                         py-2 min-w-[160px]`}
+            >
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onEdit();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 
+                           hover:bg-primary-600 flex items-center gap-3 transition"
+              >
+                <span>✏️</span> Modifier
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onAddNote();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 
+                           hover:bg-amber-600 flex items-center gap-3 transition"
+              >
+                <span>📝</span> Ajouter note
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onSplit();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 
+                           hover:bg-orange-600 flex items-center gap-3 transition"
+              >
+                <span>✂️</span> Diviser
+              </button>
+              <div className="border-t border-gray-700 my-1" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onDelete();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-red-400 
+                           hover:bg-red-600 hover:text-white flex items-center gap-3 transition"
+              >
+                <span>🗑️</span> Supprimer
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
