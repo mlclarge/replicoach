@@ -1396,18 +1396,6 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
     </div>
   );
 }
-            ${saving || !text.trim()
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg shadow-gold-500/30'
-            }`}
-          disabled={saving || !text.trim()}
-        >
-          {saving ? "⏳ Sauvegarde..." : "✓ SAUVEGARDER"}
-        </button>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Modal fichier original
