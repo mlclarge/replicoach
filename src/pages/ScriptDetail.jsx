@@ -222,22 +222,41 @@ function ScriptDetail() {
         text_gaps: generateGapsText(firstPart),
       });
 
-      // 2. Créer une nouvelle réplique avec la deuxième partie
-      await addSingleReplica({
+      // 2. Trouver le bon order_index (entier)
+      // On va d'abord créer avec un grand index, puis réordonner
+      const maxOrderIndex = Math.max(...replicas.map(r => r.order_index || 0)) + 1000;
+
+      // 3. Créer une nouvelle réplique avec la deuxième partie
+      const newReplica = await addSingleReplica({
         script_id: id,
         character_id: newCharacterId,
         text: secondPart,
-        order_index: originalReplica.order_index + 0.5,
+        order_index: maxOrderIndex, // Temporaire, sera réordonné
         text_gaps: generateGapsText(secondPart),
         cue_words: '...' + firstPart.split(/\s+/).slice(-3).join(' '),
       });
 
+      // 4. Réordonner toutes les répliques
+      // Trouver l'index de la réplique originale
+      const originalIndex = replicas.findIndex(r => r.id === originalReplica.id);
+      
+      // Construire le nouvel ordre : toutes les répliques jusqu'à l'originale, 
+      // puis la nouvelle, puis le reste
+      const replicasBefore = replicas.slice(0, originalIndex + 1);
+      const replicasAfter = replicas.slice(originalIndex + 1);
+      
+      const newOrder = [
+        ...replicasBefore.map(r => r.id),
+        newReplica.id,
+        ...replicasAfter.map(r => r.id)
+      ];
+
+      await reorderReplicas(id, newOrder);
+
       setSplittingReplica(null);
-      // Rafraîchir pour avoir le bon ordre
-      fetchScript(id);
     } catch (err) {
       console.error("Error splitting replica:", err);
-      alert("Erreur lors de la division de la réplique");
+      alert("Erreur lors de la division de la réplique: " + (err.message || "Erreur inconnue"));
     }
   };
 
@@ -351,25 +370,46 @@ function ScriptDetail() {
   // Handler pour ajouter une réplique à un endroit précis
   const handleAddReplicaAt = async (characterId, text, afterIndex) => {
     try {
-      const newOrderIndex = afterIndex !== undefined && afterIndex !== null
-        ? afterIndex + 0.5
-        : (currentScript?.replicas?.length || 0);
+      // Utiliser un grand index temporaire (entier)
+      const maxOrderIndex = Math.max(...(replicas.map(r => r.order_index || 0)), 0) + 1000;
       
-      await addSingleReplica({
+      const newReplica = await addSingleReplica({
         script_id: id,
         character_id: characterId,
         text: text,
-        order_index: newOrderIndex,
+        order_index: maxOrderIndex, // Temporaire, sera réordonné
         text_gaps: generateGapsText(text),
         cue_words: '',
       });
       
+      // Si on veut insérer à une position spécifique, réordonner
+      if (afterIndex !== undefined && afterIndex !== null && afterIndex >= -1) {
+        // Construire le nouvel ordre
+        let newOrder;
+        if (afterIndex === -1) {
+          // Insérer au début
+          newOrder = [newReplica.id, ...replicas.map(r => r.id)];
+        } else {
+          // Insérer après l'index spécifié
+          const replicasBefore = replicas.slice(0, afterIndex + 1);
+          const replicasAfter = replicas.slice(afterIndex + 1);
+          newOrder = [
+            ...replicasBefore.map(r => r.id),
+            newReplica.id,
+            ...replicasAfter.map(r => r.id)
+          ];
+        }
+        await reorderReplicas(id, newOrder);
+      } else {
+        // Juste rafraîchir
+        fetchScript(id);
+      }
+      
       setShowAddReplica(false);
       setInsertAfterIndex(null);
-      fetchScript(id);
     } catch (err) {
       console.error("Error adding replica:", err);
-      alert("Erreur lors de l'ajout de la réplique");
+      alert("Erreur lors de l'ajout de la réplique: " + (err.message || "Erreur inconnue"));
     }
   };
 
@@ -1266,78 +1306,96 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const handleSave = async () => {
     if (!text.trim()) return;
     setSaving(true);
-    await onSave(replica.id, selectedCharId, text.trim());
-    setSaving(false);
+    try {
+      await onSave(replica.id, selectedCharId, text.trim());
+    } finally {
+      setSaving(false);
+    }
   };
 
   const selectedChar = characters.find(c => c.id === selectedCharId);
 
   return (
-    <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
-      {/* Header fixe */}
-      <div className="p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
-        <button 
-          onClick={onClose}
-          className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
-        >
-          ✕
-        </button>
-      </div>
+    <div className="fixed inset-0 z-[60] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header fixe */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
 
-      {/* Contenu scrollable */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Sélection du personnage */}
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">Personnage</label>
-          <div className="flex gap-2 flex-wrap">
-            {characters.map((char) => (
-              <button
-                key={char.id}
-                onClick={() => setSelectedCharId(char.id)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition"
-                style={{
-                  backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                  color: selectedCharId === char.id ? 'white' : '#9CA3AF',
-                }}
-              >
-                {char.name}
-              </button>
-            ))}
+        {/* Contenu scrollable */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {/* Sélection du personnage */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <div className="flex gap-2 flex-wrap">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharId(char.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={{
+                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                  }}
+                >
+                  {char.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Texte de la réplique */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Texte</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-40 bg-gray-800 border border-gray-600 rounded-xl p-4 
+                         text-white text-base resize-none focus:border-gold-500 focus:outline-none"
+              placeholder="Texte de la réplique..."
+            />
+          </div>
+
+          {/* Prévisualisation */}
+          <div 
+            className="p-4 rounded-lg"
+            style={{ 
+              backgroundColor: `${selectedChar?.color || '#666'}20`,
+              borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
+            }}
+          >
+            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
+              {selectedChar?.name || "?"}
+            </p>
+            <p className="text-gray-300 text-sm">{text || "..."}</p>
           </div>
         </div>
 
-        {/* Texte de la réplique */}
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">Texte</label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            className="input w-full h-32 resize-none text-base"
-            placeholder="Texte de la réplique..."
-          />
-        </div>
-
-        {/* Prévisualisation */}
-        <div 
-          className="p-4 rounded-lg"
-          style={{ 
-            backgroundColor: `${selectedChar?.color || '#666'}20`,
-            borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
-          }}
-        >
-          <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
-            {selectedChar?.name || "?"}
-          </p>
-          <p className="text-gray-300">{text || "..."}</p>
+        {/* ===== BOUTON FIXE EN BAS - TOUJOURS VISIBLE ===== */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleSave}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${text.trim() && !saving
+                ? 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Sauvegarde..." : "✅ SAUVEGARDER"}
+          </button>
         </div>
       </div>
-
-      {/* ===== BOUTON FIXE EN BAS - TRÈS VISIBLE ===== */}
-      <div className="p-4 border-t border-gray-700 bg-dark safe-area-bottom">
-        <button 
-          onClick={handleSave} 
-          className={`w-full py-4 rounded-xl text-lg font-bold transition
+    </div>
+  );
+}
             ${saving || !text.trim()
               ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
               : 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg shadow-gold-500/30'
