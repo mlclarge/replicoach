@@ -1191,19 +1191,20 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             </div>
           )}
 
-          {/* Bouton menu (icône translucide dans le coin) */}
+          {/* Bouton menu - rond blanc avec + gris */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               setShowMenu(!showMenu);
             }}
-            className={`absolute ${isRight ? 'top-1 left-1' : 'top-1 right-1'}
-                       w-6 h-6 rounded-full flex items-center justify-center
-                       text-white/40 hover:text-white/80 hover:bg-white/20
-                       transition-all text-xs`}
+            className={`absolute ${isRight ? '-left-3 top-1/2 -translate-y-1/2' : '-right-3 top-1/2 -translate-y-1/2'}
+                       w-7 h-7 rounded-full flex items-center justify-center
+                       bg-white border-2 border-gray-300 shadow-md
+                       hover:border-gray-400 hover:shadow-lg
+                       transition-all`}
             title="Options"
           >
-            ⋯
+            <span className="text-gray-400 text-lg font-bold leading-none">+</span>
           </button>
         </div>
 

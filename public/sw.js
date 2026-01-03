@@ -1,8 +1,8 @@
-// Service Worker pour RépliCoach PWA - Version 2.0
-// Avec cache des données pour mode hors-ligne complet
+// Service Worker pour RépliCoach PWA - Version 3.0
+// Avec cache amélioré pour mode hors-ligne complet
 
-const CACHE_NAME = 'replicoach-v2';
-const DATA_CACHE_NAME = 'replicoach-data-v1';
+const CACHE_NAME = 'replicoach-v3';
+const DATA_CACHE_NAME = 'replicoach-data-v2';
 
 // Assets statiques à mettre en cache immédiatement
 const STATIC_ASSETS = [
@@ -21,7 +21,7 @@ const SUPABASE_CACHEABLE_TABLES = [
 
 // Installation du Service Worker
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installation v2...');
+  console.log('[SW] Installation v3...');
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('[SW] Mise en cache des assets statiques');
@@ -34,7 +34,7 @@ self.addEventListener('install', (event) => {
 
 // Activation - nettoyer les anciens caches
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activation v2...');
+  console.log('[SW] Activation v3...');
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
@@ -81,9 +81,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Requêtes Supabase autres (auth, storage, etc.) -> Network only
+  // Requêtes Supabase storage (PDFs, etc.) -> Cache avec Network First
+  if (request.url.includes('supabase.co/storage')) {
+    event.respondWith(
+      handleStorageRequest(request)
+    );
+    return;
+  }
+
+  // Requêtes Supabase autres (auth, etc.) -> Network only
   if (request.url.includes('supabase.co')) {
-    event.respondWith(fetch(request));
+    event.respondWith(fetch(request).catch(() => {
+      return new Response(JSON.stringify({ error: 'offline' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }));
     return;
   }
 
@@ -96,6 +109,8 @@ self.addEventListener('fetch', (event) => {
 // Gestion des requêtes Supabase (données)
 async function handleSupabaseRequest(request) {
   const cache = await caches.open(DATA_CACHE_NAME);
+  const cacheKey = simplifyUrl(request.url);
+  const cacheRequest = new Request(cacheKey);
   
   try {
     // Essayer le réseau d'abord
@@ -104,11 +119,6 @@ async function handleSupabaseRequest(request) {
     if (networkResponse.ok) {
       // Cloner et mettre en cache
       const responseClone = networkResponse.clone();
-      
-      // Créer une clé de cache simplifiée (sans les paramètres auth qui changent)
-      const cacheKey = simplifyUrl(request.url);
-      const cacheRequest = new Request(cacheKey);
-      
       await cache.put(cacheRequest, responseClone);
       console.log('[SW] Data cached:', cacheKey);
     }
@@ -116,25 +126,45 @@ async function handleSupabaseRequest(request) {
     return networkResponse;
   } catch (error) {
     // Hors-ligne : chercher dans le cache
-    console.log('[SW] Offline, checking cache for:', request.url);
+    console.log('[SW] Offline, checking cache for:', cacheKey);
     
-    const cacheKey = simplifyUrl(request.url);
-    const cachedResponse = await cache.match(new Request(cacheKey));
+    const cachedResponse = await cache.match(cacheRequest);
     
     if (cachedResponse) {
       console.log('[SW] Serving from cache:', cacheKey);
       return cachedResponse;
     }
     
-    // Pas en cache
+    // Pas en cache - retourner une réponse vide valide
     console.log('[SW] Not in cache:', cacheKey);
-    return new Response(JSON.stringify({ 
-      error: 'offline',
-      message: 'Données non disponibles hors-ligne'
-    }), {
-      status: 503,
+    return new Response(JSON.stringify([]), {
+      status: 200,
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+}
+
+// Gestion des requêtes Storage Supabase (PDFs, images)
+async function handleStorageRequest(request) {
+  const cache = await caches.open(DATA_CACHE_NAME);
+  
+  try {
+    const networkResponse = await fetch(request);
+    
+    if (networkResponse.ok) {
+      const responseClone = networkResponse.clone();
+      await cache.put(request, responseClone);
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    const cachedResponse = await cache.match(request);
+    
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    
+    return new Response('Fichier non disponible hors-ligne', { status: 503 });
   }
 }
 

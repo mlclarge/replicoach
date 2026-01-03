@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 /**
  * Composant qui affiche un indicateur quand l'utilisateur est hors-ligne
- * et informe sur le mode cache
+ * et informe sur le mode cache - DISPARAÎT APRÈS 5 SECONDES
  */
 function OfflineIndicator() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -23,6 +23,8 @@ function OfflineIndicator() {
       setIsOnline(false);
       setWasOffline(true);
       setShowBanner(true);
+      // Masquer le bandeau après 5 secondes
+      setTimeout(() => setShowBanner(false), 5000);
     };
 
     window.addEventListener('online', handleOnline);
@@ -32,6 +34,8 @@ function OfflineIndicator() {
     if (!navigator.onLine) {
       setIsOnline(false);
       setShowBanner(true);
+      // Masquer après 5 secondes au chargement aussi
+      setTimeout(() => setShowBanner(false), 5000);
     }
 
     return () => {
@@ -49,7 +53,7 @@ function OfflineIndicator() {
       }`}
     >
       <div 
-        className={`px-4 py-2 text-center text-sm font-medium ${
+        className={`px-4 py-2 text-center text-sm font-medium flex items-center justify-center gap-2 ${
           isOnline 
             ? 'bg-green-600 text-white' 
             : 'bg-amber-500 text-amber-950'
@@ -60,6 +64,13 @@ function OfflineIndicator() {
         ) : (
           <span>📴 Mode hors-ligne • Les textes déjà consultés restent accessibles</span>
         )}
+        {/* Bouton pour fermer manuellement */}
+        <button 
+          onClick={() => setShowBanner(false)}
+          className="ml-2 p-1 hover:bg-black/10 rounded"
+        >
+          ✕
+        </button>
       </div>
     </div>
   );
