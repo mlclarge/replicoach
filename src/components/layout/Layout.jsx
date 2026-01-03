@@ -3,10 +3,14 @@ import Header from './Header'
 import BottomNav from './BottomNav'
 import InstallPrompt from '../InstallPrompt'
 import Onboarding from '../Onboarding'
+import OfflineIndicator from '../OfflineIndicator'
 
 function Layout() {
   return (
     <div className="min-h-screen bg-darker flex flex-col">
+      {/* Indicateur hors-ligne */}
+      <OfflineIndicator />
+      
       <Header />
       <main className="flex-1 pb-20 overflow-y-auto">
         <Outlet />

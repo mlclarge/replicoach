@@ -195,6 +195,18 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      // Auto-remplir le titre avec le nom du fichier si vide
+      if (!title) {
+        const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
+        setTitle(nameWithoutExt);
+      }
+    }
+  };
+
   const handleUpload = async () => {
     if (!file || !title.trim()) return;
 
@@ -213,23 +225,46 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700">
-        <div className="p-4 border-b border-gray-700">
+      <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700 max-h-[90vh] overflow-y-auto">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">📤 Proposer un document</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Zone de fichier */}
+          {/* Zone de fichier - AMÉLIORÉE POUR MOBILE */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">Fichier</label>
-            <input
-              type="file"
-              accept=".pdf,.txt,.png,.jpg,.jpeg"
-              onChange={(e) => setFile(e.target.files?.[0])}
-              className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 
-                         file:rounded-lg file:border-0 file:bg-gray-700 file:text-white
-                         file:cursor-pointer hover:file:bg-gray-600"
-            />
+            <label className="block">
+              <div className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition
+                ${file 
+                  ? 'border-green-500 bg-green-500/10' 
+                  : 'border-gray-600 hover:border-primary-500 bg-gray-800/50'}`}
+              >
+                {file ? (
+                  <div>
+                    <span className="text-3xl block mb-2">✅</span>
+                    <p className="text-green-400 font-medium">{file.name}</p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB
+                    </p>
+                    <p className="text-primary-400 text-sm mt-2">Toucher pour changer</p>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-3xl block mb-2">📄</span>
+                    <p className="text-gray-300">Toucher pour sélectionner</p>
+                    <p className="text-gray-500 text-xs mt-1">PDF, TXT, Images</p>
+                  </div>
+                )}
+              </div>
+              <input
+                type="file"
+                accept=".pdf,.txt,.png,.jpg,.jpeg"
+                onChange={handleFileChange}
+                className="hidden"
+              />
+            </label>
           </div>
 
           {/* Titre */}

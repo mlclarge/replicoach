@@ -4,6 +4,22 @@ import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 function ScriptDetail() {
   const { id } = useParams();
@@ -20,6 +36,9 @@ function ScriptDetail() {
     addSingleReplica,
     deleteReplica,
     addCharacter,
+    updateCharacter,
+    deleteCharacter,
+    reorderReplicas,
     fetchPersonalNotes,
     addPersonalNote,
     updatePersonalNote,
@@ -34,11 +53,28 @@ function ScriptDetail() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddReplica, setShowAddReplica] = useState(false);
   const [deleteReplicaConfirm, setDeleteReplicaConfirm] = useState(null);
-  const [splittingReplica, setSplittingReplica] = useState(null); // Pour diviser une réplique
-  const [showAddCharacter, setShowAddCharacter] = useState(false); // Pour ajouter un personnage
-  const [showAddNote, setShowAddNote] = useState(null); // {afterReplicaId} pour ajouter une note
-  const [editingNote, setEditingNote] = useState(null); // Note en cours d'édition
-  const [deleteNoteConfirm, setDeleteNoteConfirm] = useState(null); // Note à supprimer
+  const [splittingReplica, setSplittingReplica] = useState(null);
+  const [showAddCharacter, setShowAddCharacter] = useState(false);
+  const [showAddNote, setShowAddNote] = useState(null);
+  const [editingNote, setEditingNote] = useState(null);
+  const [deleteNoteConfirm, setDeleteNoteConfirm] = useState(null);
+  
+  // NOUVEAUX STATES pour mode édition et gestion personnages
+  const [editMode, setEditMode] = useState(false);
+  const [showCharacterManager, setShowCharacterManager] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState(null);
+  const [deleteCharacterConfirm, setDeleteCharacterConfirm] = useState(null);
+  const [insertAfterIndex, setInsertAfterIndex] = useState(null);
+
+  // Sensors pour drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // ⚠️ TOUS LES HOOKS DOIVENT ÊTRE AVANT LES RETURNS CONDITIONNELS
 
@@ -156,7 +192,14 @@ function ScriptDetail() {
       return newChar;
     } catch (err) {
       console.error("Error adding character:", err);
-      alert("Erreur lors de l'ajout du personnage");
+      // Message d'erreur plus détaillé
+      if (err.code === '23505') {
+        alert("Un personnage avec ce nom existe déjà dans ce script");
+      } else if (err.code === '42501') {
+        alert("Vous n'avez pas la permission d'ajouter un personnage à ce script");
+      } else {
+        alert(`Erreur lors de l'ajout du personnage: ${err.message || 'Erreur inconnue'}`);
+      }
       throw err;
     }
   };
@@ -258,6 +301,77 @@ function ScriptDetail() {
 
   // Compter le nombre total de notes
   const totalNotes = currentScript?.personalNotes?.length || 0;
+
+  // Handler pour drag & drop des répliques
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    
+    if (!over || active.id === over.id) return;
+    
+    const oldIndex = replicas.findIndex(r => r.id === active.id);
+    const newIndex = replicas.findIndex(r => r.id === over.id);
+    
+    if (oldIndex === -1 || newIndex === -1) return;
+    
+    // Réorganiser localement d'abord pour feedback immédiat
+    const newOrder = arrayMove(replicas, oldIndex, newIndex);
+    const replicaIds = newOrder.map(r => r.id);
+    
+    // Sauvegarder en base
+    try {
+      await reorderReplicas(id, replicaIds);
+    } catch (err) {
+      console.error("Error reordering:", err);
+      alert("Erreur lors du réordonnancement");
+    }
+  };
+
+  // Handler pour modifier un personnage
+  const handleUpdateCharacter = async (characterId, name, color) => {
+    try {
+      await updateCharacter(characterId, { name, color });
+      setEditingCharacter(null);
+    } catch (err) {
+      console.error("Error updating character:", err);
+      alert("Erreur lors de la modification du personnage");
+    }
+  };
+
+  // Handler pour supprimer un personnage
+  const handleDeleteCharacter = async (characterId) => {
+    try {
+      await deleteCharacter(characterId);
+      setDeleteCharacterConfirm(null);
+    } catch (err) {
+      console.error("Error deleting character:", err);
+      alert("Erreur lors de la suppression du personnage");
+    }
+  };
+
+  // Handler pour ajouter une réplique à un endroit précis
+  const handleAddReplicaAt = async (characterId, text, afterIndex) => {
+    try {
+      const newOrderIndex = afterIndex !== undefined && afterIndex !== null
+        ? afterIndex + 0.5
+        : (currentScript?.replicas?.length || 0);
+      
+      await addSingleReplica({
+        script_id: id,
+        character_id: characterId,
+        text: text,
+        order_index: newOrderIndex,
+        text_gaps: generateGapsText(text),
+        cue_words: '',
+      });
+      
+      setShowAddReplica(false);
+      setInsertAfterIndex(null);
+      fetchScript(id);
+    } catch (err) {
+      console.error("Error adding replica:", err);
+      alert("Erreur lors de l'ajout de la réplique");
+    }
+  };
 
   // ⚠️ RETURNS CONDITIONNELS APRÈS TOUS LES HOOKS
 
@@ -379,7 +493,7 @@ function ScriptDetail() {
         </div>
 
         {/* Modes de vue - Adaptés au fond beige */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-4">
           <button
             onClick={() => setViewMode("full")}
             className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
@@ -415,53 +529,125 @@ function ScriptDetail() {
           </button>
         </div>
 
+        {/* Barre d'édition - Mode édition et gestion personnages */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition
+              ${
+                editMode
+                  ? "bg-orange-500 text-white shadow-lg"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-orange-50"
+              }`}
+          >
+            {editMode ? "✅ Terminer" : "✏️ Mode édition"}
+          </button>
+          <button
+            onClick={() => setShowCharacterManager(true)}
+            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 
+                       border border-gray-300 hover:bg-purple-50 transition"
+          >
+            👥 Personnages
+          </button>
+        </div>
+
+        {/* Info mode édition */}
+        {editMode && (
+          <div className="mb-4 p-3 bg-orange-100 border border-orange-300 rounded-lg">
+            <p className="text-orange-800 text-sm">
+              <strong>🔄 Mode édition activé</strong> - Glissez les répliques pour les réorganiser. 
+              Cliquez sur ➕ pour insérer une réplique à un endroit précis.
+            </p>
+          </div>
+        )}
+
         {/* Indicateur nombre de notes */}
         {totalNotes > 0 && (
           <div className="mb-3 flex items-center gap-2 text-sm">
-            <span className="bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full">
+            <span className="bg-amber-500/20 text-amber-700 px-3 py-1 rounded-full">
               📝 {totalNotes} note{totalNotes > 1 ? 's' : ''} personnelle{totalNotes > 1 ? 's' : ''}
             </span>
           </div>
         )}
 
         {/* Liste des répliques avec notes - Style WhatsApp */}
-        <div className="space-y-3">
-          {filteredReplicas.map((replica, index) => {
-            const character = characters.find(
-              (c) => c.id === replica.character_id
-            );
-            const isRight = characterPositions[replica.character_id] === 1;
-            const notesAfterThisReplica = notesByReplicaId[replica.id] || [];
-            
-            return (
-              <div key={replica.id}>
-                {/* La réplique */}
-                <ChatBubble
-                  replica={replica}
-                  character={character}
-                  characters={characters}
-                  viewMode={viewMode}
-                  isRight={isRight}
-                  number={index + 1}
-                  onEdit={() => setEditingReplica(replica)}
-                  onDelete={() => setDeleteReplicaConfirm(replica)}
-                  onSplit={() => setSplittingReplica(replica)}
-                  onAddNote={() => setShowAddNote({ afterReplicaId: replica.id })}
-                />
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredReplicas.map(r => r.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {filteredReplicas.map((replica, index) => {
+                const character = characters.find(
+                  (c) => c.id === replica.character_id
+                );
+                const isRight = characterPositions[replica.character_id] === 1;
+                const notesAfterThisReplica = notesByReplicaId[replica.id] || [];
+                
+                return (
+                  <div key={replica.id}>
+                    {/* Bouton insérer avant (en mode édition) */}
+                    {editMode && index === 0 && (
+                      <button
+                        onClick={() => {
+                          setInsertAfterIndex(-1);
+                          setShowAddReplica(true);
+                        }}
+                        className="w-full py-2 mb-2 border-2 border-dashed border-orange-400 rounded-lg
+                                   text-orange-600 text-sm hover:bg-orange-50 transition"
+                      >
+                        ➕ Insérer au début
+                      </button>
+                    )}
+                    
+                    {/* La réplique (draggable en mode édition) */}
+                    <SortableReplicaBubble
+                      replica={replica}
+                      character={character}
+                      characters={characters}
+                      viewMode={viewMode}
+                      isRight={isRight}
+                      number={index + 1}
+                      editMode={editMode}
+                      onEdit={() => setEditingReplica(replica)}
+                      onDelete={() => setDeleteReplicaConfirm(replica)}
+                      onSplit={() => setSplittingReplica(replica)}
+                      onAddNote={() => setShowAddNote({ afterReplicaId: replica.id })}
+                    />
 
-                {/* Notes personnelles après cette réplique */}
-                {notesAfterThisReplica.map((note) => (
-                  <NoteBubble
-                    key={note.id}
-                    note={note}
-                    onEdit={() => setEditingNote(note)}
-                    onDelete={() => setDeleteNoteConfirm(note)}
-                  />
-                ))}
-              </div>
-            );
-          })}
-        </div>
+                    {/* Notes personnelles après cette réplique */}
+                    {notesAfterThisReplica.map((note) => (
+                      <NoteBubble
+                        key={note.id}
+                        note={note}
+                        onEdit={() => setEditingNote(note)}
+                        onDelete={() => setDeleteNoteConfirm(note)}
+                      />
+                    ))}
+
+                    {/* Bouton insérer après (en mode édition) */}
+                    {editMode && (
+                      <button
+                        onClick={() => {
+                          setInsertAfterIndex(index);
+                          setShowAddReplica(true);
+                        }}
+                        className="w-full py-2 mt-2 border-2 border-dashed border-orange-400 rounded-lg
+                                   text-orange-600 text-sm hover:bg-orange-50 transition opacity-50 hover:opacity-100"
+                      >
+                        ➕ Insérer après #{index + 1}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
 
         {filteredReplicas.length === 0 && (
           <p className="text-center text-gray-600 py-8 bg-white/50 rounded-lg">
@@ -530,8 +716,12 @@ function ScriptDetail() {
       {showAddReplica && (
         <AddReplicaModal
           characters={characters}
-          onAdd={handleAddReplica}
-          onClose={() => setShowAddReplica(false)}
+          insertAfterIndex={insertAfterIndex}
+          onAdd={handleAddReplicaAt}
+          onClose={() => {
+            setShowAddReplica(false);
+            setInsertAfterIndex(null);
+          }}
         />
       )}
 
@@ -581,6 +771,60 @@ function ScriptDetail() {
           onAdd={handleAddCharacter}
           onClose={() => setShowAddCharacter(false)}
         />
+      )}
+
+      {/* Modal de gestion des personnages */}
+      {showCharacterManager && (
+        <CharacterManagerModal
+          characters={characters}
+          onEdit={(char) => {
+            setEditingCharacter(char);
+            setShowCharacterManager(false);
+          }}
+          onDelete={(char) => {
+            setDeleteCharacterConfirm(char);
+            setShowCharacterManager(false);
+          }}
+          onClose={() => setShowCharacterManager(false)}
+        />
+      )}
+
+      {/* Modal d'édition de personnage */}
+      {editingCharacter && (
+        <EditCharacterModal
+          character={editingCharacter}
+          existingColors={characters.filter(c => c.id !== editingCharacter.id).map(c => c.color)}
+          onSave={handleUpdateCharacter}
+          onClose={() => setEditingCharacter(null)}
+        />
+      )}
+
+      {/* Modal de confirmation suppression personnage */}
+      {deleteCharacterConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer {deleteCharacterConfirm.name} ?
+            </h3>
+            <p className="text-red-400 text-sm mb-4">
+              ⚠️ Toutes les répliques de ce personnage seront également supprimées !
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteCharacterConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteCharacter(deleteCharacterConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal d'ajout de note personnelle */}
@@ -674,6 +918,57 @@ function ScriptDetail() {
           onClose={() => setShowShareModal(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Bulle de réplique draggable (pour le mode édition)
+ */
+function SortableReplicaBubble({ replica, character, characters, viewMode, isRight, number, editMode, onEdit, onDelete, onSplit, onAddNote }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: replica.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {/* Poignée de drag (visible en mode édition) */}
+      {editMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="absolute -left-2 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing
+                     bg-orange-500 text-white p-2 rounded-lg shadow-lg hover:bg-orange-600"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+          </svg>
+        </div>
+      )}
+      
+      <ChatBubble
+        replica={replica}
+        character={character}
+        viewMode={viewMode}
+        isRight={isRight}
+        number={number}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onSplit={onSplit}
+        onAddNote={onAddNote}
+      />
     </div>
   );
 }
@@ -785,16 +1080,16 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
           )}
         </div>
 
-        {/* Boutons d'action (visible au hover/touch) */}
+        {/* Boutons d'action - TOUJOURS VISIBLES SUR MOBILE */}
         <div className={`absolute -top-2 ${isRight ? '-left-2' : '-right-2'} flex gap-1 
-                        opacity-0 group-hover:opacity-100 transition-opacity`}>
+                        sm:opacity-0 sm:group-hover:opacity-100 transition-opacity`}>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onEdit();
             }}
-            className="w-7 h-7 bg-gray-700 hover:bg-primary-600 
-                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            className="w-8 h-8 bg-gray-800 hover:bg-primary-600 border border-gray-600
+                       rounded-full flex items-center justify-center text-sm shadow-lg"
             title="Modifier"
           >
             ✏️
@@ -804,8 +1099,8 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               e.stopPropagation();
               onAddNote();
             }}
-            className="w-7 h-7 bg-gray-700 hover:bg-amber-600 
-                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            className="w-8 h-8 bg-gray-800 hover:bg-amber-600 border border-gray-600
+                       rounded-full flex items-center justify-center text-sm shadow-lg"
             title="Ajouter une note"
           >
             📝
@@ -815,8 +1110,8 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               e.stopPropagation();
               onSplit();
             }}
-            className="w-7 h-7 bg-gray-700 hover:bg-orange-600 
-                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            className="w-8 h-8 bg-gray-800 hover:bg-orange-600 border border-gray-600
+                       rounded-full flex items-center justify-center text-sm shadow-lg"
             title="Diviser en deux"
           >
             ✂️
@@ -826,8 +1121,8 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               e.stopPropagation();
               onDelete();
             }}
-            className="w-7 h-7 bg-gray-700 hover:bg-red-600 
-                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            className="w-8 h-8 bg-gray-800 hover:bg-red-600 border border-gray-600
+                       rounded-full flex items-center justify-center text-sm shadow-lg"
             title="Supprimer"
           >
             🗑️
@@ -841,7 +1136,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
 /**
  * Modal d'ajout d'une réplique - BOUTON TOUJOURS VISIBLE
  */
-function AddReplicaModal({ characters, onAdd, onClose }) {
+function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -850,7 +1145,7 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
     if (!text.trim() || !selectedCharId) return;
     setSaving(true);
     try {
-      await onAdd(selectedCharId, text.trim());
+      await onAdd(selectedCharId, text.trim(), insertAfterIndex);
     } catch (err) {
       console.error("Erreur ajout:", err);
       setSaving(false);
@@ -859,6 +1154,13 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
 
   const selectedChar = characters.find(c => c.id === selectedCharId);
   const canSubmit = text.trim() && selectedCharId && !saving;
+  
+  // Message d'insertion
+  const insertMessage = insertAfterIndex === -1 
+    ? "📍 Sera inséré au début du texte"
+    : insertAfterIndex !== null && insertAfterIndex !== undefined
+      ? `📍 Sera inséré après la réplique #${insertAfterIndex + 1}`
+      : "📍 Sera ajouté à la fin du texte";
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/95">
@@ -878,6 +1180,11 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
 
         {/* Contenu scrollable - Prend l'espace restant */}
         <div className="flex-1 overflow-y-auto p-4">
+          {/* Message de position */}
+          <div className="mb-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg">
+            <p className="text-orange-400 text-sm font-medium">{insertMessage}</p>
+          </div>
+
           {/* Sélection du personnage */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2">Personnage</label>
@@ -1960,6 +2267,191 @@ function EditNoteModal({ note, onSave, onClose }) {
             className={`w-full py-4 rounded-xl text-lg font-bold transition
               ${text.trim() && !saving
                 ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de gestion des personnages (modifier/supprimer)
+ */
+function CharacterManagerModal({ characters, onEdit, onDelete, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">👥 Gérer les personnages</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Liste des personnages */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {characters.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Aucun personnage</p>
+          ) : (
+            <div className="space-y-3">
+              {characters.map((char) => (
+                <div 
+                  key={char.id}
+                  className="flex items-center gap-3 p-4 bg-gray-800 rounded-xl border border-gray-700"
+                >
+                  {/* Couleur */}
+                  <div 
+                    className="w-10 h-10 rounded-full shadow-lg"
+                    style={{ backgroundColor: char.color }}
+                  />
+                  
+                  {/* Nom */}
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{char.name}</p>
+                    <p className="text-gray-500 text-xs">{char.color}</p>
+                  </div>
+
+                  {/* Actions */}
+                  <button
+                    onClick={() => onEdit(char)}
+                    className="p-2 bg-gray-700 hover:bg-primary-600 rounded-lg transition"
+                    title="Modifier"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => onDelete(char)}
+                    className="p-2 bg-gray-700 hover:bg-red-600 rounded-lg transition"
+                    title="Supprimer"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={onClose}
+            className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal d'édition d'un personnage
+ */
+function EditCharacterModal({ character, existingColors, onSave, onClose }) {
+  const [name, setName] = useState(character.name);
+  const [color, setColor] = useState(character.color);
+  const [saving, setSaving] = useState(false);
+
+  const CHARACTER_COLORS = [
+    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
+    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
+    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+  ];
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(character.id, name.trim().toUpperCase(), color);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Modifier le personnage</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Contenu */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Nom */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Nom du personnage</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value.toUpperCase())}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 
+                         text-white font-semibold focus:border-purple-500 focus:outline-none"
+              placeholder="NOM DU PERSONNAGE"
+            />
+          </div>
+
+          {/* Couleur */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Couleur</label>
+            <div className="grid grid-cols-5 gap-2">
+              {CHARACTER_COLORS.map((c) => {
+                const isUsed = existingColors.includes(c);
+                return (
+                  <button
+                    key={c}
+                    onClick={() => !isUsed && setColor(c)}
+                    disabled={isUsed}
+                    className={`w-12 h-12 rounded-xl transition ${
+                      color === c ? 'ring-4 ring-white scale-110' : ''
+                    } ${isUsed ? 'opacity-30 cursor-not-allowed' : 'hover:scale-105'}`}
+                    style={{ backgroundColor: c }}
+                    title={isUsed ? 'Déjà utilisé' : c}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Aperçu */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+            <div 
+              className="p-4 rounded-xl text-white font-bold text-center"
+              style={{ backgroundColor: color }}
+            >
+              {name || "NOM"}
+            </div>
+          </div>
+        </div>
+
+        {/* Bouton */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${name.trim() && !saving
+                ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
           >
             {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}

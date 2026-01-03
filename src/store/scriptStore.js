@@ -165,6 +165,76 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
+  // Modifier un personnage
+  updateCharacter: async (characterId, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from("characters")
+        .update(updates)
+        .eq("id", characterId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            characters: state.currentScript.characters.map((c) =>
+              c.id === characterId ? { ...c, ...data } : c
+            ),
+          },
+        };
+      });
+
+      return data;
+    } catch (error) {
+      console.error("Update character error:", error);
+      throw error;
+    }
+  },
+
+  // Supprimer un personnage (et toutes ses répliques)
+  deleteCharacter: async (characterId) => {
+    try {
+      // D'abord supprimer les répliques associées
+      const { error: replicasError } = await supabase
+        .from("replicas")
+        .delete()
+        .eq("character_id", characterId);
+
+      if (replicasError) throw replicasError;
+
+      // Puis supprimer le personnage
+      const { error } = await supabase
+        .from("characters")
+        .delete()
+        .eq("id", characterId);
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            characters: state.currentScript.characters.filter((c) => c.id !== characterId),
+            replicas: state.currentScript.replicas.filter((r) => r.character_id !== characterId),
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Delete character error:", error);
+      throw error;
+    }
+  },
+
   addReplicas: async (replicas) => {
     try {
       const { data, error } = await supabase
