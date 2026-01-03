@@ -327,7 +327,7 @@ function ScriptDetail() {
 
       {/* Boutons flottants */}
       <div className="fixed bottom-24 right-4 flex flex-col gap-3">
-        {/* Bouton Ajouter réplique */}
+        {/* Bouton Ajouter/Éditer réplique */}
         <button
           onClick={() => setShowAddReplica(true)}
           className="w-14 h-14 bg-green-600 hover:bg-green-500 rounded-full
@@ -335,7 +335,7 @@ function ScriptDetail() {
                      transition transform hover:scale-110"
           title="Ajouter une réplique"
         >
-          ➕
+          ✏️
         </button>
         
         {/* Bouton Audio */}
@@ -583,7 +583,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
 }
 
 /**
- * Modal d'ajout d'une réplique - OPTIMISÉ MOBILE
+ * Modal d'ajout d'une réplique - BOUTON TOUJOURS VISIBLE
  */
 function AddReplicaModal({ characters, onAdd, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
@@ -595,7 +595,6 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
     setSaving(true);
     try {
       await onAdd(selectedCharId, text.trim());
-      // Le parent gère la fermeture via setShowAddReplica(false)
     } catch (err) {
       console.error("Erreur ajout:", err);
       setSaving(false);
@@ -603,87 +602,91 @@ function AddReplicaModal({ characters, onAdd, onClose }) {
   };
 
   const selectedChar = characters.find(c => c.id === selectedCharId);
+  const canSubmit = text.trim() && selectedCharId && !saving;
 
   return (
-    <div className="fixed inset-0 bg-black/95 z-50 flex flex-col">
-      {/* Header fixe */}
-      <div className="shrink-0 p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-white">➕ Ajouter une réplique</h3>
-        <button 
-          onClick={onClose}
-          className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Contenu scrollable */}
-      <div className="flex-1 overflow-y-auto p-4 pb-32">
-        {/* Sélection du personnage */}
-        <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-2">Personnage</label>
-          <div className="flex gap-2 flex-wrap">
-            {characters.map((char) => (
-              <button
-                key={char.id}
-                onClick={() => setSelectedCharId(char.id)}
-                className="px-4 py-2 rounded-lg text-sm font-medium transition"
-                style={{
-                  backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                  color: selectedCharId === char.id ? 'white' : '#9CA3AF',
-                }}
-              >
-                {char.name}
-              </button>
-            ))}
-          </div>
+    <div className="fixed inset-0 z-[60] bg-black/95">
+      {/* Container avec hauteur maximale */}
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header - Hauteur fixe */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Ajouter une réplique</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
         </div>
 
-        {/* Texte de la réplique */}
-        <div className="mb-4">
-          <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
-          <textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            className="w-full h-32 bg-gray-800 border border-gray-600 rounded-xl p-4 
-                       text-white text-base resize-none focus:border-gold-500 focus:outline-none"
-            placeholder="Entrez le texte de la réplique..."
-            autoFocus
-          />
-        </div>
-
-        {/* Prévisualisation */}
-        {text && selectedChar && (
+        {/* Contenu scrollable - Prend l'espace restant */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Sélection du personnage */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
-            <div 
-              className="p-4 rounded-xl"
-              style={{ 
-                backgroundColor: `${selectedChar.color}dd`,
-              }}
-            >
-              <p className="text-xs font-semibold mb-1 text-white/80">
-                {selectedChar.name}
-              </p>
-              <p className="text-white">{text}</p>
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <div className="flex gap-2 flex-wrap">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharId(char.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={{
+                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                  }}
+                >
+                  {char.name}
+                </button>
+              ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* ===== BOUTON FIXE EN BAS - TOUJOURS VISIBLE ===== */}
-      <div className="shrink-0 p-4 border-t border-gray-700 bg-dark">
-        <button 
-          onClick={handleAdd} 
-          className={`w-full py-4 rounded-xl text-lg font-bold transition
-            ${saving || !text.trim() || !selectedCharId
-              ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-              : 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg'
-            }`}
-          disabled={saving || !text.trim() || !selectedCharId}
-        >
-          {saving ? "⏳ Ajout en cours..." : "✅ AJOUTER LA RÉPLIQUE"}
-        </button>
+          {/* Texte de la réplique */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-28 bg-gray-800 border border-gray-600 rounded-xl p-4 
+                         text-white text-base resize-none focus:border-gold-500 focus:outline-none"
+              placeholder="Entrez le texte de la réplique..."
+              autoFocus
+            />
+          </div>
+
+          {/* Prévisualisation */}
+          {text && selectedChar && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+              <div 
+                className="p-4 rounded-xl"
+                style={{ backgroundColor: `${selectedChar.color}dd` }}
+              >
+                <p className="text-xs font-semibold mb-1 text-white/80">
+                  {selectedChar.name}
+                </p>
+                <p className="text-white">{text}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* BOUTON FIXE EN BAS - Toujours visible */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleAdd} 
+            disabled={!canSubmit}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${canSubmit
+                ? 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              }`}
+          >
+            {saving ? "⏳ Ajout en cours..." : "✅ AJOUTER LA RÉPLIQUE"}
+          </button>
+        </div>
+        
       </div>
     </div>
   );
