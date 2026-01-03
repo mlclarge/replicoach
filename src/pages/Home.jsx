@@ -42,7 +42,7 @@ const CARD_BACKGROUNDS = [
   { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900' },
 ];
 
-function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
+function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0, notesCount = 0 }) {
   const {
     attributes,
     listeners,
@@ -107,6 +107,11 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, index = 0 }) {
                     {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
                     {script.replicas?.length || 0} réplique
                     {(script.replicas?.length || 0) > 1 ? "s" : ""}
+                    {notesCount > 0 && (
+                      <span className="ml-2 text-amber-600 font-semibold">
+                        • 📝 {notesCount}
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>
@@ -369,13 +374,15 @@ function Home() {
     loading, 
     fetchScripts, 
     deleteScript, 
-    updateScriptOrder 
+    updateScriptOrder,
+    countNotesForScripts,
   } = useScriptStore();
   
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
   const [sortBy, setSortBy] = useState("order");
   const [activeId, setActiveId] = useState(null);
+  const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
   
   // États pour les consignes metteur en scène
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
@@ -408,8 +415,20 @@ function Home() {
     if (user) {
       fetchScripts(user.id);
       loadDirectorNotes();
+      loadNotesCounts();
     }
   }, [user, fetchScripts]);
+
+  // Charger le nombre de notes par script
+  const loadNotesCounts = async () => {
+    if (!user || !countNotesForScripts) return;
+    try {
+      const counts = await countNotesForScripts(user.id);
+      setNotesCounts(counts);
+    } catch (err) {
+      console.error("Erreur chargement notes:", err);
+    }
+  };
 
   const loadDirectorNotes = async () => {
     if (!user) return;
@@ -707,6 +726,7 @@ function Home() {
                   onDelete={handleDelete}
                   onOpen={handleOpenScript}
                   onShare={handleOpenShare}
+                  notesCount={notesCounts[script.id] || 0}
                 />
               ))}
             </div>

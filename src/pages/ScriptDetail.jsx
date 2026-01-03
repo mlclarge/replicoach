@@ -19,6 +19,11 @@ function ScriptDetail() {
     updateReplica,
     addSingleReplica,
     deleteReplica,
+    addCharacter,
+    fetchPersonalNotes,
+    addPersonalNote,
+    updatePersonalNote,
+    deletePersonalNote,
   } = useScriptStore();
 
   const [viewMode, setViewMode] = useState("full");
@@ -29,6 +34,11 @@ function ScriptDetail() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [showAddReplica, setShowAddReplica] = useState(false);
   const [deleteReplicaConfirm, setDeleteReplicaConfirm] = useState(null);
+  const [splittingReplica, setSplittingReplica] = useState(null); // Pour diviser une réplique
+  const [showAddCharacter, setShowAddCharacter] = useState(false); // Pour ajouter un personnage
+  const [showAddNote, setShowAddNote] = useState(null); // {afterReplicaId} pour ajouter une note
+  const [editingNote, setEditingNote] = useState(null); // Note en cours d'édition
+  const [deleteNoteConfirm, setDeleteNoteConfirm] = useState(null); // Note à supprimer
 
   // ⚠️ TOUS LES HOOKS DOIVENT ÊTRE AVANT LES RETURNS CONDITIONNELS
 
@@ -36,6 +46,13 @@ function ScriptDetail() {
     fetchScript(id);
     return () => clearCurrentScript();
   }, [id, fetchScript, clearCurrentScript]);
+
+  // Charger les notes personnelles
+  useEffect(() => {
+    if (currentScript?.id && user?.id) {
+      fetchPersonalNotes(currentScript.id, user.id);
+    }
+  }, [currentScript?.id, user?.id, fetchPersonalNotes]);
 
   // Calculer l'index de position pour chaque personnage (pour alterner gauche/droite)
   const characterPositions = useMemo(() => {
@@ -131,12 +148,116 @@ function ScriptDetail() {
     }
   };
 
+  // Handler pour ajouter un nouveau personnage
+  const handleAddCharacter = async (name, color) => {
+    try {
+      const newChar = await addCharacter(id, { name, color });
+      setShowAddCharacter(false);
+      return newChar;
+    } catch (err) {
+      console.error("Error adding character:", err);
+      alert("Erreur lors de l'ajout du personnage");
+      throw err;
+    }
+  };
+
+  // Handler pour diviser une réplique
+  const handleSplitReplica = async (originalReplica, splitIndex, newCharacterId) => {
+    try {
+      const originalText = originalReplica.text;
+      const firstPart = originalText.substring(0, splitIndex).trim();
+      const secondPart = originalText.substring(splitIndex).trim();
+      
+      if (!firstPart || !secondPart) {
+        alert("Les deux parties doivent contenir du texte");
+        return;
+      }
+
+      // 1. Mettre à jour la réplique originale avec la première partie
+      await updateReplica(originalReplica.id, {
+        text: firstPart,
+        text_gaps: generateGapsText(firstPart),
+      });
+
+      // 2. Créer une nouvelle réplique avec la deuxième partie
+      await addSingleReplica({
+        script_id: id,
+        character_id: newCharacterId,
+        text: secondPart,
+        order_index: originalReplica.order_index + 0.5,
+        text_gaps: generateGapsText(secondPart),
+        cue_words: '...' + firstPart.split(/\s+/).slice(-3).join(' '),
+      });
+
+      setSplittingReplica(null);
+      // Rafraîchir pour avoir le bon ordre
+      fetchScript(id);
+    } catch (err) {
+      console.error("Error splitting replica:", err);
+      alert("Erreur lors de la division de la réplique");
+    }
+  };
+
   // Générer le texte à trous
   const generateGapsText = (text) => {
     return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
       return first + '_'.repeat(Math.min(rest.length, 5));
     });
   };
+
+  // Handler pour ajouter une note personnelle
+  const handleAddNote = async (afterReplicaId, text, noteType) => {
+    try {
+      await addPersonalNote({
+        user_id: user.id,
+        script_id: id,
+        after_replica_id: afterReplicaId,
+        text: text,
+        note_type: noteType,
+      });
+      setShowAddNote(null);
+    } catch (err) {
+      console.error("Error adding note:", err);
+      alert("Erreur lors de l'ajout de la note");
+    }
+  };
+
+  // Handler pour modifier une note
+  const handleUpdateNote = async (noteId, text, noteType) => {
+    try {
+      await updatePersonalNote(noteId, { text, note_type: noteType });
+      setEditingNote(null);
+    } catch (err) {
+      console.error("Error updating note:", err);
+      alert("Erreur lors de la modification de la note");
+    }
+  };
+
+  // Handler pour supprimer une note
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await deletePersonalNote(noteId);
+      setDeleteNoteConfirm(null);
+    } catch (err) {
+      console.error("Error deleting note:", err);
+      alert("Erreur lors de la suppression de la note");
+    }
+  };
+
+  // Grouper les notes par after_replica_id pour un affichage facile
+  const notesByReplicaId = useMemo(() => {
+    const notes = currentScript?.personalNotes || [];
+    const grouped = {};
+    notes.forEach(note => {
+      const key = note.after_replica_id || 'start';
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(note);
+    });
+    return grouped;
+  }, [currentScript?.personalNotes]);
+
+  // Compter le nombre total de notes
+  const totalNotes = currentScript?.personalNotes?.length || 0;
 
   // ⚠️ RETURNS CONDITIONNELS APRÈS TOUS LES HOOKS
 
@@ -294,26 +415,50 @@ function ScriptDetail() {
           </button>
         </div>
 
-        {/* Liste des répliques - Style WhatsApp */}
+        {/* Indicateur nombre de notes */}
+        {totalNotes > 0 && (
+          <div className="mb-3 flex items-center gap-2 text-sm">
+            <span className="bg-amber-500/20 text-amber-500 px-3 py-1 rounded-full">
+              📝 {totalNotes} note{totalNotes > 1 ? 's' : ''} personnelle{totalNotes > 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
+
+        {/* Liste des répliques avec notes - Style WhatsApp */}
         <div className="space-y-3">
           {filteredReplicas.map((replica, index) => {
             const character = characters.find(
               (c) => c.id === replica.character_id
             );
             const isRight = characterPositions[replica.character_id] === 1;
+            const notesAfterThisReplica = notesByReplicaId[replica.id] || [];
             
             return (
-              <ChatBubble
-                key={replica.id}
-                replica={replica}
-                character={character}
-                characters={characters}
-                viewMode={viewMode}
-                isRight={isRight}
-                number={index + 1}
-                onEdit={() => setEditingReplica(replica)}
-                onDelete={() => setDeleteReplicaConfirm(replica)}
-              />
+              <div key={replica.id}>
+                {/* La réplique */}
+                <ChatBubble
+                  replica={replica}
+                  character={character}
+                  characters={characters}
+                  viewMode={viewMode}
+                  isRight={isRight}
+                  number={index + 1}
+                  onEdit={() => setEditingReplica(replica)}
+                  onDelete={() => setDeleteReplicaConfirm(replica)}
+                  onSplit={() => setSplittingReplica(replica)}
+                  onAddNote={() => setShowAddNote({ afterReplicaId: replica.id })}
+                />
+
+                {/* Notes personnelles après cette réplique */}
+                {notesAfterThisReplica.map((note) => (
+                  <NoteBubble
+                    key={note.id}
+                    note={note}
+                    onEdit={() => setEditingNote(note)}
+                    onDelete={() => setDeleteNoteConfirm(note)}
+                  />
+                ))}
+              </div>
             );
           })}
         </div>
@@ -327,6 +472,28 @@ function ScriptDetail() {
 
       {/* Boutons flottants */}
       <div className="fixed bottom-24 right-4 flex flex-col gap-3">
+        {/* Bouton Ajouter note */}
+        <button
+          onClick={() => setShowAddNote({ afterReplicaId: null })}
+          className="w-14 h-14 bg-amber-500 hover:bg-amber-400 rounded-full
+                     flex items-center justify-center text-2xl shadow-lg
+                     transition transform hover:scale-110"
+          title="Ajouter une note personnelle"
+        >
+          📝
+        </button>
+        
+        {/* Bouton Ajouter personnage */}
+        <button
+          onClick={() => setShowAddCharacter(true)}
+          className="w-14 h-14 bg-purple-600 hover:bg-purple-500 rounded-full
+                     flex items-center justify-center text-2xl shadow-lg
+                     transition transform hover:scale-110"
+          title="Ajouter un personnage"
+        >
+          👤
+        </button>
+        
         {/* Bouton Ajouter/Éditer réplique */}
         <button
           onClick={() => setShowAddReplica(true)}
@@ -396,6 +563,73 @@ function ScriptDetail() {
         </div>
       )}
 
+      {/* Modal de division de réplique */}
+      {splittingReplica && (
+        <SplitReplicaModal
+          replica={splittingReplica}
+          characters={characters}
+          onSplit={handleSplitReplica}
+          onAddCharacter={handleAddCharacter}
+          onClose={() => setSplittingReplica(null)}
+        />
+      )}
+
+      {/* Modal d'ajout de personnage */}
+      {showAddCharacter && (
+        <AddCharacterModal
+          existingColors={characters.map(c => c.color)}
+          onAdd={handleAddCharacter}
+          onClose={() => setShowAddCharacter(false)}
+        />
+      )}
+
+      {/* Modal d'ajout de note personnelle */}
+      {showAddNote && (
+        <AddNoteModal
+          replicas={replicas}
+          afterReplicaId={showAddNote.afterReplicaId}
+          onAdd={handleAddNote}
+          onClose={() => setShowAddNote(null)}
+        />
+      )}
+
+      {/* Modal d'édition de note */}
+      {editingNote && (
+        <EditNoteModal
+          note={editingNote}
+          onSave={handleUpdateNote}
+          onClose={() => setEditingNote(null)}
+        />
+      )}
+
+      {/* Modal de confirmation suppression note */}
+      {deleteNoteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer cette note ?
+            </h3>
+            <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+              "{deleteNoteConfirm.text}"
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteNoteConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteNote(deleteNoteConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de confirmation suppression script */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -447,7 +681,7 @@ function ScriptDetail() {
 /**
  * Bulle de chat style WhatsApp
  */
-function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onDelete }) {
+function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onDelete, onSplit, onAddNote }) {
   const [revealed, setRevealed] = useState(false);
 
   const bubbleColor = character?.color || '#6B7280';
@@ -564,6 +798,28 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             title="Modifier"
           >
             ✏️
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAddNote();
+            }}
+            className="w-7 h-7 bg-gray-700 hover:bg-amber-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Ajouter une note"
+          >
+            📝
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplit();
+            }}
+            className="w-7 h-7 bg-gray-700 hover:bg-orange-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Diviser en deux"
+          >
+            ✂️
           </button>
           <button
             onClick={(e) => {
@@ -1046,6 +1302,667 @@ function ShareTroupeModal({ script, userId, onClose }) {
         <div className="p-4 border-t border-gray-700">
           <button onClick={onClose} className="btn-secondary w-full">
             Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal de division d'une réplique
+ * Permet de couper une réplique en deux et d'attribuer la 2ème partie à un autre personnage
+ */
+function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClose }) {
+  const [splitPosition, setSplitPosition] = useState(null);
+  const [selectedCharId, setSelectedCharId] = useState(null);
+  const [showNewCharForm, setShowNewCharForm] = useState(false);
+  const [newCharName, setNewCharName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const text = replica.text;
+  
+  // Couleurs disponibles pour nouveau personnage
+  const CHARACTER_COLORS = [
+    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
+    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
+    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+  ];
+  const usedColors = characters.map(c => c.color);
+  const availableColors = CHARACTER_COLORS.filter(c => !usedColors.includes(c));
+  const [newCharColor, setNewCharColor] = useState(availableColors[0] || CHARACTER_COLORS[0]);
+
+  // Trouver la position de coupure par clic sur le texte
+  const handleTextClick = (e) => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const offset = range.startOffset;
+      
+      // Trouver la position dans le texte complet
+      const textNode = e.target;
+      if (textNode.textContent) {
+        setSplitPosition(offset);
+      }
+    }
+  };
+
+  // Trouver automatiquement les points de coupure possibles (noms de personnages en majuscules)
+  const findPotentialSplitPoints = () => {
+    const regex = /([A-ZÀ-Ÿ]{2,}(?:[-'\s][A-ZÀ-Ÿ]+)*)\s*[:\-–]/g;
+    const points = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > 10) { // Ignorer si trop près du début
+        points.push({
+          position: match.index,
+          name: match[1].trim(),
+          preview: text.substring(Math.max(0, match.index - 20), match.index + 30)
+        });
+      }
+    }
+    return points;
+  };
+
+  const potentialSplitPoints = findPotentialSplitPoints();
+
+  const handleSplit = async () => {
+    if (splitPosition === null || !selectedCharId) return;
+    
+    setSaving(true);
+    try {
+      await onSplit(replica, splitPosition, selectedCharId);
+    } catch (err) {
+      console.error("Erreur division:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateAndSelect = async () => {
+    if (!newCharName.trim()) return;
+    
+    setSaving(true);
+    try {
+      const newChar = await onAddCharacter(newCharName.trim().toUpperCase(), newCharColor);
+      setSelectedCharId(newChar.id);
+      setShowNewCharForm(false);
+    } catch (err) {
+      console.error("Erreur création personnage:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const firstPart = splitPosition !== null ? text.substring(0, splitPosition).trim() : text;
+  const secondPart = splitPosition !== null ? text.substring(splitPosition).trim() : "";
+
+  const currentChar = characters.find(c => c.id === replica.character_id);
+  const selectedChar = characters.find(c => c.id === selectedCharId);
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✂️ Diviser la réplique</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Contenu scrollable */}
+        <div className="flex-1 overflow-y-auto p-4">
+          
+          {/* Étape 1: Choisir où couper */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-gold-500 mb-2">1️⃣ Où voulez-vous couper ?</h4>
+            
+            {/* Points de coupure détectés automatiquement */}
+            {potentialSplitPoints.length > 0 && (
+              <div className="mb-4">
+                <p className="text-gray-400 text-xs mb-2">Points de coupure détectés :</p>
+                <div className="space-y-2">
+                  {potentialSplitPoints.map((point, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSplitPosition(point.position)}
+                      className={`w-full text-left p-3 rounded-lg border transition text-sm
+                        ${splitPosition === point.position 
+                          ? 'bg-orange-600/20 border-orange-500 text-orange-300' 
+                          : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'}`}
+                    >
+                      <span className="font-bold text-white">{point.name}</span>
+                      <span className="text-gray-500 ml-2 text-xs">Position {point.position}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Saisie manuelle de la position */}
+            <div className="mb-4">
+              <label className="text-gray-400 text-xs mb-1 block">Ou entrez la position manuellement :</label>
+              <input
+                type="number"
+                min="1"
+                max={text.length - 1}
+                value={splitPosition || ""}
+                onChange={(e) => setSplitPosition(parseInt(e.target.value) || null)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white"
+                placeholder="Position du caractère..."
+              />
+            </div>
+          </div>
+
+          {/* Aperçu de la division */}
+          {splitPosition !== null && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">📝 Aperçu</h4>
+              
+              <div className="space-y-3">
+                {/* Partie 1 */}
+                <div 
+                  className="p-3 rounded-xl"
+                  style={{ backgroundColor: `${currentChar?.color || '#666'}dd` }}
+                >
+                  <p className="text-xs font-bold text-white/80 mb-1">{currentChar?.name} (conservé)</p>
+                  <p className="text-white text-sm">{firstPart || "(vide)"}</p>
+                </div>
+
+                <div className="text-center text-gray-500">✂️ - - - - - - - - - - ✂️</div>
+
+                {/* Partie 2 */}
+                <div 
+                  className="p-3 rounded-xl"
+                  style={{ backgroundColor: `${selectedChar?.color || '#666'}dd` }}
+                >
+                  <p className="text-xs font-bold text-white/80 mb-1">
+                    {selectedChar?.name || "❓ Choisir le personnage"}
+                  </p>
+                  <p className="text-white text-sm">{secondPart || "(vide)"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Étape 2: Choisir le personnage pour la 2ème partie */}
+          {splitPosition !== null && secondPart && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">2️⃣ Attribuer à quel personnage ?</h4>
+              
+              {/* Personnages existants */}
+              <div className="flex gap-2 flex-wrap mb-3">
+                {characters.map((char) => (
+                  <button
+                    key={char.id}
+                    onClick={() => {
+                      setSelectedCharId(char.id);
+                      setShowNewCharForm(false);
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                    style={{
+                      backgroundColor: selectedCharId === char.id ? char.color : '#374151',
+                      color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                    }}
+                  >
+                    {char.name}
+                  </button>
+                ))}
+              </div>
+
+              {/* Bouton pour nouveau personnage */}
+              <button
+                onClick={() => setShowNewCharForm(!showNewCharForm)}
+                className={`w-full p-3 rounded-lg border-2 border-dashed transition text-sm
+                  ${showNewCharForm 
+                    ? 'border-green-500 bg-green-500/10 text-green-400' 
+                    : 'border-gray-600 text-gray-400 hover:border-gray-500'}`}
+              >
+                ➕ Créer un nouveau personnage
+              </button>
+
+              {/* Formulaire nouveau personnage */}
+              {showNewCharForm && (
+                <div className="mt-3 p-4 bg-gray-800 rounded-xl border border-gray-700">
+                  <div className="mb-3">
+                    <label className="text-gray-400 text-xs mb-1 block">Nom du personnage</label>
+                    <input
+                      type="text"
+                      value={newCharName}
+                      onChange={(e) => setNewCharName(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white uppercase"
+                      placeholder="Ex: L'ADJUDANT-CHEF"
+                    />
+                  </div>
+                  
+                  <div className="mb-3">
+                    <label className="text-gray-400 text-xs mb-1 block">Couleur</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {CHARACTER_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setNewCharColor(color)}
+                          className={`w-8 h-8 rounded-full transition ${newCharColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800' : ''}`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleCreateAndSelect}
+                    disabled={!newCharName.trim() || saving}
+                    className={`w-full py-3 rounded-lg font-semibold transition
+                      ${newCharName.trim() && !saving
+                        ? 'bg-green-600 hover:bg-green-500 text-white'
+                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+                  >
+                    {saving ? "⏳ Création..." : "✓ Créer et sélectionner"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bouton de validation */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleSplit}
+            disabled={splitPosition === null || !selectedCharId || !secondPart || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${splitPosition !== null && selectedCharId && secondPart && !saving
+                ? 'bg-orange-500 hover:bg-orange-400 text-white shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Division en cours..." : "✂️ DIVISER LA RÉPLIQUE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal d'ajout d'un personnage
+ */
+function AddCharacterModal({ existingColors, onAdd, onClose }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const CHARACTER_COLORS = [
+    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
+    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
+    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+  ];
+  const availableColors = CHARACTER_COLORS.filter(c => !existingColors.includes(c));
+  const [color, setColor] = useState(availableColors[0] || CHARACTER_COLORS[0]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(name.trim().toUpperCase(), color);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
+      <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">➕ Nouveau personnage</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-gray-400 text-sm mb-2 block">Nom du personnage</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white uppercase"
+              placeholder="Ex: L'ADJUDANT-CHEF"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-gray-400 text-sm mb-2 block">Couleur</label>
+            <div className="flex gap-2 flex-wrap">
+              {CHARACTER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={`w-10 h-10 rounded-full transition ${color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-dark' : ''}`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Aperçu */}
+          {name && (
+            <div 
+              className="p-3 rounded-xl"
+              style={{ backgroundColor: `${color}dd` }}
+            >
+              <p className="text-white font-bold">{name.toUpperCase()}</p>
+              <p className="text-white/70 text-sm">Aperçu de la couleur</p>
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-700">
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className={`w-full py-3 rounded-xl font-bold transition
+              ${name.trim() && !saving
+                ? 'bg-gold-500 hover:bg-gold-400 text-dark'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Création..." : "✓ CRÉER LE PERSONNAGE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Bulle de note personnelle - Style distinctif (fond ambre/jaune)
+ */
+function NoteBubble({ note, onEdit, onDelete }) {
+  const NOTE_TYPES = {
+    general: { icon: '📝', label: 'Note' },
+    movement: { icon: '🚶', label: 'Déplacement' },
+    intention: { icon: '💭', label: 'Intention' },
+    prop: { icon: '🎪', label: 'Accessoire' },
+    cue: { icon: '🎯', label: 'Repère' },
+  };
+
+  const typeInfo = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
+
+  return (
+    <div className="flex justify-center my-2">
+      <div className="relative max-w-[90%] group">
+        {/* Bulle de note - Style distinctif */}
+        <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
+                        border-2 border-amber-400 border-dashed shadow-lg">
+          {/* Type de note */}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">{typeInfo.icon}</span>
+            <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+              {typeInfo.label}
+            </span>
+          </div>
+
+          {/* Contenu de la note */}
+          <p className="text-amber-950 text-sm font-medium leading-relaxed">
+            {note.text}
+          </p>
+        </div>
+
+        {/* Boutons d'action */}
+        <div className="absolute -top-2 -right-2 flex gap-1 
+                        opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onEdit}
+            className="w-6 h-6 bg-gray-700 hover:bg-primary-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Modifier"
+          >
+            ✏️
+          </button>
+          <button
+            onClick={onDelete}
+            className="w-6 h-6 bg-gray-700 hover:bg-red-600 
+                       rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Supprimer"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal d'ajout de note personnelle
+ */
+function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
+  const [text, setText] = useState("");
+  const [noteType, setNoteType] = useState("general");
+  const [selectedReplicaId, setSelectedReplicaId] = useState(afterReplicaId);
+  const [saving, setSaving] = useState(false);
+
+  const NOTE_TYPES = [
+    { value: 'general', icon: '📝', label: 'Note générale' },
+    { value: 'movement', icon: '🚶', label: 'Déplacement' },
+    { value: 'intention', icon: '💭', label: 'Intention de jeu' },
+    { value: 'prop', icon: '🎪', label: 'Accessoire' },
+    { value: 'cue', icon: '🎯', label: 'Repère / Signal' },
+  ];
+
+  const handleSubmit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(selectedReplicaId, text.trim(), noteType);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">📝 Ajouter une note</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Contenu */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Type de note */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <div className="grid grid-cols-2 gap-2">
+              {NOTE_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setNoteType(type.value)}
+                  className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2
+                    ${noteType === type.value 
+                      ? 'bg-amber-500 text-amber-950' 
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Texte de la note */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-32 bg-gray-800 border border-gray-600 rounded-xl p-4 
+                         text-white text-base resize-none focus:border-amber-500 focus:outline-none"
+              placeholder="Ex: Avancer vers le public, prendre la chaise..."
+              autoFocus
+            />
+          </div>
+
+          {/* Position (optionnel) */}
+          {replicas && replicas.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">
+                Placer après la réplique (optionnel)
+              </label>
+              <select
+                value={selectedReplicaId || ""}
+                onChange={(e) => setSelectedReplicaId(e.target.value || null)}
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white"
+              >
+                <option value="">-- Au début du texte --</option>
+                {replicas.slice(0, 20).map((r, idx) => (
+                  <option key={r.id} value={r.id}>
+                    #{idx + 1} - {r.text.substring(0, 40)}...
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Aperçu */}
+          {text && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+              <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
+                              border-2 border-amber-400 border-dashed">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{NOTE_TYPES.find(t => t.value === noteType)?.icon}</span>
+                  <span className="text-xs font-bold text-amber-900 uppercase">
+                    {NOTE_TYPES.find(t => t.value === noteType)?.label}
+                  </span>
+                </div>
+                <p className="text-amber-950 text-sm font-medium">{text}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Bouton de validation */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleSubmit}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${text.trim() && !saving
+                ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ AJOUTER LA NOTE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal d'édition de note
+ */
+function EditNoteModal({ note, onSave, onClose }) {
+  const [text, setText] = useState(note.text);
+  const [noteType, setNoteType] = useState(note.note_type || "general");
+  const [saving, setSaving] = useState(false);
+
+  const NOTE_TYPES = [
+    { value: 'general', icon: '📝', label: 'Note générale' },
+    { value: 'movement', icon: '🚶', label: 'Déplacement' },
+    { value: 'intention', icon: '💭', label: 'Intention de jeu' },
+    { value: 'prop', icon: '🎪', label: 'Accessoire' },
+    { value: 'cue', icon: '🎯', label: 'Repère / Signal' },
+  ];
+
+  const handleSubmit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(note.id, text.trim(), noteType);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        
+        {/* Header */}
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Modifier la note</h3>
+          <button 
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Contenu */}
+        <div className="flex-1 overflow-y-auto p-4">
+          {/* Type de note */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <div className="grid grid-cols-2 gap-2">
+              {NOTE_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setNoteType(type.value)}
+                  className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2
+                    ${noteType === type.value 
+                      ? 'bg-amber-500 text-amber-950' 
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Texte */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-32 bg-gray-800 border border-gray-600 rounded-xl p-4 
+                         text-white text-base resize-none focus:border-amber-500 focus:outline-none"
+              autoFocus
+            />
+          </div>
+        </div>
+
+        {/* Bouton */}
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button 
+            onClick={handleSubmit}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition
+              ${text.trim() && !saving
+                ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg'
+                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
           </button>
         </div>
       </div>

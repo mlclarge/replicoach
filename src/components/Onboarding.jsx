@@ -22,7 +22,13 @@ const ONBOARDING_SLIDES = [
     icon: '✏️',
     title: 'Corrigez si nécessaire',
     description: 'Après l\'import, vous pouvez modifier, ajouter ou supprimer des répliques. Cliquez sur une réplique pour l\'éditer, ou utilisez le bouton + pour en ajouter.',
-    tip: '💡 Glissez les répliques pour réorganiser l\'ordre si besoin',
+    tip: '💡 Utilisez ✂️ pour diviser une réplique mal scannée en deux',
+  },
+  {
+    icon: '📝',
+    title: 'Vos notes personnelles',
+    description: 'Ajoutez vos propres notes de jeu : déplacements, intentions, accessoires, repères... Elles s\'affichent entre les répliques et n\'appartiennent qu\'à vous.',
+    tip: '💡 Cliquez sur 📝 après une réplique pour y ajouter votre note',
   },
   {
     icon: '🎨',
@@ -31,7 +37,7 @@ const ONBOARDING_SLIDES = [
     tip: '💡 Filtrez par personnage pour vous concentrer sur votre rôle',
   },
   {
-    icon: '📝',
+    icon: '🔖',
     title: 'Modes d\'apprentissage',
     description: 'Trois modes pour progresser : texte complet, texte à trous (premières lettres), et mode répliques (indices uniquement).',
     tip: '💡 Commencez par le mode complet, puis passez aux trous !',

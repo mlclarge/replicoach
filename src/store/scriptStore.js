@@ -145,6 +145,19 @@ export const useScriptStore = create((set, get) => ({
         .single();
 
       if (error) throw error;
+      
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript || state.currentScript.id !== scriptId) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            characters: [...(state.currentScript.characters || []), data],
+          },
+        };
+      });
+      
       return data;
     } catch (error) {
       console.error("Add character error:", error);
@@ -280,6 +293,152 @@ export const useScriptStore = create((set, get) => ({
     } catch (error) {
       console.error("Reorder replicas error:", error);
       throw error;
+    }
+  },
+
+  // ========== NOTES PERSONNELLES ==========
+
+  // Récupérer les notes personnelles d'un script
+  fetchPersonalNotes: async (scriptId, userId) => {
+    try {
+      const { data, error } = await supabase
+        .from("personal_notes")
+        .select("*")
+        .eq("script_id", scriptId)
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript || state.currentScript.id !== scriptId) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            personalNotes: data || [],
+          },
+        };
+      });
+
+      return data;
+    } catch (error) {
+      console.error("Fetch personal notes error:", error);
+      return [];
+    }
+  },
+
+  // Ajouter une note personnelle
+  addPersonalNote: async (noteData) => {
+    try {
+      const { data, error } = await supabase
+        .from("personal_notes")
+        .insert([noteData])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            personalNotes: [...(state.currentScript.personalNotes || []), data],
+          },
+        };
+      });
+
+      return data;
+    } catch (error) {
+      console.error("Add personal note error:", error);
+      throw error;
+    }
+  },
+
+  // Modifier une note personnelle
+  updatePersonalNote: async (noteId, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from("personal_notes")
+        .update(updates)
+        .eq("id", noteId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            personalNotes: (state.currentScript.personalNotes || []).map((n) =>
+              n.id === noteId ? data : n
+            ),
+          },
+        };
+      });
+
+      return data;
+    } catch (error) {
+      console.error("Update personal note error:", error);
+      throw error;
+    }
+  },
+
+  // Supprimer une note personnelle
+  deletePersonalNote: async (noteId) => {
+    try {
+      const { error } = await supabase
+        .from("personal_notes")
+        .delete()
+        .eq("id", noteId);
+
+      if (error) throw error;
+
+      // Mettre à jour le state local
+      set((state) => {
+        if (!state.currentScript) return state;
+        
+        return {
+          currentScript: {
+            ...state.currentScript,
+            personalNotes: (state.currentScript.personalNotes || []).filter((n) => n.id !== noteId),
+          },
+        };
+      });
+    } catch (error) {
+      console.error("Delete personal note error:", error);
+      throw error;
+    }
+  },
+
+  // Compter les notes par script (pour l'affichage dans Home)
+  countNotesForScripts: async (userId) => {
+    try {
+      const { data, error } = await supabase
+        .from("personal_notes")
+        .select("script_id")
+        .eq("user_id", userId);
+
+      if (error) throw error;
+
+      // Compter par script_id
+      const counts = {};
+      (data || []).forEach((note) => {
+        counts[note.script_id] = (counts[note.script_id] || 0) + 1;
+      });
+
+      return counts;
+    } catch (error) {
+      console.error("Count notes error:", error);
+      return {};
     }
   },
 
