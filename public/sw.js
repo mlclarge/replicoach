@@ -238,13 +238,47 @@ self.addEventListener('message', (event) => {
     cacheScriptData(event.data.scriptId, event.data.userId);
   }
   
-  // Effacer le cache de données
+  // Effacer le cache de données (après suppression, modification, etc.)
   if (event.data === 'CLEAR_DATA_CACHE') {
     caches.delete(DATA_CACHE_NAME).then(() => {
       console.log('[SW] Data cache cleared');
     });
   }
+
+  // Invalider le cache pour un script spécifique
+  if (event.data.type === 'INVALIDATE_SCRIPT') {
+    invalidateScriptCache(event.data.scriptId);
+  }
+
+  // Rafraîchir tout le cache de données
+  if (event.data === 'REFRESH_DATA_CACHE') {
+    refreshDataCache();
+  }
 });
+
+// Invalider le cache pour un script spécifique
+async function invalidateScriptCache(scriptId) {
+  console.log('[SW] Invalidating cache for script:', scriptId);
+  const cache = await caches.open(DATA_CACHE_NAME);
+  const keys = await cache.keys();
+  
+  for (const request of keys) {
+    if (request.url.includes(scriptId) || 
+        request.url.includes('scripts') ||
+        request.url.includes('replicas') ||
+        request.url.includes('characters')) {
+      await cache.delete(request);
+      console.log('[SW] Deleted from cache:', request.url);
+    }
+  }
+}
+
+// Rafraîchir tout le cache de données
+async function refreshDataCache() {
+  console.log('[SW] Refreshing all data cache');
+  await caches.delete(DATA_CACHE_NAME);
+  console.log('[SW] Data cache deleted, will be rebuilt on next fetch');
+}
 
 // Fonction pour pré-cacher les données d'un script
 async function cacheScriptData(scriptId, userId) {

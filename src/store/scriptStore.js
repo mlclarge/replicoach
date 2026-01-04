@@ -118,6 +118,34 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
+  // Mettre à jour un script (titre, etc.)
+  updateScript: async (scriptId, updates) => {
+    try {
+      const { data, error } = await supabase
+        .from("scripts")
+        .update(updates)
+        .eq("id", scriptId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set((state) => ({
+        scripts: state.scripts.map((s) => 
+          s.id === scriptId ? { ...s, ...updates } : s
+        ),
+        currentScript: state.currentScript?.id === scriptId 
+          ? { ...state.currentScript, ...updates }
+          : state.currentScript,
+      }));
+
+      return data;
+    } catch (error) {
+      console.error("Update script error:", error);
+      throw error;
+    }
+  },
+
   deleteScript: async (scriptId) => {
     try {
       const { error } = await supabase
@@ -321,6 +349,13 @@ export const useScriptStore = create((set, get) => ({
   // Supprimer une réplique
   deleteReplica: async (replicaId) => {
     try {
+      // Récupérer le script_id avant suppression pour invalider le cache
+      const { data: replica } = await supabase
+        .from("replicas")
+        .select("script_id")
+        .eq("id", replicaId)
+        .single();
+
       const { error } = await supabase
         .from("replicas")
         .delete()
@@ -339,6 +374,14 @@ export const useScriptStore = create((set, get) => ({
           },
         };
       });
+
+      // Invalider le cache PWA
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'INVALIDATE_SCRIPT',
+          scriptId: replica?.script_id
+        });
+      }
     } catch (error) {
       console.error("Delete replica error:", error);
       throw error;

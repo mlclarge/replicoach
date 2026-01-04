@@ -43,6 +43,7 @@ function ScriptDetail() {
     addPersonalNote,
     updatePersonalNote,
     deletePersonalNote,
+    updateScript,
   } = useScriptStore();
 
   const [viewMode, setViewMode] = useState("full");
@@ -65,6 +66,9 @@ function ScriptDetail() {
   const [editingCharacter, setEditingCharacter] = useState(null);
   const [deleteCharacterConfirm, setDeleteCharacterConfirm] = useState(null);
   const [insertAfterIndex, setInsertAfterIndex] = useState(null);
+  const [showNotesListModal, setShowNotesListModal] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -267,6 +271,18 @@ function ScriptDetail() {
     });
   };
 
+  // Handler pour sauvegarder le titre
+  const handleSaveTitle = async () => {
+    if (!newTitle.trim()) return;
+    try {
+      await updateScript(id, { title: newTitle.trim() });
+      setEditingTitle(false);
+    } catch (err) {
+      console.error("Error updating title:", err);
+      alert("Erreur lors de la modification du titre");
+    }
+  };
+
   // Handler pour ajouter une note personnelle
   const handleAddNote = async (afterReplicaId, text, noteType) => {
     try {
@@ -449,7 +465,45 @@ function ScriptDetail() {
       <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 mb-4 border-b-2 border-primary-600 shadow-lg">
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <h1 className="text-2xl font-display text-gold-400 mb-1">{title}</h1>
+            {/* Titre éditable */}
+            {editingTitle ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="flex-1 bg-white/20 border border-gold-400 rounded-lg px-3 py-1
+                             text-xl text-gold-400 font-display placeholder-gold-400/50"
+                  placeholder="Titre du texte"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveTitle}
+                  className="p-2 bg-green-500 text-white rounded-lg"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => setEditingTitle(false)}
+                  className="p-2 bg-gray-600 text-white rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <h1 
+                className="text-2xl font-display text-gold-400 mb-1 cursor-pointer 
+                           hover:text-gold-300 flex items-center gap-2 group"
+                onClick={() => {
+                  setNewTitle(title);
+                  setEditingTitle(true);
+                }}
+                title="Cliquer pour modifier le titre"
+              >
+                {title}
+                <span className="text-sm opacity-0 group-hover:opacity-100 transition">✏️</span>
+              </h1>
+            )}
             <p className="text-gray-300 text-sm">
               {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
@@ -601,12 +655,18 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Indicateur nombre de notes */}
+        {/* Indicateur nombre de notes - CLIQUABLE */}
         {totalNotes > 0 && (
-          <div className="mb-3 flex items-center gap-2 text-sm">
-            <span className="bg-amber-500/20 text-amber-700 px-3 py-1 rounded-full">
-              📝 {totalNotes} note{totalNotes > 1 ? 's' : ''} personnelle{totalNotes > 1 ? 's' : ''}
-            </span>
+          <div className="mb-3">
+            <button
+              onClick={() => setShowNotesListModal(true)}
+              className="flex items-center gap-2 text-sm bg-amber-500/20 text-amber-700 
+                         px-3 py-2 rounded-full hover:bg-amber-500/30 transition"
+            >
+              <span>📝</span>
+              <span>{totalNotes} note{totalNotes > 1 ? 's' : ''} personnelle{totalNotes > 1 ? 's' : ''}</span>
+              <span className="text-amber-500">→</span>
+            </button>
           </div>
         )}
 
@@ -920,6 +980,23 @@ function ScriptDetail() {
           onClose={() => setShowShareModal(false)}
         />
       )}
+
+      {/* Modal liste des notes personnelles */}
+      {showNotesListModal && (
+        <NotesListModal
+          notes={currentScript?.personalNotes || []}
+          replicas={replicas}
+          onClose={() => setShowNotesListModal(false)}
+          onEdit={(note) => {
+            setShowNotesListModal(false);
+            setEditingNote(note);
+          }}
+          onDelete={(note) => {
+            setShowNotesListModal(false);
+            setDeleteNoteConfirm(note);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1098,10 +1175,10 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
     switch (viewMode) {
       case "gaps":
         if (revealed) {
-          return <p className="text-white">{replica.text}</p>;
+          return <p className="text-white whitespace-pre-wrap">{replica.text}</p>;
         } else {
           return (
-            <p className="text-white/80 font-mono text-sm tracking-wide">
+            <p className="text-white/80 font-mono text-sm tracking-wide whitespace-pre-wrap">
               {replica.text_gaps || replica.text}
             </p>
           );
@@ -1116,7 +1193,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
               </p>
             )}
             {revealed ? (
-              <p className="text-white">{replica.text}</p>
+              <p className="text-white whitespace-pre-wrap">{replica.text}</p>
             ) : (
               <p className="text-white/70 text-sm text-center py-2">
                 👆 Toucher pour révéler
@@ -1126,7 +1203,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         );
 
       default:
-        return <p className="text-white leading-relaxed">{replica.text}</p>;
+        return <p className="text-white leading-relaxed whitespace-pre-wrap">{replica.text}</p>;
     }
   };
 
@@ -2607,6 +2684,103 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
           >
             {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Modal pour afficher la liste des notes personnelles
+ */
+function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
+  const NOTE_TYPES = {
+    general: { icon: '📝', label: 'Note générale', color: 'amber' },
+    movement: { icon: '🚶', label: 'Déplacement', color: 'blue' },
+    intention: { icon: '🎭', label: 'Intention', color: 'purple' },
+    accessory: { icon: '🎒', label: 'Accessoire', color: 'green' },
+    cue: { icon: '⏰', label: 'Repère', color: 'red' },
+  };
+
+  // Fonction pour obtenir le contexte (réplique associée)
+  const getReplicaContext = (afterReplicaId) => {
+    if (!afterReplicaId) return "Au début du texte";
+    const replica = replicas.find(r => r.id === afterReplicaId);
+    if (!replica) return "Réplique inconnue";
+    return replica.text?.substring(0, 50) + (replica.text?.length > 50 ? "..." : "");
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
+      <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700 max-h-[80vh] flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">📝 Mes notes personnelles</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
+        </div>
+
+        {/* Liste */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {notes.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">
+              Aucune note pour ce texte
+            </p>
+          ) : (
+            notes.map(note => {
+              const noteType = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
+              return (
+                <div 
+                  key={note.id}
+                  className={`p-4 rounded-lg border-l-4 bg-${noteType.color}-500/10 border-${noteType.color}-500`}
+                  style={{
+                    backgroundColor: `rgba(245, 158, 11, 0.1)`,
+                    borderLeftColor: noteType.color === 'amber' ? '#f59e0b' 
+                      : noteType.color === 'blue' ? '#3b82f6'
+                      : noteType.color === 'purple' ? '#8b5cf6'
+                      : noteType.color === 'green' ? '#22c55e'
+                      : '#ef4444'
+                  }}
+                >
+                  {/* Header note */}
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="flex items-center gap-2 text-sm">
+                      <span>{noteType.icon}</span>
+                      <span className="text-gray-400">{noteType.label}</span>
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onEdit(note)}
+                        className="text-gray-400 hover:text-blue-400 text-sm"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => onDelete(note)}
+                        className="text-gray-400 hover:text-red-400 text-sm"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Contenu */}
+                  <p className="text-white whitespace-pre-wrap">{note.text}</p>
+                  
+                  {/* Contexte */}
+                  <p className="text-gray-500 text-xs mt-2 italic">
+                    Après : "{getReplicaContext(note.after_replica_id)}"
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-gray-700">
+          <button onClick={onClose} className="btn-secondary w-full">
+            Fermer
           </button>
         </div>
       </div>
