@@ -35,6 +35,8 @@ function AudioMode() {
   const [isPaused, setIsPaused] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rate, setRate] = useState(1);
+  const [femalePitch, setFemalePitch] = useState(2.0); // Pitch TRÈS aigu pour voix féminine
+  const [malePitch, setMalePitch] = useState(0.4); // Pitch TRÈS grave pour voix masculine
   
   // Personnages masqués (pour le comédien)
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
@@ -129,24 +131,39 @@ function AudioMode() {
     }
   }, [currentIndex, isPlaying]);
 
-  // Fonction speak améliorée avec pitch pour différencier M/F
+  // Fonction speak améliorée avec pitch FORT pour différencier M/F
   const speak = (text, voiceName, characterId) => {
     return new Promise((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
-      const voice = voices.all?.find((v) => v.name === voiceName);
-
-      if (voice) utterance.voice = voice;
-      utterance.rate = rate;
-      utterance.lang = "fr-FR";
-
-      // Appliquer le pitch selon le genre du personnage (avec override possible)
+      
+      // Déterminer le genre
       const character = currentScript?.characters?.find(c => c.id === characterId);
       const gender = characterGenders[characterId] || character?.gender || detectGender(character?.name || '');
       
+      // Essayer de trouver une voix appropriée au genre
+      let selectedVoice = voices.all?.find((v) => v.name === voiceName);
+      
+      // Sur Android/Chrome, chercher une voix féminine si disponible
       if (gender === 'female') {
-        utterance.pitch = 1.4; // Voix plus aiguë pour femmes
+        const femaleVoice = voices.all?.find(v => 
+          v.name.toLowerCase().includes('female') ||
+          v.name.toLowerCase().includes('femme') ||
+          v.name.toLowerCase().includes('woman') ||
+          v.name.toLowerCase().includes('féminin')
+        );
+        if (femaleVoice) selectedVoice = femaleVoice;
+      }
+
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.lang = "fr-FR";
+
+      // Pitch réglable par l'utilisateur
+      if (gender === 'female') {
+        utterance.pitch = femalePitch;
+        utterance.rate = rate * 1.05; // Légèrement plus rapide
       } else {
-        utterance.pitch = 0.7; // Voix plus grave pour hommes
+        utterance.pitch = malePitch;
+        utterance.rate = rate * 0.95; // Légèrement plus lent
       }
 
       utterance.onend = resolve;
@@ -154,6 +171,25 @@ function AudioMode() {
 
       speechSynthesis.speak(utterance);
     });
+  };
+
+  // Fonction de test des voix
+  const testVoice = (gender) => {
+    const testText = gender === 'female' 
+      ? "Bonjour, je suis une voix féminine."
+      : "Bonjour, je suis une voix masculine.";
+    
+    const utterance = new SpeechSynthesisUtterance(testText);
+    utterance.lang = "fr-FR";
+    utterance.pitch = gender === 'female' ? femalePitch : malePitch;
+    utterance.rate = rate;
+    
+    if (voices.all?.length > 0) {
+      utterance.voice = voices.all[0];
+    }
+    
+    speechSynthesis.cancel();
+    speechSynthesis.speak(utterance);
   };
 
   // Lecture continue
@@ -214,27 +250,19 @@ function AudioMode() {
     pausedRef.current = false;
   };
 
-  const playOne = async (index) => {
+  // Cliquer sur une bulle = lancer la lecture continue à partir de cette position
+  const playFromIndex = async (index) => {
     if (!currentScript?.replicas) return;
 
     stop();
-    setCurrentIndex(index);
-    setIsPlaying(true);
-    playingRef.current = true;
-
-    const replica = currentScript.replicas[index];
-    const voiceName = characterVoices[replica.character_id];
-
-    await speak(replica.text, voiceName, replica.character_id);
-    setIsPlaying(false);
-    playingRef.current = false;
+    // Lancer la lecture continue à partir de cet index
+    playAll(index);
   };
 
   const goToPrevious = () => {
     const newIndex = Math.max(0, currentIndex - 1);
     if (isPlaying) {
       stop();
-      setCurrentIndex(newIndex);
       playAll(newIndex);
     } else {
       setCurrentIndex(newIndex);
@@ -246,7 +274,6 @@ function AudioMode() {
     const newIndex = Math.min(currentScript.replicas.length - 1, currentIndex + 1);
     if (isPlaying) {
       stop();
-      setCurrentIndex(newIndex);
       playAll(newIndex);
     } else {
       setCurrentIndex(newIndex);
@@ -383,20 +410,73 @@ function AudioMode() {
             })}
           </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-gray-600 text-sm">Vitesse</span>
-              <span className="text-primary-700 font-semibold">{rate}x</span>
+          <div className="mt-3 pt-3 border-t border-gray-200 space-y-4">
+            {/* Vitesse */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Vitesse</span>
+                <span className="text-primary-700 font-semibold">{rate}x</span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={rate}
+                onChange={(e) => setRate(parseFloat(e.target.value))}
+                className="w-full accent-primary-600"
+              />
             </div>
-            <input
-              type="range"
-              min="0.5"
-              max="2"
-              step="0.1"
-              value={rate}
-              onChange={(e) => setRate(parseFloat(e.target.value))}
-              className="w-full accent-primary-600"
-            />
+
+            {/* Pitch féminin */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Voix ♀ (aigüe)</span>
+                <span className="text-pink-600 font-semibold">{femalePitch.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="1.0"
+                max="2.0"
+                step="0.1"
+                value={femalePitch}
+                onChange={(e) => setFemalePitch(parseFloat(e.target.value))}
+                className="w-full accent-pink-500"
+              />
+            </div>
+
+            {/* Pitch masculin */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-600 text-sm">Voix ♂ (grave)</span>
+                <span className="text-blue-600 font-semibold">{malePitch.toFixed(1)}</span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.1"
+                value={malePitch}
+                onChange={(e) => setMalePitch(parseFloat(e.target.value))}
+                className="w-full accent-blue-500"
+              />
+            </div>
+
+            {/* Bouton test */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => testVoice('female')}
+                className="flex-1 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-semibold"
+              >
+                🔊 Test ♀
+              </button>
+              <button
+                onClick={() => testVoice('male')}
+                className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold"
+              >
+                🔊 Test ♂
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -446,7 +526,7 @@ function AudioMode() {
               isCurrent={isCurrent}
               isPlaying={isCurrentPlaying}
               isHidden={isHidden}
-              onClick={() => playOne(index)}
+              onClick={() => playFromIndex(index)}
             />
           );
         })}
