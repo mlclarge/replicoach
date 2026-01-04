@@ -30,6 +30,7 @@ function AudioMode() {
 
   const [voices, setVoices] = useState({ male: [], female: [] });
   const [characterVoices, setCharacterVoices] = useState({});
+  const [characterGenders, setCharacterGenders] = useState({}); // Override du genre par personnage
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -128,7 +129,8 @@ function AudioMode() {
     }
   }, [currentIndex, isPlaying]);
 
-  const speak = (text, voiceName) => {
+  // Fonction speak améliorée avec pitch pour différencier M/F
+  const speak = (text, voiceName, characterId) => {
     return new Promise((resolve) => {
       const utterance = new SpeechSynthesisUtterance(text);
       const voice = voices.all?.find((v) => v.name === voiceName);
@@ -136,6 +138,16 @@ function AudioMode() {
       if (voice) utterance.voice = voice;
       utterance.rate = rate;
       utterance.lang = "fr-FR";
+
+      // Appliquer le pitch selon le genre du personnage (avec override possible)
+      const character = currentScript?.characters?.find(c => c.id === characterId);
+      const gender = characterGenders[characterId] || character?.gender || detectGender(character?.name || '');
+      
+      if (gender === 'female') {
+        utterance.pitch = 1.4; // Voix plus aiguë pour femmes
+      } else {
+        utterance.pitch = 0.7; // Voix plus grave pour hommes
+      }
 
       utterance.onend = resolve;
       utterance.onerror = resolve;
@@ -175,7 +187,7 @@ function AudioMode() {
         continue;
       }
 
-      await speak(replica.text, voiceName);
+      await speak(replica.text, voiceName, replica.character_id);
     }
 
     setIsPlaying(false);
@@ -213,7 +225,7 @@ function AudioMode() {
     const replica = currentScript.replicas[index];
     const voiceName = characterVoices[replica.character_id];
 
-    await speak(replica.text, voiceName);
+    await speak(replica.text, voiceName, replica.character_id);
     setIsPlaying(false);
     playingRef.current = false;
   };
@@ -255,6 +267,18 @@ function AudioMode() {
 
   const updateCharacterVoice = (charId, voiceName) => {
     setCharacterVoices((prev) => ({ ...prev, [charId]: voiceName }));
+  };
+
+  const toggleCharacterGender = (charId, currentGender) => {
+    const newGender = currentGender === 'female' ? 'male' : 'female';
+    setCharacterGenders((prev) => ({ ...prev, [charId]: newGender }));
+  };
+
+  // Obtenir le genre effectif d'un personnage
+  const getCharacterGender = (characterId) => {
+    if (characterGenders[characterId]) return characterGenders[characterId];
+    const character = currentScript?.characters?.find(c => c.id === characterId);
+    return character?.gender || detectGender(character?.name || '');
   };
 
   if (loading || !currentScript) {
@@ -314,25 +338,43 @@ function AudioMode() {
       {/* Paramètres (collapsible) */}
       {showSettings && (
         <div className="bg-white border-b border-gray-200 p-4 shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3">🎭 Voix des personnages</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">🎭 Voix des personnages</h3>
+          <p className="text-xs text-gray-500 mb-3">
+            Le pitch est ajusté automatiquement : ♀ = aigu, ♂ = grave
+          </p>
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {characters.map((char) => {
-              const gender = char.gender || detectGender(char.name);
+              const detectedGender = detectGender(char.name);
+              const currentGender = characterGenders[char.id] || char.gender || detectedGender;
               return (
-                <div key={char.id} className="flex items-center gap-2">
+                <div key={char.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                   <span
                     className="w-3 h-3 rounded-full flex-shrink-0"
                     style={{ backgroundColor: char.color }}
                   />
                   <span className="text-gray-700 text-sm flex-1 truncate">{char.name}</span>
+                  
+                  {/* Bouton genre */}
+                  <button
+                    onClick={() => toggleCharacterGender(char.id, currentGender)}
+                    className={`px-2 py-1 rounded text-sm font-bold transition ${
+                      currentGender === 'female' 
+                        ? 'bg-pink-100 text-pink-600' 
+                        : 'bg-blue-100 text-blue-600'
+                    }`}
+                    title="Cliquer pour changer le genre"
+                  >
+                    {currentGender === 'female' ? '♀' : '♂'}
+                  </button>
+                  
                   <select
                     value={characterVoices[char.id] || ""}
                     onChange={(e) => updateCharacterVoice(char.id, e.target.value)}
-                    className="bg-white border border-gray-300 text-gray-700 rounded px-2 py-1 text-xs max-w-[120px]"
+                    className="bg-white border border-gray-300 text-gray-700 rounded px-2 py-1 text-xs max-w-[100px]"
                   >
                     {voices.all?.map((voice) => (
                       <option key={voice.name} value={voice.name}>
-                        {voice.name.replace(/Microsoft|Google/gi, "").trim().substring(0, 15)}
+                        {voice.name.replace(/Microsoft|Google/gi, "").trim().substring(0, 12)}
                       </option>
                     ))}
                   </select>

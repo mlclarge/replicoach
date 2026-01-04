@@ -50,9 +50,9 @@ const ONBOARDING_SLIDES = [
   },
   {
     icon: '🔊',
-    title: 'Écoute audio',
-    description: 'Faites lire les répliques à voix haute avec des voix différentes pour chaque personnage.',
-    tip: '💡 Parfait pour apprendre en écoutant pendant vos trajets',
+    title: 'Mode Audio avancé',
+    description: 'Écoutez vos répliques avec des voix masculines et féminines distinctes. Masquez vos répliques pour vous entraîner en mode "italienne" - les autres personnages parlent, c\'est à vous de répondre !',
+    tip: '💡 Cliquez sur un personnage pour masquer ses répliques pendant la lecture',
   },
   {
     icon: '👥',
