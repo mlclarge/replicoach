@@ -4,6 +4,7 @@ import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import ReplicaGroupsManager from "../components/ReplicaGroups";
 import {
   DndContext,
   closestCenter,
@@ -69,6 +70,10 @@ function ScriptDetail() {
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState('');
+  
+  // SOUS-ENSEMBLES DE RÉPLIQUES
+  const [showReplicaGroups, setShowReplicaGroups] = useState(false);
+  const [studyingGroup, setStudyingGroup] = useState(null); // { replicaIds: [], name: '' }
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -120,13 +125,25 @@ function ScriptDetail() {
     return counts;
   }, [currentScript?.replicas]);
 
-  // Répliques filtrées
+  // Répliques filtrées (par personnage ET/OU par groupe)
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
-    return selectedCharacter
-      ? currentScript.replicas.filter((r) => r.character_id === selectedCharacter)
-      : currentScript.replicas;
-  }, [currentScript?.replicas, selectedCharacter]);
+    
+    let result = currentScript.replicas;
+    
+    // Filtre par groupe (sous-ensemble)
+    if (studyingGroup?.replicaIds?.length > 0) {
+      const groupSet = new Set(studyingGroup.replicaIds);
+      result = result.filter(r => groupSet.has(r.id));
+    }
+    
+    // Filtre par personnage
+    if (selectedCharacter) {
+      result = result.filter(r => r.character_id === selectedCharacter);
+    }
+    
+    return result;
+  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
 
   // Handler pour supprimer le script
   const handleDelete = async () => {
@@ -587,10 +604,11 @@ function ScriptDetail() {
         </div>
 
         {/* Modes de vue - Adaptés au fond beige */}
-        <div className="flex gap-2 mb-4">
+        {/* Modes de vue - 2x2 grid pour mobile */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <button
             onClick={() => setViewMode("full")}
-            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "full"
                   ? "bg-primary-700 text-white"
@@ -601,7 +619,7 @@ function ScriptDetail() {
           </button>
           <button
             onClick={() => setViewMode("gaps")}
-            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "gaps"
                   ? "bg-primary-700 text-white"
@@ -611,8 +629,19 @@ function ScriptDetail() {
             🔤 Trous
           </button>
           <button
+            onClick={() => setViewMode("first3")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+              ${
+                viewMode === "first3"
+                  ? "bg-primary-700 text-white"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+              }`}
+          >
+            3️⃣ 3 mots
+          </button>
+          <button
             onClick={() => setViewMode("cue")}
-            className={`flex-1 py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
               ${
                 viewMode === "cue"
                   ? "bg-primary-700 text-white"
@@ -643,7 +672,29 @@ function ScriptDetail() {
           >
             👥 Personnages
           </button>
+          <button
+            onClick={() => setShowReplicaGroups(true)}
+            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 
+                       border border-gray-300 hover:bg-indigo-50 transition"
+          >
+            📚 Groupes
+          </button>
         </div>
+
+        {/* Indicateur groupe actif */}
+        {studyingGroup && (
+          <div className="mb-4 p-3 bg-indigo-100 border border-indigo-300 rounded-lg flex items-center justify-between">
+            <p className="text-indigo-800 text-sm">
+              <strong>📚 Groupe :</strong> {studyingGroup.name} ({studyingGroup.replicaIds?.length} répliques)
+            </p>
+            <button
+              onClick={() => setStudyingGroup(null)}
+              className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm"
+            >
+              ✕ Quitter
+            </button>
+          </div>
+        )}
 
         {/* Info mode édition */}
         {editMode && (
@@ -997,6 +1048,20 @@ function ScriptDetail() {
           }}
         />
       )}
+
+      {/* Modal Sous-ensembles de répliques */}
+      {showReplicaGroups && (
+        <ReplicaGroupsManager
+          scriptId={id}
+          userId={user?.id}
+          replicas={replicas}
+          characters={characters}
+          onClose={() => setShowReplicaGroups(false)}
+          onSelectGroup={(replicaIds, name) => {
+            setStudyingGroup({ replicaIds, name });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -1172,6 +1237,12 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
   };
 
   const renderContent = () => {
+    // Fonction pour obtenir les 3 premiers mots
+    const getFirst3Words = (text) => {
+      const words = text.trim().split(/\s+/).slice(0, 3);
+      return words.join(' ') + (text.trim().split(/\s+/).length > 3 ? '...' : '');
+    };
+
     switch (viewMode) {
       case "gaps":
         if (revealed) {
@@ -1183,6 +1254,25 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
             </p>
           );
         }
+
+      case "first3":
+        return (
+          <div>
+            {/* Toujours afficher les 3 premiers mots */}
+            <p className="text-white font-bold">
+              {getFirst3Words(replica.text)}
+            </p>
+            {revealed ? (
+              <p className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20">
+                {replica.text}
+              </p>
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
 
       case "cue":
         return (

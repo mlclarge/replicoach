@@ -44,20 +44,20 @@ const ONBOARDING_SLIDES = [
   },
   {
     icon: '🔖',
-    title: 'Modes d\'apprentissage',
-    description: 'Trois modes pour progresser : texte complet, texte à trous (premières lettres), et mode répliques (indices uniquement).',
-    tip: '💡 Commencez par le mode complet, puis passez aux trous !',
+    title: '4 modes d\'apprentissage',
+    description: 'Progressez étape par étape : 📖 Complet (texte entier) → 🔤 Trous (premières lettres) → 3️⃣ 3 mots (début de réplique) → 🎭 Répliques (indices seulement).',
+    tip: '💡 Le mode "3 mots" affiche juste le début, touchez pour révéler !',
   },
   {
     icon: '🔊',
-    title: 'Mode Audio avancé',
-    description: 'Écoutez vos répliques avec des voix masculines et féminines distinctes. Masquez vos répliques pour vous entraîner en mode "italienne" - les autres personnages parlent, c\'est à vous de répondre !',
-    tip: '💡 Cliquez sur un personnage pour masquer ses répliques pendant la lecture',
+    title: 'Mode Audio & Italienne',
+    description: 'Écoutez vos répliques avec des voix distinctes (♀ aiguë, ♂ grave). Mode Italienne : masquez VOS répliques, écoutez les autres, puis cliquez sur votre bulle quand c\'est à vous de parler !',
+    tip: '💡 Les didascalies (parenthèses) ne sont pas lues',
   },
   {
     icon: '👥',
     title: 'Partagez avec votre troupe',
-    description: 'Créez une troupe, invitez vos partenaires de jeu, et partagez vos textes avec eux.',
+    description: 'Créez une troupe, invitez vos partenaires de jeu, et partagez vos textes avec eux. Chacun peut personnaliser sa copie.',
     tip: '💡 Le metteur en scène importe les textes et les partage',
   },
   {
@@ -69,8 +69,8 @@ const ONBOARDING_SLIDES = [
   {
     icon: '🚧',
     title: 'Bientôt disponible...',
-    description: 'Nous travaillons sur de nouvelles fonctionnalités passionnantes pour améliorer votre expérience !',
-    tip: '🎙️ Enregistrer vos répliques • 🎬 Uploader des vidéos • 🎭 Répliques à l\'italienne en audio',
+    description: 'Nous travaillons sur de nouvelles fonctionnalités passionnantes !',
+    tip: '📚 Sous-ensembles de répliques • 📋 Consignes du metteur en scène • 🎙️ Enregistrement vocal',
     isFuture: true,
   },
   {

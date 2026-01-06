@@ -4,6 +4,12 @@ import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { fetchDirectorNotes } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import { MonitoringPanel } from "../components/Monitoring";
+
+// Emails autorisés à voir le monitoring
+const ADMIN_EMAILS = [
+  'moz2611@gmail.com',
+];
 
 /**
  * Page Profil
@@ -124,6 +130,13 @@ function Profile() {
           <p className="text-gray-400 text-sm">Consignes</p>
         </div>
       </div>
+
+      {/* Monitoring (admin only) */}
+      {ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
+        <div className="mb-6">
+          <MonitoringPanel />
+        </div>
+      )}
 
       {/* Onglets */}
       <div className="flex gap-2 mb-4">

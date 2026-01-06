@@ -11,8 +11,11 @@ import {
   deleteTroupe,
   shareScript,
   unshareScript,
+  copySharedScript,
+  isUserTroupeAdmin,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import TroupeDocuments from "../components/TroupeDocuments";
 
 /**
  * Page des textes partagés et gestion des troupes
@@ -51,6 +54,7 @@ function Shared() {
   const [success, setSuccess] = useState(null);
   const [createdTroupeCode, setCreatedTroupeCode] = useState(null);
   const [deleteTroupeConfirm, setDeleteTroupeConfirm] = useState(null);
+  const [expandedTroupe, setExpandedTroupe] = useState(null); // Pour voir les consignes
 
   useEffect(() => {
     loadData();
@@ -245,25 +249,65 @@ function Shared() {
             <EmptySharedState onJoin={() => setShowJoinModal(true)} />
           ) : (
             <div className="space-y-3">
+              <p className="text-sm text-gray-400 mb-2">
+                💡 Copiez un texte pour le personnaliser sans affecter l'original
+              </p>
               {sharedScripts.map((item) => (
                 <div
                   key={item.id}
-                  onClick={() => navigate(`/script/${item.scripts?.id}`)}
-                  className="card cursor-pointer hover:border-primary-500 transition"
+                  className="card hover:border-primary-500 transition"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                      <span className="text-2xl">📜</span>
+                    <div 
+                      className="flex-1 flex items-center gap-4 cursor-pointer"
+                      onClick={() => navigate(`/script/${item.scripts?.id}`)}
+                    >
+                      <div className="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center">
+                        <span className="text-2xl">📜</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-white">
+                          {item.scripts?.title || "Sans titre"}
+                        </h3>
+                        <p className="text-gray-500 text-sm">
+                          via {item.troupes?.name} • {item.scripts?.characters?.length || 0} personnages
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="font-semibold text-white">
-                        {item.scripts?.title || "Sans titre"}
-                      </h3>
-                      <p className="text-gray-500 text-sm">
-                        via {item.troupes?.name} • {item.scripts?.characters?.length || 0} personnages
-                      </p>
-                    </div>
-                    <span className="text-gray-500">→</span>
+                    
+                    {/* Bouton copier */}
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if (!confirm('Créer une copie personnelle de ce texte ?')) return;
+                        setActionLoading(true);
+                        try {
+                          const newScript = await copySharedScript(
+                            item.scripts?.id, 
+                            item.troupe_id, 
+                            user.id
+                          );
+                          setSuccess('Copie créée ! Retrouvez-la dans "Mes textes"');
+                          setTimeout(() => navigate('/'), 1500);
+                        } catch (err) {
+                          setError('Erreur lors de la copie: ' + err.message);
+                        }
+                        setActionLoading(false);
+                      }}
+                      disabled={actionLoading}
+                      className="p-2 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg 
+                                 font-semibold text-sm transition disabled:opacity-50"
+                      title="Créer ma copie personnelle"
+                    >
+                      📋 Copier
+                    </button>
+                    
+                    <span 
+                      className="text-gray-500 cursor-pointer"
+                      onClick={() => navigate(`/script/${item.scripts?.id}`)}
+                    >
+                      →
+                    </span>
                   </div>
                 </div>
               ))}
@@ -371,6 +415,28 @@ function Shared() {
                       )}
                     </div>
                   </div>
+                  
+                  {/* Bouton voir consignes */}
+                  <button
+                    onClick={() => setExpandedTroupe(expandedTroupe === troupe.id ? null : troupe.id)}
+                    className="mt-3 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg 
+                               text-sm text-gray-300 transition flex items-center justify-center gap-2"
+                  >
+                    <span>📋</span>
+                    <span>Consignes du metteur en scène</span>
+                    <span>{expandedTroupe === troupe.id ? '▲' : '▼'}</span>
+                  </button>
+                  
+                  {/* Section consignes expandable */}
+                  {expandedTroupe === troupe.id && (
+                    <div className="mt-4 pt-4 border-t border-gray-700">
+                      <TroupeDocuments 
+                        troupeId={troupe.id}
+                        userId={user.id}
+                        troupeName={troupe.name}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

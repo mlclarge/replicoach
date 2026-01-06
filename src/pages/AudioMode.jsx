@@ -24,28 +24,46 @@ function detectGender(name) {
   return "male";
 }
 
+// Nettoyer le texte pour la lecture audio (enlever didascalies et caractères spéciaux)
+function cleanTextForSpeech(text) {
+  return text
+    // Enlever les didascalies (texte entre parenthèses)
+    .replace(/\([^)]*\)/g, '')
+    // Enlever les crochets
+    .replace(/\[[^\]]*\]/g, '')
+    // Enlever les tirets du 6 et 8 isolés
+    .replace(/\s*[-–—]\s*/g, ' ')
+    // Enlever les caractères spéciaux
+    .replace(/[*_#~`]/g, '')
+    // Nettoyer les espaces multiples
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function AudioMode() {
   const { id } = useParams();
   const { currentScript, loading, fetchScript } = useScriptStore();
 
-  const [voices, setVoices] = useState({ male: [], female: [] });
+  const [voices, setVoices] = useState({ male: [], female: [], all: [] });
   const [characterVoices, setCharacterVoices] = useState({});
-  const [characterGenders, setCharacterGenders] = useState({}); // Override du genre par personnage
+  const [characterGenders, setCharacterGenders] = useState({});
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rate, setRate] = useState(1);
-  const [femalePitch, setFemalePitch] = useState(2.0); // Pitch TRÈS aigu pour voix féminine
-  const [malePitch, setMalePitch] = useState(0.4); // Pitch TRÈS grave pour voix masculine
+  const [femalePitch, setFemalePitch] = useState(2.0);
+  const [malePitch, setMalePitch] = useState(0.4);
   
-  // Personnages masqués (pour le comédien)
+  // Personnages masqués (mode italienne)
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
+  
+  // État pour attendre le clic sur bulle masquée
+  const [waitingForClick, setWaitingForClick] = useState(false);
   
   // Afficher les paramètres
   const [showSettings, setShowSettings] = useState(false);
 
   const playingRef = useRef(false);
-  const pausedRef = useRef(false);
+  const waitingRef = useRef(false);
   const currentReplicaRef = useRef(null);
 
   useEffect(() => {
@@ -100,70 +118,54 @@ function AudioMode() {
   useEffect(() => {
     if (currentScript?.characters && voices.all?.length > 0) {
       const autoVoices = {};
-      let maleIndex = 0;
-      let femaleIndex = 0;
-
       currentScript.characters.forEach((char) => {
-        const gender = char.gender || detectGender(char.name);
-
-        if (gender === "female" && voices.female.length > 0) {
-          autoVoices[char.id] = voices.female[femaleIndex % voices.female.length]?.name;
-          femaleIndex++;
-        } else if (voices.male.length > 0) {
-          autoVoices[char.id] = voices.male[maleIndex % voices.male.length]?.name;
-          maleIndex++;
-        } else {
-          autoVoices[char.id] = voices.all[0]?.name;
-        }
+        autoVoices[char.id] = voices.all[0]?.name;
       });
-
       setCharacterVoices(autoVoices);
     }
   }, [currentScript, voices]);
 
   // Scroll vers réplique en cours
   useEffect(() => {
-    if (isPlaying && currentReplicaRef.current) {
+    if (currentReplicaRef.current) {
       currentReplicaRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'center'
       });
     }
-  }, [currentIndex, isPlaying]);
+  }, [currentIndex]);
 
-  // Fonction speak améliorée avec pitch FORT pour différencier M/F
-  const speak = (text, voiceName, characterId) => {
+  // Fonction speak avec pitch et nettoyage didascalies
+  const speak = (text, characterId) => {
     return new Promise((resolve) => {
-      const utterance = new SpeechSynthesisUtterance(text);
+      // Nettoyer le texte (enlever didascalies)
+      const cleanedText = cleanTextForSpeech(text);
+      
+      if (!cleanedText) {
+        resolve(); // Texte vide après nettoyage
+        return;
+      }
+
+      const utterance = new SpeechSynthesisUtterance(cleanedText);
       
       // Déterminer le genre
       const character = currentScript?.characters?.find(c => c.id === characterId);
       const gender = characterGenders[characterId] || character?.gender || detectGender(character?.name || '');
       
-      // Essayer de trouver une voix appropriée au genre
-      let selectedVoice = voices.all?.find((v) => v.name === voiceName);
-      
-      // Sur Android/Chrome, chercher une voix féminine si disponible
-      if (gender === 'female') {
-        const femaleVoice = voices.all?.find(v => 
-          v.name.toLowerCase().includes('female') ||
-          v.name.toLowerCase().includes('femme') ||
-          v.name.toLowerCase().includes('woman') ||
-          v.name.toLowerCase().includes('féminin')
-        );
-        if (femaleVoice) selectedVoice = femaleVoice;
-      }
-
+      // Sélectionner une voix
+      const voiceName = characterVoices[characterId];
+      const selectedVoice = voices.all?.find((v) => v.name === voiceName);
       if (selectedVoice) utterance.voice = selectedVoice;
+      
       utterance.lang = "fr-FR";
 
-      // Pitch réglable par l'utilisateur
+      // Appliquer pitch selon genre
       if (gender === 'female') {
         utterance.pitch = femalePitch;
-        utterance.rate = rate * 1.05; // Légèrement plus rapide
+        utterance.rate = rate * 1.05;
       } else {
         utterance.pitch = malePitch;
-        utterance.rate = rate * 0.95; // Légèrement plus lent
+        utterance.rate = rate * 0.95;
       }
 
       utterance.onend = resolve;
@@ -173,7 +175,7 @@ function AudioMode() {
     });
   };
 
-  // Fonction de test des voix
+  // Test voix
   const testVoice = (gender) => {
     const testText = gender === 'female' 
       ? "Bonjour, je suis une voix féminine."
@@ -192,91 +194,88 @@ function AudioMode() {
     speechSynthesis.speak(utterance);
   };
 
-  // Lecture continue
+  // Lecture continue avec mode italienne (attend le clic sur bulles masquées)
   const playAll = async (startIndex = currentIndex) => {
     if (!currentScript?.replicas) return;
 
     setIsPlaying(true);
-    setIsPaused(false);
     playingRef.current = true;
-    pausedRef.current = false;
+    waitingRef.current = false;
 
     for (let i = startIndex; i < currentScript.replicas.length; i++) {
-      if (!playingRef.current) break;
-      
-      // Attendre si en pause
-      while (pausedRef.current) {
-        await new Promise(r => setTimeout(r, 100));
-        if (!playingRef.current) break;
-      }
-      
       if (!playingRef.current) break;
 
       setCurrentIndex(i);
       const replica = currentScript.replicas[i];
-      const voiceName = characterVoices[replica.character_id];
 
-      // Si personnage masqué, ne pas lire (mais marquer une pause)
+      // Si personnage masqué = MODE ITALIENNE
+      // On ATTEND que l'utilisateur clique sur la bulle
       if (hiddenCharacters.has(replica.character_id)) {
-        // Pause pour laisser le comédien dire sa réplique
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
+        setWaitingForClick(true);
+        waitingRef.current = true;
+        
+        // Attendre que l'utilisateur clique (waitingRef devient false)
+        while (waitingRef.current && playingRef.current) {
+          await new Promise(r => setTimeout(r, 100));
+        }
+        
+        setWaitingForClick(false);
+        
+        if (!playingRef.current) break;
+        continue; // Passer à la réplique suivante
       }
 
-      await speak(replica.text, voiceName, replica.character_id);
+      // Lire la réplique (non masquée)
+      await speak(replica.text, replica.character_id);
     }
 
     setIsPlaying(false);
     playingRef.current = false;
+    setWaitingForClick(false);
   };
 
+  // STOP complet
   const stop = () => {
     speechSynthesis.cancel();
     setIsPlaying(false);
-    setIsPaused(false);
     playingRef.current = false;
-    pausedRef.current = false;
+    waitingRef.current = false;
+    setWaitingForClick(false);
   };
 
-  const pause = () => {
-    speechSynthesis.pause();
-    setIsPaused(true);
-    pausedRef.current = true;
+  // Clic sur une bulle masquée = continuer la lecture
+  const onBubbleClick = (index) => {
+    const replica = currentScript?.replicas[index];
+    
+    if (waitingForClick && hiddenCharacters.has(replica?.character_id)) {
+      // L'utilisateur clique sur sa bulle masquée = continuer
+      waitingRef.current = false;
+    } else if (!isPlaying) {
+      // Si pas en lecture, lancer depuis cette position
+      playAll(index);
+    } else {
+      // En lecture mais pas en attente = on peut lire cette bulle spécifique puis reprendre
+      // Pour simplifier, on continue juste
+    }
   };
 
-  const resume = () => {
-    speechSynthesis.resume();
-    setIsPaused(false);
-    pausedRef.current = false;
-  };
-
-  // Cliquer sur une bulle = lancer la lecture continue à partir de cette position
-  const playFromIndex = async (index) => {
-    if (!currentScript?.replicas) return;
-
-    stop();
-    // Lancer la lecture continue à partir de cet index
-    playAll(index);
-  };
-
+  // Navigation
   const goToPrevious = () => {
     const newIndex = Math.max(0, currentIndex - 1);
+    setCurrentIndex(newIndex);
     if (isPlaying) {
       stop();
-      playAll(newIndex);
-    } else {
-      setCurrentIndex(newIndex);
+      setTimeout(() => playAll(newIndex), 100);
     }
   };
 
   const goToNext = () => {
     if (!currentScript?.replicas) return;
     const newIndex = Math.min(currentScript.replicas.length - 1, currentIndex + 1);
+    setCurrentIndex(newIndex);
     if (isPlaying) {
       stop();
-      playAll(newIndex);
-    } else {
-      setCurrentIndex(newIndex);
+      setTimeout(() => playAll(newIndex), 100);
     }
   };
 
@@ -292,20 +291,9 @@ function AudioMode() {
     });
   };
 
-  const updateCharacterVoice = (charId, voiceName) => {
-    setCharacterVoices((prev) => ({ ...prev, [charId]: voiceName }));
-  };
-
   const toggleCharacterGender = (charId, currentGender) => {
     const newGender = currentGender === 'female' ? 'male' : 'female';
     setCharacterGenders((prev) => ({ ...prev, [charId]: newGender }));
-  };
-
-  // Obtenir le genre effectif d'un personnage
-  const getCharacterGender = (characterId) => {
-    if (characterGenders[characterId]) return characterGenders[characterId];
-    const character = currentScript?.characters?.find(c => c.id === characterId);
-    return character?.gender || detectGender(character?.name || '');
   };
 
   if (loading || !currentScript) {
@@ -319,16 +307,16 @@ function AudioMode() {
   const { title, characters = [], replicas = [] } = currentScript;
   const progress = replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
 
-  // Déterminer position des personnages (gauche/droite)
+  // Position des personnages (gauche/droite)
   const characterPositions = {};
   characters.forEach((char, index) => {
     characterPositions[char.id] = index % 2;
   });
 
   return (
-    <div className="min-h-screen bg-amber-50 pb-48">
+    <div className="min-h-screen bg-amber-50 pb-52">
       {/* Header */}
-      <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 border-b-2 border-primary-600 shadow-lg">
+      <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 shadow-lg sticky top-0 z-30">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link to={`/script/${id}`} className="text-white hover:text-gold-400 text-xl">
@@ -365,55 +353,15 @@ function AudioMode() {
       {/* Paramètres (collapsible) */}
       {showSettings && (
         <div className="bg-white border-b border-gray-200 p-4 shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-2">🎭 Voix des personnages</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">🎭 Réglages voix</h3>
           <p className="text-xs text-gray-500 mb-3">
-            Le pitch est ajusté automatiquement : ♀ = aigu, ♂ = grave
+            Pitch : ♀ = aigu, ♂ = grave
           </p>
-          <div className="space-y-2 max-h-48 overflow-y-auto">
-            {characters.map((char) => {
-              const detectedGender = detectGender(char.name);
-              const currentGender = characterGenders[char.id] || char.gender || detectedGender;
-              return (
-                <div key={char.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                  <span
-                    className="w-3 h-3 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: char.color }}
-                  />
-                  <span className="text-gray-700 text-sm flex-1 truncate">{char.name}</span>
-                  
-                  {/* Bouton genre */}
-                  <button
-                    onClick={() => toggleCharacterGender(char.id, currentGender)}
-                    className={`px-2 py-1 rounded text-sm font-bold transition ${
-                      currentGender === 'female' 
-                        ? 'bg-pink-100 text-pink-600' 
-                        : 'bg-blue-100 text-blue-600'
-                    }`}
-                    title="Cliquer pour changer le genre"
-                  >
-                    {currentGender === 'female' ? '♀' : '♂'}
-                  </button>
-                  
-                  <select
-                    value={characterVoices[char.id] || ""}
-                    onChange={(e) => updateCharacterVoice(char.id, e.target.value)}
-                    className="bg-white border border-gray-300 text-gray-700 rounded px-2 py-1 text-xs max-w-[100px]"
-                  >
-                    {voices.all?.map((voice) => (
-                      <option key={voice.name} value={voice.name}>
-                        {voice.name.replace(/Microsoft|Google/gi, "").trim().substring(0, 12)}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              );
-            })}
-          </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-200 space-y-4">
+          <div className="space-y-3">
             {/* Vitesse */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-1">
                 <span className="text-gray-600 text-sm">Vitesse</span>
                 <span className="text-primary-700 font-semibold">{rate}x</span>
               </div>
@@ -430,8 +378,8 @@ function AudioMode() {
 
             {/* Pitch féminin */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Voix ♀ (aigüe)</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-600 text-sm">Voix ♀</span>
                 <span className="text-pink-600 font-semibold">{femalePitch.toFixed(1)}</span>
               </div>
               <input
@@ -447,8 +395,8 @@ function AudioMode() {
 
             {/* Pitch masculin */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-gray-600 text-sm">Voix ♂ (grave)</span>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-gray-600 text-sm">Voix ♂</span>
                 <span className="text-blue-600 font-semibold">{malePitch.toFixed(1)}</span>
               </div>
               <input
@@ -462,7 +410,7 @@ function AudioMode() {
               />
             </div>
 
-            {/* Bouton test */}
+            {/* Test voix */}
             <div className="flex gap-2">
               <button
                 onClick={() => testVoice('female')}
@@ -477,148 +425,174 @@ function AudioMode() {
                 🔊 Test ♂
               </button>
             </div>
+
+            {/* Genre par personnage */}
+            <div className="pt-3 border-t border-gray-200">
+              <p className="text-xs text-gray-500 mb-2">Genre des personnages :</p>
+              <div className="flex flex-wrap gap-2">
+                {characters.map((char) => {
+                  const gender = characterGenders[char.id] || char.gender || detectGender(char.name);
+                  return (
+                    <button
+                      key={char.id}
+                      onClick={() => toggleCharacterGender(char.id, gender)}
+                      className={`px-2 py-1 rounded text-xs font-bold ${
+                        gender === 'female' 
+                          ? 'bg-pink-100 text-pink-600' 
+                          : 'bg-blue-100 text-blue-600'
+                      }`}
+                    >
+                      {char.name.substring(0, 8)} {gender === 'female' ? '♀' : '♂'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Filtres personnages - avec bouton masquer */}
-      <div className="p-4 bg-amber-50 sticky top-0 z-20 border-b border-amber-200">
-        <p className="text-xs text-gray-500 mb-2">
-          👆 Cliquez pour masquer les répliques (mode italienne)
+      {/* Mode italienne - Sélection des personnages à masquer */}
+      <div className="p-3 bg-amber-100 border-b border-amber-200">
+        <p className="text-xs text-amber-800 mb-2 font-semibold">
+          🎭 Mode italienne : cliquez pour masquer vos répliques
         </p>
-        <div className="flex gap-2 overflow-x-auto pb-2">
+        <div className="flex gap-2 overflow-x-auto pb-1">
           {characters.map((char) => {
             const isHidden = hiddenCharacters.has(char.id);
             return (
               <button
                 key={char.id}
                 onClick={() => toggleHideCharacter(char.id)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition
+                className={`flex items-center gap-1 px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition shadow
                   ${isHidden 
-                    ? 'bg-gray-300 text-gray-500 line-through opacity-60' 
-                    : 'text-white shadow-md'}`}
+                    ? 'bg-gray-400 text-white ring-2 ring-red-500' 
+                    : 'text-white'}`}
                 style={!isHidden ? { backgroundColor: char.color } : {}}
               >
-                {isHidden ? '👁️‍🗨️' : '👁️'} {char.name}
+                {isHidden ? '🙈' : '👁️'} {char.name}
               </button>
             );
           })}
         </div>
+        {hiddenCharacters.size > 0 && (
+          <p className="text-xs text-amber-700 mt-2">
+            ℹ️ Vos répliques seront masquées. Cliquez dessus quand c'est votre tour !
+          </p>
+        )}
       </div>
 
-      {/* Liste des répliques - Style WhatsApp */}
+      {/* Indicateur d'attente (mode italienne) */}
+      {waitingForClick && (
+        <div className="bg-green-500 text-white p-3 text-center animate-pulse sticky top-[120px] z-20">
+          <p className="font-bold">🎭 C'est à vous !</p>
+          <p className="text-sm">Cliquez sur votre bulle pour continuer</p>
+        </div>
+      )}
+
+      {/* Liste des répliques */}
       <div className="p-4 space-y-3">
         {replicas.map((replica, index) => {
           const character = characters.find((c) => c.id === replica.character_id);
           const isRight = characterPositions[replica.character_id] === 1;
           const isCurrent = index === currentIndex;
-          const isCurrentPlaying = isCurrent && isPlaying;
           const isHidden = hiddenCharacters.has(replica.character_id);
+          const isWaitingOnThis = waitingForClick && isCurrent && isHidden;
 
           return (
             <AudioBubble
               key={replica.id}
-              ref={isCurrentPlaying ? currentReplicaRef : null}
+              ref={isCurrent ? currentReplicaRef : null}
               replica={replica}
               character={character}
               isRight={isRight}
               number={index + 1}
               isCurrent={isCurrent}
-              isPlaying={isCurrentPlaying}
+              isPlaying={isPlaying && isCurrent && !isHidden}
               isHidden={isHidden}
-              onClick={() => playFromIndex(index)}
+              isWaiting={isWaitingOnThis}
+              onClick={() => onBubbleClick(index)}
             />
           );
         })}
       </div>
 
-      {/* Panneau de contrôle audio - FIXÉ EN BAS */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-gray-900 to-gray-800 border-t border-gray-700 shadow-2xl safe-area-bottom">
-        {/* Info réplique en cours */}
-        <div className="px-4 py-2 border-b border-gray-700">
+      {/* Panneau de contrôle FIXE en bas - TOUJOURS VISIBLE */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-gray-900 border-t-2 border-gold-500 shadow-2xl">
+        {/* Info réplique */}
+        <div className="px-4 py-2 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            {isPlaying && (
-              <span className="text-2xl animate-pulse">🔊</span>
-            )}
+            <div className={`text-2xl ${isPlaying && !waitingForClick ? 'animate-pulse' : ''}`}>
+              {waitingForClick ? '🎭' : isPlaying ? '🔊' : '⏸️'}
+            </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium truncate">
-                {characters.find(c => c.id === replicas[currentIndex]?.character_id)?.name || 'En attente'}
+                {characters.find(c => c.id === replicas[currentIndex]?.character_id)?.name || '-'}
               </p>
               <p className="text-gray-400 text-xs truncate">
-                {replicas[currentIndex]?.text?.substring(0, 50)}...
+                {waitingForClick ? 'À vous de jouer !' : replicas[currentIndex]?.text?.substring(0, 40)}...
               </p>
             </div>
-            <span className="text-gray-500 text-xs">
+            <span className="text-gold-500 text-sm font-bold">
               {currentIndex + 1}/{replicas.length}
             </span>
           </div>
         </div>
 
-        {/* Contrôles */}
-        <div className="px-4 py-4 pb-6">
-          <div className="flex items-center justify-center gap-4">
+        {/* Contrôles principaux */}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-center gap-3">
+            {/* STOP - Toujours visible */}
+            <button
+              onClick={stop}
+              className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-500 
+                         flex items-center justify-center text-xl text-white shadow-lg transition"
+            >
+              ⏹️
+            </button>
+
             {/* Retour */}
             <button
               onClick={goToPrevious}
               disabled={currentIndex === 0}
-              className="w-14 h-14 rounded-full bg-gray-700 hover:bg-gray-600 
-                         flex items-center justify-center text-2xl text-white
-                         disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 
+                         flex items-center justify-center text-xl text-white
+                         disabled:opacity-30 transition"
             >
               ⏮️
             </button>
 
-            {/* Play/Pause */}
-            {isPlaying ? (
-              isPaused ? (
-                <button
-                  onClick={resume}
-                  className="w-20 h-20 rounded-full bg-gold-500 hover:bg-gold-400 
-                             flex items-center justify-center text-4xl text-dark shadow-lg transition"
-                >
-                  ▶️
-                </button>
-              ) : (
-                <button
-                  onClick={pause}
-                  className="w-20 h-20 rounded-full bg-gold-500 hover:bg-gold-400 
-                             flex items-center justify-center text-4xl text-dark shadow-lg transition"
-                >
-                  ⏸️
-                </button>
-              )
-            ) : (
-              <button
-                onClick={() => playAll(currentIndex)}
-                className="w-20 h-20 rounded-full bg-gold-500 hover:bg-gold-400 
-                           flex items-center justify-center text-4xl text-dark shadow-lg transition"
-              >
-                ▶️
-              </button>
-            )}
+            {/* Play */}
+            <button
+              onClick={() => isPlaying ? stop() : playAll(currentIndex)}
+              className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl shadow-lg transition
+                ${isPlaying 
+                  ? 'bg-orange-500 hover:bg-orange-400 text-white' 
+                  : 'bg-gold-500 hover:bg-gold-400 text-dark'}`}
+            >
+              {isPlaying ? '⏸️' : '▶️'}
+            </button>
 
             {/* Avancer */}
             <button
               onClick={goToNext}
               disabled={currentIndex === replicas.length - 1}
-              className="w-14 h-14 rounded-full bg-gray-700 hover:bg-gray-600 
-                         flex items-center justify-center text-2xl text-white
-                         disabled:opacity-30 disabled:cursor-not-allowed transition"
+              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 
+                         flex items-center justify-center text-xl text-white
+                         disabled:opacity-30 transition"
             >
               ⏭️
             </button>
-          </div>
 
-          {/* Bouton Stop */}
-          {isPlaying && (
+            {/* Depuis le début */}
             <button
-              onClick={stop}
-              className="mt-3 w-full py-2 bg-red-600 hover:bg-red-500 text-white 
-                         rounded-full font-semibold transition flex items-center justify-center gap-2"
+              onClick={() => { stop(); setCurrentIndex(0); setTimeout(() => playAll(0), 100); }}
+              className="w-12 h-12 rounded-full bg-gray-700 hover:bg-gray-600 
+                         flex items-center justify-center text-xl text-white transition"
             >
-              ⏹️ Arrêter
+              🔄
             </button>
-          )}
+          </div>
         </div>
       </div>
     </div>
@@ -628,7 +602,7 @@ function AudioMode() {
 /**
  * Bulle audio style WhatsApp
  */
-const AudioBubble = forwardRef(({ replica, character, isRight, number, isCurrent, isPlaying, isHidden, onClick }, ref) => {
+const AudioBubble = forwardRef(({ replica, character, isRight, number, isCurrent, isPlaying, isHidden, isWaiting, onClick }, ref) => {
   const bubbleColor = character?.color || '#6B7280';
   
   const hexToRgba = (hex, alpha) => {
@@ -652,44 +626,52 @@ const AudioBubble = forwardRef(({ replica, character, isRight, number, isCurrent
           ${isRight ? 'rounded-br-md' : 'rounded-bl-md'}
           ${isCurrent ? 'ring-2 ring-gold-500 scale-[1.02]' : ''}
           ${isPlaying ? 'animate-pulse' : ''}
+          ${isWaiting ? 'ring-4 ring-green-500 animate-bounce' : ''}
         `}
         style={{
-          backgroundColor: isHidden ? '#d1d5db' : hexToRgba(bubbleColor, 0.9),
+          backgroundColor: isHidden ? '#9ca3af' : hexToRgba(bubbleColor, 0.9),
         }}
       >
         {/* Header */}
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className={`text-sm font-bold ${isHidden ? 'text-gray-500' : 'text-white'} drop-shadow`}>
+          <span className={`text-sm font-bold text-white drop-shadow`}>
             {character?.name || "Inconnu"}
           </span>
           <div className="flex items-center gap-2">
             {isPlaying && <span className="text-lg">🔊</span>}
-            <span className={`text-xs ${isHidden ? 'text-gray-400' : 'text-white/70'}`}>#{number}</span>
+            {isWaiting && <span className="text-lg">👆</span>}
+            <span className="text-xs text-white/70">#{number}</span>
           </div>
         </div>
 
-        {/* Contenu - masqué ou visible */}
+        {/* Contenu */}
         {isHidden ? (
-          <div className="py-4 text-center">
-            <p className="text-gray-500 text-sm italic">
-              🎭 Votre réplique - À vous de jouer !
-            </p>
-            <p className="text-gray-400 text-xs mt-1">
-              (Cliquez pour écouter)
-            </p>
+          <div className="py-3 text-center">
+            {isWaiting ? (
+              <>
+                <p className="text-white text-sm font-bold">
+                  🎭 C'est à vous !
+                </p>
+                <p className="text-white/80 text-xs mt-1">
+                  Cliquez ici pour continuer
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-white/80 text-sm italic">
+                  Votre réplique (masquée)
+                </p>
+                <p className="text-white/60 text-xs mt-1">
+                  Cliquez pour révéler
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
             {replica.text}
           </p>
         )}
-
-        {/* Indicateur cliquable */}
-        <div className={`flex justify-end mt-1 ${isHidden ? 'text-gray-400' : 'text-white/60'}`}>
-          <span className="text-xs">
-            {isPlaying ? '🔊 En cours...' : '▶️ Écouter'}
-          </span>
-        </div>
       </div>
     </div>
   );
