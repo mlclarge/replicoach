@@ -139,9 +139,24 @@ function Profile() {
         </div>
       )}
 
-      {/* Admin Panel (dev only) */}
-      {ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
+      {/* Admin Panel - Visible pour les emails autorisés OU les devs */}
+      {(ADMIN_EMAILS.includes(user?.email?.toLowerCase())) && (
         <div className="mb-6">
+          <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl mb-4">
+            <h3 className="text-white font-bold mb-2 flex items-center gap-2">
+              👨‍💻 Zone Développeur
+            </h3>
+            <p className="text-sm text-purple-300 mb-3">
+              Pour activer l'accès admin, exécutez dans Supabase SQL Editor:
+            </p>
+            <div className="p-3 bg-gray-900 rounded-lg font-mono text-xs text-green-400 overflow-x-auto">
+              INSERT INTO user_roles (user_id, role)<br/>
+              VALUES ('{user?.id}', 'dev');
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              👆 Copiez cette commande et exécutez-la dans Supabase
+            </p>
+          </div>
           <AdminPanel currentUserId={user?.id} />
         </div>
       )}

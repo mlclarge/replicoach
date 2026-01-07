@@ -417,6 +417,7 @@ function Home() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
   const [sortBy, setSortBy] = useState("order");
+  const [searchQuery, setSearchQuery] = useState(""); // Recherche par titre
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
   
@@ -529,6 +530,15 @@ function Home() {
       });
     }
 
+    // Filtrer par recherche
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      sorted = sorted.filter(script => 
+        script.title.toLowerCase().includes(query) ||
+        script.characters?.some(c => c.name.toLowerCase().includes(query))
+      );
+    }
+
     switch (sortBy) {
       case "alpha":
         sorted.sort((a, b) => a.title.localeCompare(b.title));
@@ -542,7 +552,7 @@ function Home() {
     }
 
     setLocalScripts(sorted);
-  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap]);
+  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap, searchQuery]);
 
   const handleOpenScript = (scriptId) => {
     navigate(`/script/${scriptId}`);
@@ -717,6 +727,36 @@ function Home() {
       {/* Bibliothèque publique */}
       <PublicLibrary />
 
+      {/* Barre de recherche */}
+      {scripts.length > 3 && (
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="🔍 Rechercher un texte..."
+              className="w-full p-3 pl-4 pr-10 bg-gray-800 border border-gray-700 rounded-xl
+                         text-white placeholder-gray-500 focus:outline-none focus:border-primary-500
+                         focus:ring-2 focus:ring-primary-500/30"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <p className="text-xs text-gray-500 mt-1">
+              {localScripts.length} résultat{localScripts.length > 1 ? 's' : ''} pour "{searchQuery}"
+            </p>
+          )}
+        </div>
+      )}
+
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-white">Mes saynètes</h2>
@@ -742,9 +782,9 @@ function Home() {
                     ? "bg-gold-500 text-dark"
                     : "bg-gray-700 text-gray-400"
                 }`}
-                title="Tri manuel"
+                title="Tri manuel (drag & drop)"
               >
-                #
+                ⋮⋮
               </button>
               <button
                 onClick={() => setSortBy("alpha")}
