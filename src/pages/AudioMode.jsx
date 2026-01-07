@@ -64,6 +64,7 @@ function AudioMode() {
   
   // Voix enregistrées
   const [characterRecordings, setCharacterRecordings] = useState({}); // { charId: { audioPath, audioUrl } }
+  const [replicaRecordings, setReplicaRecordings] = useState({}); // { replicaId: { data, name, date } }
   const [voiceMode, setVoiceMode] = useState({}); // { charId: 'synth' | 'recorded' }
   const [recordingCharacter, setRecordingCharacter] = useState(null); // Personnage en cours d'enregistrement
   const [isRecording, setIsRecording] = useState(false);
@@ -102,6 +103,18 @@ function AudioMode() {
       fetchScript(id);
     }
   }, [id, currentScript, fetchScript]);
+
+  // Dans le useEffect de chargement, charger les enregistrements par réplique depuis localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(`replicaRecordings_${id}`);
+    if (saved) {
+      try {
+        setReplicaRecordings(JSON.parse(saved));
+      } catch (e) {
+        console.warn('Impossible de parser replicaRecordings depuis localStorage', e);
+      }
+    }
+  }, [id]);
 
   // Charger les voix synthétiques
   useEffect(() => {
@@ -299,6 +312,99 @@ function AudioMode() {
     }
     setRecordingCharacter(null);
     chunksRef.current = [];
+  };
+
+  // Enregistrer pour une réplique spécifique
+  const [recordingReplicaId, setRecordingReplicaId] = useState(null);
+
+  const startReplicaRecording = async (replicaId) => {
+    try {
+      chunksRef.current = [];
+      setRecordingReplicaId(replicaId);
+      setRecordingDuration(0);
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorder.start();
+      setIsRecording(true);
+      
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(d => {
+          if (d >= 60) { stopReplicaRecording(); return d; }
+          return d + 1;
+        });
+      }, 1000);
+    } catch (err) {
+      alert('Impossible d\'accéder au microphone');
+      setRecordingReplicaId(null);
+    }
+  };
+
+  const stopReplicaRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    }
+  };
+
+  const saveReplicaRecording = async (replicaId, characterName) => {
+    if (chunksRef.current.length === 0) return;
+    
+    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+    const reader = new FileReader();
+    
+    reader.onloadend = () => {
+      const newRecording = {
+        data: reader.result,
+        name: `${characterName} - Réplique`,
+        date: new Date().toISOString(),
+        duration: recordingDuration
+      };
+      
+      const updated = {
+        ...replicaRecordings,
+        [replicaId]: newRecording
+      };
+      
+      setReplicaRecordings(updated);
+      localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+      
+      setRecordingReplicaId(null);
+      chunksRef.current = [];
+    };
+    
+    reader.readAsDataURL(blob);
+  };
+
+  const deleteReplicaRecording = (replicaId) => {
+    const updated = { ...replicaRecordings };
+    delete updated[replicaId];
+    setReplicaRecordings(updated);
+    localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+  };
+
+  const playReplicaRecording = (replicaId) => {
+    const recording = replicaRecordings[replicaId];
+    if (recording?.data) {
+      const audio = new Audio(recording.data);
+      audio.play();
+    }
   };
 
   const deleteRecording = async (charId) => {
@@ -946,6 +1052,14 @@ function AudioMode() {
               onBubbleClick={() => onBubbleClick(index)}
               onPlay={() => playSingleBubble(index)}
               onStop={stopSingleBubble}
+              replicaRecordings={replicaRecordings}
+              recordingReplicaId={recordingReplicaId}
+              recordingDuration={recordingDuration}
+              startReplicaRecording={startReplicaRecording}
+              stopReplicaRecording={stopReplicaRecording}
+              saveReplicaRecording={saveReplicaRecording}
+              deleteReplicaRecording={deleteReplicaRecording}
+              playReplicaRecording={playReplicaRecording}
             />
           );
         })}
@@ -1045,7 +1159,15 @@ const AudioBubble = forwardRef(({
   hasRecording,
   onBubbleClick,
   onPlay,
-  onStop
+  onStop,
+  replicaRecordings,
+  recordingReplicaId,
+  recordingDuration,
+  startReplicaRecording,
+  stopReplicaRecording,
+  saveReplicaRecording,
+  deleteReplicaRecording,
+  playReplicaRecording
 }, ref) => {
   const bubbleColor = character?.color || '#6B7280';
   
@@ -1129,6 +1251,45 @@ const AudioBubble = forwardRef(({
                              text-white rounded-full text-xs font-semibold transition active:scale-95"
                 >
                   ▶️ Écouter {hasRecording && '🎙️'}
+                </button>
+              )}
+            </div>
+            {/* Sous chaque bulle de réplique : enregistrement / lecture locale */}
+            <div className="flex gap-2 mt-2">
+              {replicaRecordings[replica.id] ? (
+                <>
+                  <button 
+                    onClick={() => playReplicaRecording(replica.id)}
+                    className="text-xs px-2 py-1 bg-green-600 text-white rounded"
+                  >
+                    ▶️ Écouter
+                  </button>
+                  <button 
+                    onClick={() => deleteReplicaRecording(replica.id)}
+                    className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                  >
+                    🗑️
+                  </button>
+                </>
+              ) : recordingReplicaId === replica.id ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-red-500 animate-pulse">🔴 {recordingDuration}s</span>
+                  <button 
+                    onClick={() => {
+                      stopReplicaRecording();
+                      saveReplicaRecording(replica.id, character?.name || 'Inconnu');
+                    }}
+                    className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                  >
+                    ⏹️ Stop
+                  </button>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => startReplicaRecording(replica.id)}
+                  className="text-xs px-2 py-1 bg-orange-500 text-white rounded"
+                >
+                  🎤 Enregistrer
                 </button>
               )}
             </div>

@@ -1194,3 +1194,42 @@ export const deleteSharedRecording = async (recordingId, audioPath) => {
 
   if (error) throw error
 }
+
+// =====================================================
+// VIDÉOS GLOBALES (sans troupe)
+// =====================================================
+
+export const addGlobalVideo = async (userId, title, youtubeUrl, description = '') => {
+  const { data, error } = await supabase
+    .from('global_videos')
+    .insert([{
+      uploaded_by: userId,
+      title,
+      youtube_url: youtubeUrl,
+      description
+    }])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const fetchGlobalVideos = async () => {
+  const { data, error } = await supabase
+    .from('global_videos')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const deleteGlobalVideo = async (videoId) => {
+  const { error } = await supabase
+    .from('global_videos')
+    .delete()
+    .eq('id', videoId);
+
+  if (error) throw error;
+};

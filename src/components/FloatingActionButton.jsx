@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getUserRole } from '../lib/supabase';
+import { getUserRole, addGlobalVideo } from '../lib/supabase';
 import { useAuthStore } from '../store/authStore';
 
 /**
@@ -10,6 +10,10 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showVideoInfo, setShowVideoInfo] = useState(false);
   const [userRole, setUserRole] = useState('member');
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoSaving, setVideoSaving] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -74,8 +78,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
         if (onAddVideo) {
           onAddVideo();
         } else if (canPostVideoAnywhere) {
-          // Dev/director peut aller directement aux partagés
-          navigate('/shared');
+          setShowVideoModal(true); // Ouvrir modal directement
         } else {
           setShowVideoInfo(true);
         }
@@ -155,6 +158,73 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
                 className="flex-1 py-3 bg-primary-600 text-white rounded-lg"
               >
                 Aller aux Partagés
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal ajout vidéo globale */}
+      {showVideoModal && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVideoModal(false)}
+        >
+          <div 
+            className="bg-gray-800 rounded-xl p-6 max-w-sm w-full"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white mb-4">📹 Ajouter une vidéo YouTube</h3>
+            
+            <input
+              type="text"
+              value={videoTitle}
+              onChange={(e) => setVideoTitle(e.target.value)}
+              placeholder="Titre de la vidéo"
+              className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg mb-3"
+            />
+            
+            <input
+              type="text"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="URL YouTube (ex: https://youtube.com/watch?v=...)"
+              className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg mb-4"
+            />
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowVideoModal(false);
+                  setVideoUrl('');
+                  setVideoTitle('');
+                }}
+                className="flex-1 py-3 bg-gray-700 text-white rounded-lg"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={async () => {
+                  if (!videoUrl.trim() || !videoTitle.trim()) {
+                    alert('Titre et URL requis');
+                    return;
+                  }
+                  setVideoSaving(true);
+                  try {
+                    await addGlobalVideo(user.id, videoTitle, videoUrl);
+                    alert('Vidéo ajoutée !');
+                    setShowVideoModal(false);
+                    setVideoUrl('');
+                    setVideoTitle('');
+                  } catch (err) {
+                    alert('Erreur: ' + err.message);
+                  }
+                  setVideoSaving(false);
+                }}
+                disabled={videoSaving || !videoUrl.trim() || !videoTitle.trim()}
+                className="flex-1 py-3 bg-purple-600 text-white rounded-lg disabled:opacity-50"
+              >
+                {videoSaving ? '...' : '📤 Ajouter'}
               </button>
             </div>
           </div>

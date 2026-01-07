@@ -61,7 +61,7 @@ function ScriptDetail() {
   const [showAddNote, setShowAddNote] = useState(null);
   const [editingNote, setEditingNote] = useState(null);
   const [deleteNoteConfirm, setDeleteNoteConfirm] = useState(null);
-  
+
   // NOUVEAUX STATES pour mode édition et gestion personnages
   const [editMode, setEditMode] = useState(false);
   const [showCharacterManager, setShowCharacterManager] = useState(false);
@@ -70,8 +70,8 @@ function ScriptDetail() {
   const [insertAfterIndex, setInsertAfterIndex] = useState(null);
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  
+  const [newTitle, setNewTitle] = useState("");
+
   // SOUS-ENSEMBLES DE RÉPLIQUES
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null); // { replicaIds: [], name: '' }
@@ -121,7 +121,7 @@ function ScriptDetail() {
   const replicaCountByCharacter = useMemo(() => {
     if (!currentScript?.replicas) return {};
     const counts = {};
-    currentScript.replicas.forEach(r => {
+    currentScript.replicas.forEach((r) => {
       counts[r.character_id] = (counts[r.character_id] || 0) + 1;
     });
     return counts;
@@ -130,20 +130,20 @@ function ScriptDetail() {
   // Répliques filtrées (par personnage ET/OU par groupe)
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
-    
+
     let result = currentScript.replicas;
-    
+
     // Filtre par groupe (sous-ensemble)
     if (studyingGroup?.replicaIds?.length > 0) {
       const groupSet = new Set(studyingGroup.replicaIds);
-      result = result.filter(r => groupSet.has(r.id));
+      result = result.filter((r) => groupSet.has(r.id));
     }
-    
+
     // Filtre par personnage
     if (selectedCharacter) {
-      result = result.filter(r => r.character_id === selectedCharacter);
+      result = result.filter((r) => r.character_id === selectedCharacter);
     }
-    
+
     return result;
   }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
 
@@ -174,19 +174,20 @@ function ScriptDetail() {
   // Handler pour ajouter une nouvelle réplique
   const handleAddReplica = async (characterId, text, afterIndex) => {
     try {
-      const newOrderIndex = afterIndex !== undefined 
-        ? afterIndex + 0.5 
-        : (currentScript?.replicas?.length || 0);
-      
+      const newOrderIndex =
+        afterIndex !== undefined
+          ? afterIndex + 0.5
+          : currentScript?.replicas?.length || 0;
+
       await addSingleReplica({
         script_id: id,
         character_id: characterId,
         text: text,
         order_index: newOrderIndex,
         text_gaps: generateGapsText(text),
-        cue_words: '',
+        cue_words: "",
       });
-      
+
       setShowAddReplica(false);
       // Rafraîchir pour avoir le bon ordre
       fetchScript(id);
@@ -216,24 +217,34 @@ function ScriptDetail() {
     } catch (err) {
       console.error("Error adding character:", err);
       // Message d'erreur plus détaillé
-      if (err.code === '23505') {
+      if (err.code === "23505") {
         alert("Un personnage avec ce nom existe déjà dans ce script");
-      } else if (err.code === '42501') {
-        alert("Vous n'avez pas la permission d'ajouter un personnage à ce script");
+      } else if (err.code === "42501") {
+        alert(
+          "Vous n'avez pas la permission d'ajouter un personnage à ce script"
+        );
       } else {
-        alert(`Erreur lors de l'ajout du personnage: ${err.message || 'Erreur inconnue'}`);
+        alert(
+          `Erreur lors de l'ajout du personnage: ${
+            err.message || "Erreur inconnue"
+          }`
+        );
       }
       throw err;
     }
   };
 
   // Handler pour diviser une réplique
-  const handleSplitReplica = async (originalReplica, splitIndex, newCharacterId) => {
+  const handleSplitReplica = async (
+    originalReplica,
+    splitIndex,
+    newCharacterId
+  ) => {
     try {
       const originalText = originalReplica.text;
       const firstPart = originalText.substring(0, splitIndex).trim();
       const secondPart = originalText.substring(splitIndex).trim();
-      
+
       if (!firstPart || !secondPart) {
         alert("Les deux parties doivent contenir du texte");
         return;
@@ -247,7 +258,8 @@ function ScriptDetail() {
 
       // 2. Trouver le bon order_index (entier)
       // On va d'abord créer avec un grand index, puis réordonner
-      const maxOrderIndex = Math.max(...replicas.map(r => r.order_index || 0)) + 1000;
+      const maxOrderIndex =
+        Math.max(...replicas.map((r) => r.order_index || 0)) + 1000;
 
       // 3. Créer une nouvelle réplique avec la deuxième partie
       const newReplica = await addSingleReplica({
@@ -256,22 +268,24 @@ function ScriptDetail() {
         text: secondPart,
         order_index: maxOrderIndex, // Temporaire, sera réordonné
         text_gaps: generateGapsText(secondPart),
-        cue_words: '...' + firstPart.split(/\s+/).slice(-3).join(' '),
+        cue_words: "..." + firstPart.split(/\s+/).slice(-3).join(" "),
       });
 
       // 4. Réordonner toutes les répliques
       // Trouver l'index de la réplique originale
-      const originalIndex = replicas.findIndex(r => r.id === originalReplica.id);
-      
-      // Construire le nouvel ordre : toutes les répliques jusqu'à l'originale, 
+      const originalIndex = replicas.findIndex(
+        (r) => r.id === originalReplica.id
+      );
+
+      // Construire le nouvel ordre : toutes les répliques jusqu'à l'originale,
       // puis la nouvelle, puis le reste
       const replicasBefore = replicas.slice(0, originalIndex + 1);
       const replicasAfter = replicas.slice(originalIndex + 1);
-      
+
       const newOrder = [
-        ...replicasBefore.map(r => r.id),
+        ...replicasBefore.map((r) => r.id),
         newReplica.id,
-        ...replicasAfter.map(r => r.id)
+        ...replicasAfter.map((r) => r.id),
       ];
 
       await reorderReplicas(id, newOrder);
@@ -279,14 +293,17 @@ function ScriptDetail() {
       setSplittingReplica(null);
     } catch (err) {
       console.error("Error splitting replica:", err);
-      alert("Erreur lors de la division de la réplique: " + (err.message || "Erreur inconnue"));
+      alert(
+        "Erreur lors de la division de la réplique: " +
+          (err.message || "Erreur inconnue")
+      );
     }
   };
 
   // Générer le texte à trous
   const generateGapsText = (text) => {
     return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
-      return first + '_'.repeat(Math.min(rest.length, 5));
+      return first + "_".repeat(Math.min(rest.length, 5));
     });
   };
 
@@ -345,8 +362,8 @@ function ScriptDetail() {
   const notesByReplicaId = useMemo(() => {
     const notes = currentScript?.personalNotes || [];
     const grouped = {};
-    notes.forEach(note => {
-      const key = note.after_replica_id || 'start';
+    notes.forEach((note) => {
+      const key = note.after_replica_id || "start";
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(note);
     });
@@ -359,18 +376,18 @@ function ScriptDetail() {
   // Handler pour drag & drop des répliques
   const handleDragEnd = async (event) => {
     const { active, over } = event;
-    
+
     if (!over || active.id === over.id) return;
-    
-    const oldIndex = replicas.findIndex(r => r.id === active.id);
-    const newIndex = replicas.findIndex(r => r.id === over.id);
-    
+
+    const oldIndex = replicas.findIndex((r) => r.id === active.id);
+    const newIndex = replicas.findIndex((r) => r.id === over.id);
+
     if (oldIndex === -1 || newIndex === -1) return;
-    
+
     // Réorganiser localement d'abord pour feedback immédiat
     const newOrder = arrayMove(replicas, oldIndex, newIndex);
-    const replicaIds = newOrder.map(r => r.id);
-    
+    const replicaIds = newOrder.map((r) => r.id);
+
     // Sauvegarder en base
     try {
       await reorderReplicas(id, replicaIds);
@@ -406,32 +423,33 @@ function ScriptDetail() {
   const handleAddReplicaAt = async (characterId, text, afterIndex) => {
     try {
       // Utiliser un grand index temporaire (entier)
-      const maxOrderIndex = Math.max(...(replicas.map(r => r.order_index || 0)), 0) + 1000;
-      
+      const maxOrderIndex =
+        Math.max(...replicas.map((r) => r.order_index || 0), 0) + 1000;
+
       const newReplica = await addSingleReplica({
         script_id: id,
         character_id: characterId,
         text: text,
         order_index: maxOrderIndex, // Temporaire, sera réordonné
         text_gaps: generateGapsText(text),
-        cue_words: '',
+        cue_words: "",
       });
-      
+
       // Si on veut insérer à une position spécifique, réordonner
       if (afterIndex !== undefined && afterIndex !== null && afterIndex >= -1) {
         // Construire le nouvel ordre
         let newOrder;
         if (afterIndex === -1) {
           // Insérer au début
-          newOrder = [newReplica.id, ...replicas.map(r => r.id)];
+          newOrder = [newReplica.id, ...replicas.map((r) => r.id)];
         } else {
           // Insérer après l'index spécifié
           const replicasBefore = replicas.slice(0, afterIndex + 1);
           const replicasAfter = replicas.slice(afterIndex + 1);
           newOrder = [
-            ...replicasBefore.map(r => r.id),
+            ...replicasBefore.map((r) => r.id),
             newReplica.id,
-            ...replicasAfter.map(r => r.id)
+            ...replicasAfter.map((r) => r.id),
           ];
         }
         await reorderReplicas(id, newOrder);
@@ -439,12 +457,15 @@ function ScriptDetail() {
         // Juste rafraîchir
         fetchScript(id);
       }
-      
+
       setShowAddReplica(false);
       setInsertAfterIndex(null);
     } catch (err) {
       console.error("Error adding replica:", err);
-      alert("Erreur lors de l'ajout de la réplique: " + (err.message || "Erreur inconnue"));
+      alert(
+        "Erreur lors de l'ajout de la réplique: " +
+          (err.message || "Erreur inconnue")
+      );
     }
   };
 
@@ -510,7 +531,7 @@ function ScriptDetail() {
                 </button>
               </div>
             ) : (
-              <h1 
+              <h1
                 className="text-2xl font-display text-gold-400 mb-1 cursor-pointer 
                            hover:text-gold-300 flex items-center gap-2 group"
                 onClick={() => {
@@ -520,7 +541,9 @@ function ScriptDetail() {
                 title="Cliquer pour modifier le titre"
               >
                 {title}
-                <span className="text-sm opacity-0 group-hover:opacity-100 transition">✏️</span>
+                <span className="text-sm opacity-0 group-hover:opacity-100 transition">
+                  ✏️
+                </span>
               </h1>
             )}
             <p className="text-gray-300 text-sm">
@@ -603,9 +626,13 @@ function ScriptDetail() {
               onClick={() => setSelectedCharacter(char.id)}
               className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
               style={{
-                backgroundColor: selectedCharacter === char.id ? char.color : 'white',
-                color: selectedCharacter === char.id ? 'white' : '#4B5563',
-                border: selectedCharacter === char.id ? `2px solid ${char.color}` : '1px solid #D1D5DB',
+                backgroundColor:
+                  selectedCharacter === char.id ? char.color : "white",
+                color: selectedCharacter === char.id ? "white" : "#4B5563",
+                border:
+                  selectedCharacter === char.id
+                    ? `2px solid ${char.color}`
+                    : "1px solid #D1D5DB",
               }}
             >
               {char.name} ({replicaCountByCharacter[char.id] || 0})
@@ -695,7 +722,8 @@ function ScriptDetail() {
         {studyingGroup && (
           <div className="mb-4 p-3 bg-indigo-100 border border-indigo-300 rounded-lg flex items-center justify-between">
             <p className="text-indigo-800 text-sm">
-              <strong>📚 Groupe :</strong> {studyingGroup.name} ({studyingGroup.replicaIds?.length} répliques)
+              <strong>📚 Groupe :</strong> {studyingGroup.name} (
+              {studyingGroup.replicaIds?.length} répliques)
             </p>
             <button
               onClick={() => setStudyingGroup(null)}
@@ -710,8 +738,9 @@ function ScriptDetail() {
         {editMode && (
           <div className="mb-4 p-3 bg-orange-100 border border-orange-300 rounded-lg">
             <p className="text-orange-800 text-sm">
-              <strong>🔄 Mode édition activé</strong> - Glissez les répliques pour les réorganiser. 
-              Cliquez sur ➕ pour insérer une réplique à un endroit précis.
+              <strong>🔄 Mode édition activé</strong> - Glissez les répliques
+              pour les réorganiser. Cliquez sur ➕ pour insérer une réplique à
+              un endroit précis.
             </p>
           </div>
         )}
@@ -725,7 +754,10 @@ function ScriptDetail() {
                          px-3 py-2 rounded-full hover:bg-amber-500/30 transition"
             >
               <span>📝</span>
-              <span>{totalNotes} note{totalNotes > 1 ? 's' : ''} personnelle{totalNotes > 1 ? 's' : ''}</span>
+              <span>
+                {totalNotes} note{totalNotes > 1 ? "s" : ""} personnelle
+                {totalNotes > 1 ? "s" : ""}
+              </span>
               <span className="text-amber-500">→</span>
             </button>
           </div>
@@ -738,7 +770,7 @@ function ScriptDetail() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={filteredReplicas.map(r => r.id)}
+            items={filteredReplicas.map((r) => r.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-3">
@@ -747,8 +779,9 @@ function ScriptDetail() {
                   (c) => c.id === replica.character_id
                 );
                 const isRight = characterPositions[replica.character_id] === 1;
-                const notesAfterThisReplica = notesByReplicaId[replica.id] || [];
-                
+                const notesAfterThisReplica =
+                  notesByReplicaId[replica.id] || [];
+
                 return (
                   <div key={replica.id}>
                     {/* Bouton insérer avant (en mode édition) */}
@@ -764,7 +797,7 @@ function ScriptDetail() {
                         ➕ Insérer au début
                       </button>
                     )}
-                    
+
                     {/* La réplique (draggable en mode édition) */}
                     <SortableReplicaBubble
                       replica={replica}
@@ -777,7 +810,9 @@ function ScriptDetail() {
                       onEdit={() => setEditingReplica(replica)}
                       onDelete={() => setDeleteReplicaConfirm(replica)}
                       onSplit={() => setSplittingReplica(replica)}
-                      onAddNote={() => setShowAddNote({ afterReplicaId: replica.id })}
+                      onAddNote={() =>
+                        setShowAddNote({ afterReplicaId: replica.id })
+                      }
                     />
 
                     {/* Notes personnelles après cette réplique */}
@@ -890,7 +925,7 @@ function ScriptDetail() {
       {/* Modal d'ajout de personnage */}
       {showAddCharacter && (
         <AddCharacterModal
-          existingColors={characters.map(c => c.color)}
+          existingColors={characters.map((c) => c.color)}
           onAdd={handleAddCharacter}
           onClose={() => setShowAddCharacter(false)}
         />
@@ -916,7 +951,9 @@ function ScriptDetail() {
       {editingCharacter && (
         <EditCharacterModal
           character={editingCharacter}
-          existingColors={characters.filter(c => c.id !== editingCharacter.id).map(c => c.color)}
+          existingColors={characters
+            .filter((c) => c.id !== editingCharacter.id)
+            .map((c) => c.color)}
           onSave={handleUpdateCharacter}
           onClose={() => setEditingCharacter(null)}
         />
@@ -930,7 +967,8 @@ function ScriptDetail() {
               Supprimer {deleteCharacterConfirm.name} ?
             </h3>
             <p className="text-red-400 text-sm mb-4">
-              ⚠️ Toutes les répliques de ce personnage seront également supprimées !
+              ⚠️ Toutes les répliques de ce personnage seront également
+              supprimées !
             </p>
             <div className="flex gap-3">
               <button
@@ -1076,7 +1114,7 @@ function ScriptDetail() {
       {showFloatingRecorder && (
         <FloatingRecorder
           onSave={(recording) => {
-            console.log('Enregistrement sauvegardé:', recording);
+            console.log("Enregistrement sauvegardé:", recording);
             setShowFloatingRecorder(false);
           }}
           onClose={() => setShowFloatingRecorder(false)}
@@ -1089,7 +1127,12 @@ function ScriptDetail() {
 /**
  * Menu flottant unique avec actions
  */
-function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink }) {
+function FloatingActionMenu({
+  onAddNote,
+  onAddCharacter,
+  onAddReplica,
+  audioLink,
+}) {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -1098,11 +1141,11 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
       {isOpen && (
         <>
           {/* Overlay pour fermer */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/30 -z-10"
             onClick={() => setIsOpen(false)}
           />
-          
+
           {/* Options du menu */}
           <div className="absolute bottom-16 right-0 flex flex-col gap-3 items-end mb-3">
             {/* Audio */}
@@ -1118,7 +1161,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 🔊
               </div>
             </Link>
-            
+
             {/* Ajouter réplique */}
             <button
               onClick={() => {
@@ -1126,7 +1169,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 onAddReplica();
               }}
               className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: '50ms' }}
+              style={{ animationDelay: "50ms" }}
             >
               <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
                 Ajouter réplique
@@ -1135,7 +1178,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 💬
               </div>
             </button>
-            
+
             {/* Ajouter personnage */}
             <button
               onClick={() => {
@@ -1143,7 +1186,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 onAddCharacter();
               }}
               className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: '100ms' }}
+              style={{ animationDelay: "100ms" }}
             >
               <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
                 Ajouter personnage
@@ -1152,7 +1195,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 👤
               </div>
             </button>
-            
+
             {/* Ajouter note */}
             <button
               onClick={() => {
@@ -1160,7 +1203,7 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
                 onAddNote();
               }}
               className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: '150ms' }}
+              style={{ animationDelay: "150ms" }}
             >
               <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
                 Ajouter note
@@ -1172,15 +1215,17 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
           </div>
         </>
       )}
-      
+
       {/* Bouton principal */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg
                    transition-all duration-300 transform
-                   ${isOpen 
-                     ? 'bg-gray-700 rotate-45' 
-                     : 'bg-primary-600 hover:bg-primary-500 hover:scale-110'}`}
+                   ${
+                     isOpen
+                       ? "bg-gray-700 rotate-45"
+                       : "bg-primary-600 hover:bg-primary-500 hover:scale-110"
+                   }`}
       >
         ➕
       </button>
@@ -1191,7 +1236,19 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
 /**
  * Bulle de réplique draggable (pour le mode édition)
  */
-function SortableReplicaBubble({ replica, character, characters, viewMode, isRight, number, editMode, onEdit, onDelete, onSplit, onAddNote }) {
+function SortableReplicaBubble({
+  replica,
+  character,
+  characters,
+  viewMode,
+  isRight,
+  number,
+  editMode,
+  onEdit,
+  onDelete,
+  onSplit,
+  onAddNote,
+}) {
   const {
     attributes,
     listeners,
@@ -1219,11 +1276,11 @@ function SortableReplicaBubble({ replica, character, characters, viewMode, isRig
                      bg-orange-500 text-white p-2 rounded-lg shadow-lg hover:bg-orange-600"
         >
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
           </svg>
         </div>
       )}
-      
+
       <ChatBubble
         replica={replica}
         character={character}
@@ -1242,12 +1299,22 @@ function SortableReplicaBubble({ replica, character, characters, viewMode, isRig
 /**
  * Bulle de chat style WhatsApp
  */
-function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onDelete, onSplit, onAddNote }) {
+function ChatBubble({
+  replica,
+  character,
+  viewMode,
+  isRight,
+  number,
+  onEdit,
+  onDelete,
+  onSplit,
+  onAddNote,
+}) {
   const [revealed, setRevealed] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  const bubbleColor = character?.color || '#6B7280';
-  
+  const bubbleColor = character?.color || "#6B7280";
+
   const hexToRgba = (hex, alpha) => {
     if (!hex) return `rgba(107, 114, 128, ${alpha})`;
     const r = parseInt(hex.slice(1, 3), 16);
@@ -1260,13 +1327,17 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
     // Fonction pour obtenir les 3 premiers mots
     const getFirst3Words = (text) => {
       const words = text.trim().split(/\s+/).slice(0, 3);
-      return words.join(' ') + (text.trim().split(/\s+/).length > 3 ? '...' : '');
+      return (
+        words.join(" ") + (text.trim().split(/\s+/).length > 3 ? "..." : "")
+      );
     };
 
     switch (viewMode) {
       case "gaps":
         if (revealed) {
-          return <p className="text-white whitespace-pre-wrap">{replica.text}</p>;
+          return (
+            <p className="text-white whitespace-pre-wrap">{replica.text}</p>
+          );
         } else {
           return (
             <p className="text-white/80 font-mono text-sm tracking-wide whitespace-pre-wrap">
@@ -1313,7 +1384,11 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         );
 
       default:
-        return <p className="text-white leading-relaxed whitespace-pre-wrap">{replica.text}</p>;
+        return (
+          <p className="text-white leading-relaxed whitespace-pre-wrap">
+            {replica.text}
+          </p>
+        );
     }
   };
 
@@ -1327,11 +1402,11 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
   };
 
   return (
-    <div className={`flex ${isRight ? 'justify-end' : 'justify-start'} mb-1`}>
+    <div className={`flex ${isRight ? "justify-end" : "justify-start"} mb-1`}>
       <div
         className={`
           relative max-w-[85%]
-          ${isClickable ? 'cursor-pointer active:scale-[0.98]' : ''}
+          ${isClickable ? "cursor-pointer active:scale-[0.98]" : ""}
           transition-transform duration-150
         `}
         onClick={handleBubbleClick}
@@ -1340,7 +1415,7 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         <div
           className={`
             px-4 py-3 rounded-2xl relative shadow-lg
-            ${isRight ? 'rounded-br-md' : 'rounded-bl-md'}
+            ${isRight ? "rounded-br-md" : "rounded-bl-md"}
           `}
           style={{
             backgroundColor: hexToRgba(bubbleColor, 0.85),
@@ -1349,12 +1424,14 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         >
           {/* Triangle de la bulle */}
           <div
-            className={`absolute bottom-0 w-3 h-3 ${isRight ? '-right-1.5' : '-left-1.5'}`}
+            className={`absolute bottom-0 w-3 h-3 ${
+              isRight ? "-right-1.5" : "-left-1.5"
+            }`}
             style={{
               backgroundColor: hexToRgba(bubbleColor, 0.85),
-              clipPath: isRight 
-                ? 'polygon(0 0, 100% 100%, 0 100%)' 
-                : 'polygon(100% 0, 100% 100%, 0 100%)',
+              clipPath: isRight
+                ? "polygon(0 0, 100% 100%, 0 100%)"
+                : "polygon(100% 0, 100% 100%, 0 100%)",
             }}
           />
 
@@ -1391,7 +1468,9 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
                        transition-all z-10`}
             title="Options"
           >
-            <span className="text-gray-400 text-sm font-bold leading-none">⋯</span>
+            <span className="text-gray-400 text-sm font-bold leading-none">
+              ⋯
+            </span>
           </button>
         </div>
 
@@ -1399,16 +1478,16 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
         {showMenu && (
           <>
             {/* Overlay pour fermer */}
-            <div 
-              className="fixed inset-0 z-40" 
+            <div
+              className="fixed inset-0 z-40"
               onClick={(e) => {
                 e.stopPropagation();
                 setShowMenu(false);
               }}
             />
-            
+
             {/* Menu - s'ouvre vers le bas */}
-            <div 
+            <div
               className={`absolute z-50 right-0 top-6
                          bg-gray-900 border border-gray-700 rounded-xl shadow-xl
                          py-2 min-w-[160px]`}
@@ -1470,7 +1549,9 @@ function ChatBubble({ replica, character, viewMode, isRight, number, onEdit, onD
  * Modal d'ajout d'une réplique - BOUTON TOUJOURS VISIBLE
  */
 function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
-  const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
+  const [selectedCharId, setSelectedCharId] = useState(
+    characters[0]?.id || null
+  );
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -1485,13 +1566,14 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
     }
   };
 
-  const selectedChar = characters.find(c => c.id === selectedCharId);
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
   const canSubmit = text.trim() && selectedCharId && !saving;
-  
+
   // Message d'insertion
-  const insertMessage = insertAfterIndex === -1 
-    ? "📍 Sera inséré au début du texte"
-    : insertAfterIndex !== null && insertAfterIndex !== undefined
+  const insertMessage =
+    insertAfterIndex === -1
+      ? "📍 Sera inséré au début du texte"
+      : insertAfterIndex !== null && insertAfterIndex !== undefined
       ? `📍 Sera inséré après la réplique #${insertAfterIndex + 1}`
       : "📍 Sera ajouté à la fin du texte";
 
@@ -1499,11 +1581,12 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
     <div className="fixed inset-0 z-[60] bg-black/95">
       {/* Container avec hauteur maximale */}
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header - Hauteur fixe */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">✏️ Ajouter une réplique</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            ✏️ Ajouter une réplique
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -1515,12 +1598,16 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
         <div className="flex-1 overflow-y-auto p-4">
           {/* Message de position */}
           <div className="mb-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg">
-            <p className="text-orange-400 text-sm font-medium">{insertMessage}</p>
+            <p className="text-orange-400 text-sm font-medium">
+              {insertMessage}
+            </p>
           </div>
 
           {/* Sélection du personnage */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Personnage
+            </label>
             <div className="flex gap-2 flex-wrap">
               {characters.map((char) => (
                 <button
@@ -1528,8 +1615,9 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
                   onClick={() => setSelectedCharId(char.id)}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                    backgroundColor:
+                      selectedCharId === char.id ? char.color : "#374151",
+                    color: selectedCharId === char.id ? "white" : "#9CA3AF",
                   }}
                 >
                   {char.name}
@@ -1540,7 +1628,9 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
 
           {/* Texte de la réplique */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Texte de la réplique</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Texte de la réplique
+            </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -1555,7 +1645,7 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
           {text && selectedChar && (
             <div className="mb-4">
               <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
-              <div 
+              <div
                 className="p-4 rounded-xl"
                 style={{ backgroundColor: `${selectedChar.color}dd` }}
               >
@@ -1570,19 +1660,19 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
 
         {/* BOUTON FIXE EN BAS - Toujours visible */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
-            onClick={handleAdd} 
+          <button
+            onClick={handleAdd}
             disabled={!canSubmit}
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${canSubmit
-                ? 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+              ${
+                canSubmit
+                  ? "bg-gold-500 hover:bg-gold-400 text-dark shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
               }`}
           >
             {saving ? "⏳ Ajout en cours..." : "✅ AJOUTER LA RÉPLIQUE"}
           </button>
         </div>
-        
       </div>
     </div>
   );
@@ -1606,16 +1696,17 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
     }
   };
 
-  const selectedChar = characters.find(c => c.id === selectedCharId);
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header fixe */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">✏️ Modifier la réplique</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            ✏️ Modifier la réplique
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -1627,7 +1718,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {/* Sélection du personnage */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Personnage
+            </label>
             <div className="flex gap-2 flex-wrap">
               {characters.map((char) => (
                 <button
@@ -1635,8 +1728,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
                   onClick={() => setSelectedCharId(char.id)}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                    color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                    backgroundColor:
+                      selectedCharId === char.id ? char.color : "#374151",
+                    color: selectedCharId === char.id ? "white" : "#9CA3AF",
                   }}
                 >
                   {char.name}
@@ -1658,14 +1752,17 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
           </div>
 
           {/* Prévisualisation */}
-          <div 
+          <div
             className="p-4 rounded-lg"
-            style={{ 
-              backgroundColor: `${selectedChar?.color || '#666'}20`,
-              borderLeft: `4px solid ${selectedChar?.color || '#666'}`,
+            style={{
+              backgroundColor: `${selectedChar?.color || "#666"}20`,
+              borderLeft: `4px solid ${selectedChar?.color || "#666"}`,
             }}
           >
-            <p className="text-xs font-semibold mb-1" style={{ color: selectedChar?.color || '#999' }}>
+            <p
+              className="text-xs font-semibold mb-1"
+              style={{ color: selectedChar?.color || "#999" }}
+            >
               {selectedChar?.name || "?"}
             </p>
             <p className="text-gray-300 text-sm">{text || "..."}</p>
@@ -1674,13 +1771,15 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
 
         {/* ===== BOUTON FIXE EN BAS - TOUJOURS VISIBLE ===== */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={handleSave}
             disabled={!text.trim() || saving}
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${text.trim() && !saving
-                ? 'bg-gold-500 hover:bg-gold-400 text-dark shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                text.trim() && !saving
+                  ? "bg-gold-500 hover:bg-gold-400 text-dark shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Sauvegarde..." : "✅ SAUVEGARDER"}
           </button>
@@ -1695,19 +1794,22 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
  */
 function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
   // Détecter mobile
-  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  
+  const isMobile =
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
   const [showText, setShowText] = useState(isMobile); // Texte par défaut sur mobile
   const [pdfError, setPdfError] = useState(false);
   const [checkingPdf, setCheckingPdf] = useState(!isMobile);
-  const isPdf = filename?.toLowerCase().endsWith('.pdf');
+  const isPdf = filename?.toLowerCase().endsWith(".pdf");
 
   // Vérifier si le PDF existe vraiment (seulement sur desktop)
   useEffect(() => {
     if (fileUrl && isPdf && !isMobile) {
       setCheckingPdf(true);
-      fetch(fileUrl, { method: 'HEAD' })
-        .then(res => {
+      fetch(fileUrl, { method: "HEAD" })
+        .then((res) => {
           if (!res.ok) {
             setPdfError(true);
             setShowText(true);
@@ -1728,7 +1830,9 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
     <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
       <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-dark">
         <div className="flex-1 min-w-0">
-          <h3 className="text-white font-semibold truncate">{filename || "Fichier original"}</h3>
+          <h3 className="text-white font-semibold truncate">
+            {filename || "Fichier original"}
+          </h3>
         </div>
         <div className="flex items-center gap-2">
           {/* Bouton toggle PDF/Texte */}
@@ -1736,10 +1840,12 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
             <button
               onClick={() => setShowText(!showText)}
               className={`px-3 py-1 rounded-lg text-sm transition ${
-                showText ? 'bg-primary-600 text-white' : 'bg-gray-700 text-gray-300'
+                showText
+                  ? "bg-primary-600 text-white"
+                  : "bg-gray-700 text-gray-300"
               }`}
             >
-              {showText ? '📄 PDF' : '📝 Texte'}
+              {showText ? "📄 PDF" : "📝 Texte"}
             </button>
           )}
           {/* Bouton télécharger */}
@@ -1774,7 +1880,8 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
             {pdfError && (
               <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                 <p className="text-yellow-400 text-sm">
-                  ⚠️ Le fichier PDF original n'est plus disponible. Voici le texte extrait :
+                  ⚠️ Le fichier PDF original n'est plus disponible. Voici le
+                  texte extrait :
                 </p>
               </div>
             )}
@@ -1805,7 +1912,9 @@ function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
           />
         ) : (
           <div className="text-center py-8">
-            <p className="text-gray-400 mb-4">Aperçu non disponible pour ce type de fichier</p>
+            <p className="text-gray-400 mb-4">
+              Aperçu non disponible pour ce type de fichier
+            </p>
             <a
               href={fileUrl}
               target="_blank"
@@ -1840,7 +1949,7 @@ function ShareTroupeModal({ script, userId, onClose }) {
       setLoading(false);
       return;
     }
-    
+
     try {
       const userTroupes = await fetchUserTroupes(userId);
       setTroupes(userTroupes || []);
@@ -1855,7 +1964,7 @@ function ShareTroupeModal({ script, userId, onClose }) {
   const handleShare = async (troupeId) => {
     setSharing(true);
     setError(null);
-    
+
     try {
       await shareScript(script.id, troupeId, userId);
       setSuccess("✓ Texte partagé avec succès !");
@@ -1890,12 +1999,14 @@ function ShareTroupeModal({ script, userId, onClose }) {
           ) : troupes.length === 0 ? (
             <div className="text-center py-6">
               <span className="text-4xl mb-3 block">🎭</span>
-              <p className="text-gray-400 mb-2">Vous n'avez pas encore de troupe</p>
+              <p className="text-gray-400 mb-2">
+                Vous n'avez pas encore de troupe
+              </p>
               <p className="text-gray-500 text-sm mb-4">
                 Créez ou rejoignez une troupe pour partager vos textes.
               </p>
-              <Link 
-                to="/shared" 
+              <Link
+                to="/shared"
                 onClick={onClose}
                 className="btn-gold inline-block"
               >
@@ -1922,7 +2033,9 @@ function ShareTroupeModal({ script, userId, onClose }) {
                       <span className="text-2xl">🎭</span>
                       <div>
                         <p className="text-white font-medium">{troupe.name}</p>
-                        <p className="text-gray-500 text-xs">Code: {troupe.code}</p>
+                        <p className="text-gray-500 text-xs">
+                          Code: {troupe.code}
+                        </p>
                       </div>
                     </div>
                     <span className="text-primary-400 text-xl">→</span>
@@ -1934,7 +2047,9 @@ function ShareTroupeModal({ script, userId, onClose }) {
 
           {success && (
             <div className="mt-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
-              <p className="text-green-400 text-center font-medium">{success}</p>
+              <p className="text-green-400 text-center font-medium">
+                {success}
+              </p>
             </div>
           )}
 
@@ -1959,7 +2074,13 @@ function ShareTroupeModal({ script, userId, onClose }) {
  * Modal de division d'une réplique
  * Permet de couper une réplique en deux et d'attribuer la 2ème partie à un autre personnage
  */
-function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClose }) {
+function SplitReplicaModal({
+  replica,
+  characters,
+  onSplit,
+  onAddCharacter,
+  onClose,
+}) {
   const [splitPosition, setSplitPosition] = useState(null);
   const [selectedCharId, setSelectedCharId] = useState(null);
   const [showNewCharForm, setShowNewCharForm] = useState(false);
@@ -1967,16 +2088,32 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
   const [saving, setSaving] = useState(false);
 
   const text = replica.text;
-  
+
   // Couleurs disponibles pour nouveau personnage
   const CHARACTER_COLORS = [
-    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
-    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
-    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
   ];
-  const usedColors = characters.map(c => c.color);
-  const availableColors = CHARACTER_COLORS.filter(c => !usedColors.includes(c));
-  const [newCharColor, setNewCharColor] = useState(availableColors[0] || CHARACTER_COLORS[0]);
+  const usedColors = characters.map((c) => c.color);
+  const availableColors = CHARACTER_COLORS.filter(
+    (c) => !usedColors.includes(c)
+  );
+  const [newCharColor, setNewCharColor] = useState(
+    availableColors[0] || CHARACTER_COLORS[0]
+  );
 
   // Trouver la position de coupure par clic sur le texte
   const handleTextClick = (e) => {
@@ -1984,7 +2121,7 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
     if (selection && selection.rangeCount > 0) {
       const range = selection.getRangeAt(0);
       const offset = range.startOffset;
-      
+
       // Trouver la position dans le texte complet
       const textNode = e.target;
       if (textNode.textContent) {
@@ -1999,11 +2136,15 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
     const points = [];
     let match;
     while ((match = regex.exec(text)) !== null) {
-      if (match.index > 10) { // Ignorer si trop près du début
+      if (match.index > 10) {
+        // Ignorer si trop près du début
         points.push({
           position: match.index,
           name: match[1].trim(),
-          preview: text.substring(Math.max(0, match.index - 20), match.index + 30)
+          preview: text.substring(
+            Math.max(0, match.index - 20),
+            match.index + 30
+          ),
         });
       }
     }
@@ -2014,7 +2155,7 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
 
   const handleSplit = async () => {
     if (splitPosition === null || !selectedCharId) return;
-    
+
     setSaving(true);
     try {
       await onSplit(replica, splitPosition, selectedCharId);
@@ -2027,10 +2168,13 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
 
   const handleCreateAndSelect = async () => {
     if (!newCharName.trim()) return;
-    
+
     setSaving(true);
     try {
-      const newChar = await onAddCharacter(newCharName.trim().toUpperCase(), newCharColor);
+      const newChar = await onAddCharacter(
+        newCharName.trim().toUpperCase(),
+        newCharColor
+      );
       setSelectedCharId(newChar.id);
       setShowNewCharForm(false);
     } catch (err) {
@@ -2040,20 +2184,23 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
     }
   };
 
-  const firstPart = splitPosition !== null ? text.substring(0, splitPosition).trim() : text;
-  const secondPart = splitPosition !== null ? text.substring(splitPosition).trim() : "";
+  const firstPart =
+    splitPosition !== null ? text.substring(0, splitPosition).trim() : text;
+  const secondPart =
+    splitPosition !== null ? text.substring(splitPosition).trim() : "";
 
-  const currentChar = characters.find(c => c.id === replica.character_id);
-  const selectedChar = characters.find(c => c.id === selectedCharId);
+  const currentChar = characters.find((c) => c.id === replica.character_id);
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
 
   return (
     <div className="fixed inset-0 z-[70] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">✂️ Diviser la réplique</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            ✂️ Diviser la réplique
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -2063,27 +2210,34 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
 
         {/* Contenu scrollable */}
         <div className="flex-1 overflow-y-auto p-4">
-          
           {/* Étape 1: Choisir où couper */}
           <div className="mb-6">
-            <h4 className="text-sm font-semibold text-gold-500 mb-2">1️⃣ Où voulez-vous couper ?</h4>
-            
+            <h4 className="text-sm font-semibold text-gold-500 mb-2">
+              1️⃣ Où voulez-vous couper ?
+            </h4>
+
             {/* Points de coupure détectés automatiquement */}
             {potentialSplitPoints.length > 0 && (
               <div className="mb-4">
-                <p className="text-gray-400 text-xs mb-2">Points de coupure détectés :</p>
+                <p className="text-gray-400 text-xs mb-2">
+                  Points de coupure détectés :
+                </p>
                 <div className="space-y-2">
                   {potentialSplitPoints.map((point, idx) => (
                     <button
                       key={idx}
                       onClick={() => setSplitPosition(point.position)}
                       className={`w-full text-left p-3 rounded-lg border transition text-sm
-                        ${splitPosition === point.position 
-                          ? 'bg-orange-600/20 border-orange-500 text-orange-300' 
-                          : 'bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500'}`}
+                        ${
+                          splitPosition === point.position
+                            ? "bg-orange-600/20 border-orange-500 text-orange-300"
+                            : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"
+                        }`}
                     >
                       <span className="font-bold text-white">{point.name}</span>
-                      <span className="text-gray-500 ml-2 text-xs">Position {point.position}</span>
+                      <span className="text-gray-500 ml-2 text-xs">
+                        Position {point.position}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -2092,13 +2246,17 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
 
             {/* Saisie manuelle de la position */}
             <div className="mb-4">
-              <label className="text-gray-400 text-xs mb-1 block">Ou entrez la position manuellement :</label>
+              <label className="text-gray-400 text-xs mb-1 block">
+                Ou entrez la position manuellement :
+              </label>
               <input
                 type="number"
                 min="1"
                 max={text.length - 1}
                 value={splitPosition || ""}
-                onChange={(e) => setSplitPosition(parseInt(e.target.value) || null)}
+                onChange={(e) =>
+                  setSplitPosition(parseInt(e.target.value) || null)
+                }
                 className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white"
                 placeholder="Position du caractère..."
               />
@@ -2108,24 +2266,34 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
           {/* Aperçu de la division */}
           {splitPosition !== null && (
             <div className="mb-6">
-              <h4 className="text-sm font-semibold text-gold-500 mb-2">📝 Aperçu</h4>
-              
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">
+                📝 Aperçu
+              </h4>
+
               <div className="space-y-3">
                 {/* Partie 1 */}
-                <div 
+                <div
                   className="p-3 rounded-xl"
-                  style={{ backgroundColor: `${currentChar?.color || '#666'}dd` }}
+                  style={{
+                    backgroundColor: `${currentChar?.color || "#666"}dd`,
+                  }}
                 >
-                  <p className="text-xs font-bold text-white/80 mb-1">{currentChar?.name} (conservé)</p>
+                  <p className="text-xs font-bold text-white/80 mb-1">
+                    {currentChar?.name} (conservé)
+                  </p>
                   <p className="text-white text-sm">{firstPart || "(vide)"}</p>
                 </div>
 
-                <div className="text-center text-gray-500">✂️ - - - - - - - - - - ✂️</div>
+                <div className="text-center text-gray-500">
+                  ✂️ - - - - - - - - - - ✂️
+                </div>
 
                 {/* Partie 2 */}
-                <div 
+                <div
                   className="p-3 rounded-xl"
-                  style={{ backgroundColor: `${selectedChar?.color || '#666'}dd` }}
+                  style={{
+                    backgroundColor: `${selectedChar?.color || "#666"}dd`,
+                  }}
                 >
                   <p className="text-xs font-bold text-white/80 mb-1">
                     {selectedChar?.name || "❓ Choisir le personnage"}
@@ -2139,8 +2307,10 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
           {/* Étape 2: Choisir le personnage pour la 2ème partie */}
           {splitPosition !== null && secondPart && (
             <div className="mb-6">
-              <h4 className="text-sm font-semibold text-gold-500 mb-2">2️⃣ Attribuer à quel personnage ?</h4>
-              
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">
+                2️⃣ Attribuer à quel personnage ?
+              </h4>
+
               {/* Personnages existants */}
               <div className="flex gap-2 flex-wrap mb-3">
                 {characters.map((char) => (
@@ -2152,8 +2322,9 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
                     }}
                     className="px-4 py-2 rounded-lg text-sm font-medium transition"
                     style={{
-                      backgroundColor: selectedCharId === char.id ? char.color : '#374151',
-                      color: selectedCharId === char.id ? 'white' : '#9CA3AF',
+                      backgroundColor:
+                        selectedCharId === char.id ? char.color : "#374151",
+                      color: selectedCharId === char.id ? "white" : "#9CA3AF",
                     }}
                   >
                     {char.name}
@@ -2165,9 +2336,11 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
               <button
                 onClick={() => setShowNewCharForm(!showNewCharForm)}
                 className={`w-full p-3 rounded-lg border-2 border-dashed transition text-sm
-                  ${showNewCharForm 
-                    ? 'border-green-500 bg-green-500/10 text-green-400' 
-                    : 'border-gray-600 text-gray-400 hover:border-gray-500'}`}
+                  ${
+                    showNewCharForm
+                      ? "border-green-500 bg-green-500/10 text-green-400"
+                      : "border-gray-600 text-gray-400 hover:border-gray-500"
+                  }`}
               >
                 ➕ Créer un nouveau personnage
               </button>
@@ -2176,7 +2349,9 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
               {showNewCharForm && (
                 <div className="mt-3 p-4 bg-gray-800 rounded-xl border border-gray-700">
                   <div className="mb-3">
-                    <label className="text-gray-400 text-xs mb-1 block">Nom du personnage</label>
+                    <label className="text-gray-400 text-xs mb-1 block">
+                      Nom du personnage
+                    </label>
                     <input
                       type="text"
                       value={newCharName}
@@ -2185,15 +2360,21 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
                       placeholder="Ex: L'ADJUDANT-CHEF"
                     />
                   </div>
-                  
+
                   <div className="mb-3">
-                    <label className="text-gray-400 text-xs mb-1 block">Couleur</label>
+                    <label className="text-gray-400 text-xs mb-1 block">
+                      Couleur
+                    </label>
                     <div className="flex gap-2 flex-wrap">
                       {CHARACTER_COLORS.map((color) => (
                         <button
                           key={color}
                           onClick={() => setNewCharColor(color)}
-                          className={`w-8 h-8 rounded-full transition ${newCharColor === color ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-800' : ''}`}
+                          className={`w-8 h-8 rounded-full transition ${
+                            newCharColor === color
+                              ? "ring-2 ring-white ring-offset-2 ring-offset-gray-800"
+                              : ""
+                          }`}
                           style={{ backgroundColor: color }}
                         />
                       ))}
@@ -2204,9 +2385,11 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
                     onClick={handleCreateAndSelect}
                     disabled={!newCharName.trim() || saving}
                     className={`w-full py-3 rounded-lg font-semibold transition
-                      ${newCharName.trim() && !saving
-                        ? 'bg-green-600 hover:bg-green-500 text-white'
-                        : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+                      ${
+                        newCharName.trim() && !saving
+                          ? "bg-green-600 hover:bg-green-500 text-white"
+                          : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                      }`}
                   >
                     {saving ? "⏳ Création..." : "✓ Créer et sélectionner"}
                   </button>
@@ -2218,13 +2401,20 @@ function SplitReplicaModal({ replica, characters, onSplit, onAddCharacter, onClo
 
         {/* Bouton de validation */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={handleSplit}
-            disabled={splitPosition === null || !selectedCharId || !secondPart || saving}
+            disabled={
+              splitPosition === null || !selectedCharId || !secondPart || saving
+            }
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${splitPosition !== null && selectedCharId && secondPart && !saving
-                ? 'bg-orange-500 hover:bg-orange-400 text-white shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                splitPosition !== null &&
+                selectedCharId &&
+                secondPart &&
+                !saving
+                  ? "bg-orange-500 hover:bg-orange-400 text-white shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Division en cours..." : "✂️ DIVISER LA RÉPLIQUE"}
           </button>
@@ -2242,11 +2432,25 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
   const [saving, setSaving] = useState(false);
 
   const CHARACTER_COLORS = [
-    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
-    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
-    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
   ];
-  const availableColors = CHARACTER_COLORS.filter(c => !existingColors.includes(c));
+  const availableColors = CHARACTER_COLORS.filter(
+    (c) => !existingColors.includes(c)
+  );
   const [color, setColor] = useState(availableColors[0] || CHARACTER_COLORS[0]);
 
   const handleSubmit = async () => {
@@ -2265,13 +2469,22 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
     <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
       <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700">
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">➕ Nouveau personnage</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
+          <h3 className="text-lg font-semibold text-white">
+            ➕ Nouveau personnage
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-2"
+          >
+            ✕
+          </button>
         </div>
 
         <div className="p-4 space-y-4">
           <div>
-            <label className="text-gray-400 text-sm mb-2 block">Nom du personnage</label>
+            <label className="text-gray-400 text-sm mb-2 block">
+              Nom du personnage
+            </label>
             <input
               type="text"
               value={name}
@@ -2289,7 +2502,11 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
                 <button
                   key={c}
                   onClick={() => setColor(c)}
-                  className={`w-10 h-10 rounded-full transition ${color === c ? 'ring-2 ring-white ring-offset-2 ring-offset-dark' : ''}`}
+                  className={`w-10 h-10 rounded-full transition ${
+                    color === c
+                      ? "ring-2 ring-white ring-offset-2 ring-offset-dark"
+                      : ""
+                  }`}
                   style={{ backgroundColor: c }}
                 />
               ))}
@@ -2298,7 +2515,7 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
 
           {/* Aperçu */}
           {name && (
-            <div 
+            <div
               className="p-3 rounded-xl"
               style={{ backgroundColor: `${color}dd` }}
             >
@@ -2313,9 +2530,11 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
             onClick={handleSubmit}
             disabled={!name.trim() || saving}
             className={`w-full py-3 rounded-xl font-bold transition
-              ${name.trim() && !saving
-                ? 'bg-gold-500 hover:bg-gold-400 text-dark'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                name.trim() && !saving
+                  ? "bg-gold-500 hover:bg-gold-400 text-dark"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Création..." : "✓ CRÉER LE PERSONNAGE"}
           </button>
@@ -2330,11 +2549,11 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
  */
 function NoteBubble({ note, onEdit, onDelete }) {
   const NOTE_TYPES = {
-    general: { icon: '📝', label: 'Note' },
-    movement: { icon: '🚶', label: 'Déplacement' },
-    intention: { icon: '💭', label: 'Intention' },
-    prop: { icon: '🎪', label: 'Accessoire' },
-    cue: { icon: '🎯', label: 'Repère' },
+    general: { icon: "📝", label: "Note" },
+    movement: { icon: "🚶", label: "Déplacement" },
+    intention: { icon: "💭", label: "Intention" },
+    prop: { icon: "🎪", label: "Accessoire" },
+    cue: { icon: "🎯", label: "Repère" },
   };
 
   const typeInfo = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
@@ -2343,8 +2562,10 @@ function NoteBubble({ note, onEdit, onDelete }) {
     <div className="flex justify-center my-2">
       <div className="relative max-w-[90%] group">
         {/* Bulle de note - Style distinctif */}
-        <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
-                        border-2 border-amber-400 border-dashed shadow-lg">
+        <div
+          className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
+                        border-2 border-amber-400 border-dashed shadow-lg"
+        >
           {/* Type de note */}
           <div className="flex items-center gap-2 mb-1">
             <span className="text-lg">{typeInfo.icon}</span>
@@ -2360,8 +2581,10 @@ function NoteBubble({ note, onEdit, onDelete }) {
         </div>
 
         {/* Boutons d'action */}
-        <div className="absolute -top-2 -right-2 flex gap-1 
-                        opacity-0 group-hover:opacity-100 transition-opacity">
+        <div
+          className="absolute -top-2 -right-2 flex gap-1 
+                        opacity-0 group-hover:opacity-100 transition-opacity"
+        >
           <button
             onClick={onEdit}
             className="w-6 h-6 bg-gray-700 hover:bg-primary-600 
@@ -2394,11 +2617,11 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
   const [saving, setSaving] = useState(false);
 
   const NOTE_TYPES = [
-    { value: 'general', icon: '📝', label: 'Note générale' },
-    { value: 'movement', icon: '🚶', label: 'Déplacement' },
-    { value: 'intention', icon: '💭', label: 'Intention de jeu' },
-    { value: 'prop', icon: '🎪', label: 'Accessoire' },
-    { value: 'cue', icon: '🎯', label: 'Repère / Signal' },
+    { value: "general", icon: "📝", label: "Note générale" },
+    { value: "movement", icon: "🚶", label: "Déplacement" },
+    { value: "intention", icon: "💭", label: "Intention de jeu" },
+    { value: "prop", icon: "🎪", label: "Accessoire" },
+    { value: "cue", icon: "🎯", label: "Repère / Signal" },
   ];
 
   const handleSubmit = async () => {
@@ -2416,11 +2639,12 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">📝 Ajouter une note</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            📝 Ajouter une note
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -2432,16 +2656,20 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
         <div className="flex-1 overflow-y-auto p-4">
           {/* Type de note */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Type de note
+            </label>
             <div className="grid grid-cols-2 gap-2">
               {NOTE_TYPES.map((type) => (
                 <button
                   key={type.value}
                   onClick={() => setNoteType(type.value)}
                   className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2
-                    ${noteType === type.value 
-                      ? 'bg-amber-500 text-amber-950' 
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                    ${
+                      noteType === type.value
+                        ? "bg-amber-500 text-amber-950"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
                 >
                   <span className="text-lg">{type.icon}</span>
                   {type.label}
@@ -2452,7 +2680,9 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
 
           {/* Texte de la note */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Votre note
+            </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -2488,12 +2718,16 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
           {text && (
             <div className="mb-4">
               <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
-              <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
-                              border-2 border-amber-400 border-dashed">
+              <div
+                className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 
+                              border-2 border-amber-400 border-dashed"
+              >
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">{NOTE_TYPES.find(t => t.value === noteType)?.icon}</span>
+                  <span className="text-lg">
+                    {NOTE_TYPES.find((t) => t.value === noteType)?.icon}
+                  </span>
                   <span className="text-xs font-bold text-amber-900 uppercase">
-                    {NOTE_TYPES.find(t => t.value === noteType)?.label}
+                    {NOTE_TYPES.find((t) => t.value === noteType)?.label}
                   </span>
                 </div>
                 <p className="text-amber-950 text-sm font-medium">{text}</p>
@@ -2504,13 +2738,15 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
 
         {/* Bouton de validation */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={!text.trim() || saving}
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${text.trim() && !saving
-                ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                text.trim() && !saving
+                  ? "bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Enregistrement..." : "✅ AJOUTER LA NOTE"}
           </button>
@@ -2529,11 +2765,11 @@ function EditNoteModal({ note, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
 
   const NOTE_TYPES = [
-    { value: 'general', icon: '📝', label: 'Note générale' },
-    { value: 'movement', icon: '🚶', label: 'Déplacement' },
-    { value: 'intention', icon: '💭', label: 'Intention de jeu' },
-    { value: 'prop', icon: '🎪', label: 'Accessoire' },
-    { value: 'cue', icon: '🎯', label: 'Repère / Signal' },
+    { value: "general", icon: "📝", label: "Note générale" },
+    { value: "movement", icon: "🚶", label: "Déplacement" },
+    { value: "intention", icon: "💭", label: "Intention de jeu" },
+    { value: "prop", icon: "🎪", label: "Accessoire" },
+    { value: "cue", icon: "🎯", label: "Repère / Signal" },
   ];
 
   const handleSubmit = async () => {
@@ -2551,11 +2787,12 @@ function EditNoteModal({ note, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">✏️ Modifier la note</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            ✏️ Modifier la note
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -2567,16 +2804,20 @@ function EditNoteModal({ note, onSave, onClose }) {
         <div className="flex-1 overflow-y-auto p-4">
           {/* Type de note */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Type de note
+            </label>
             <div className="grid grid-cols-2 gap-2">
               {NOTE_TYPES.map((type) => (
                 <button
                   key={type.value}
                   onClick={() => setNoteType(type.value)}
                   className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2
-                    ${noteType === type.value 
-                      ? 'bg-amber-500 text-amber-950' 
-                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
+                    ${
+                      noteType === type.value
+                        ? "bg-amber-500 text-amber-950"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
                 >
                   <span className="text-lg">{type.icon}</span>
                   {type.label}
@@ -2587,7 +2828,9 @@ function EditNoteModal({ note, onSave, onClose }) {
 
           {/* Texte */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Votre note
+            </label>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -2600,13 +2843,15 @@ function EditNoteModal({ note, onSave, onClose }) {
 
         {/* Bouton */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={!text.trim() || saving}
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${text.trim() && !saving
-                ? 'bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                text.trim() && !saving
+                  ? "bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
           </button>
@@ -2623,11 +2868,12 @@ function CharacterManagerModal({ characters, onEdit, onDelete, onClose }) {
   return (
     <div className="fixed inset-0 z-[70] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">👥 Gérer les personnages</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            👥 Gérer les personnages
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -2642,16 +2888,16 @@ function CharacterManagerModal({ characters, onEdit, onDelete, onClose }) {
           ) : (
             <div className="space-y-3">
               {characters.map((char) => (
-                <div 
+                <div
                   key={char.id}
                   className="flex items-center gap-3 p-4 bg-gray-800 rounded-xl border border-gray-700"
                 >
                   {/* Couleur */}
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-full shadow-lg"
                     style={{ backgroundColor: char.color }}
                   />
-                  
+
                   {/* Nom */}
                   <div className="flex-1">
                     <p className="text-white font-medium">{char.name}</p>
@@ -2681,7 +2927,7 @@ function CharacterManagerModal({ characters, onEdit, onDelete, onClose }) {
 
         {/* Footer */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={onClose}
             className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold"
           >
@@ -2702,9 +2948,21 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
 
   const CHARACTER_COLORS = [
-    '#8B1538', '#2563EB', '#059669', '#D97706', '#7C3AED',
-    '#DC2626', '#0891B2', '#4F46E5', '#DB2777', '#65A30D',
-    '#0D9488', '#6366F1', '#EA580C', '#84CC16', '#EC4899',
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
   ];
 
   const handleSubmit = async () => {
@@ -2722,11 +2980,12 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
   return (
     <div className="fixed inset-0 z-[80] bg-black/95">
       <div className="h-full flex flex-col max-h-screen">
-        
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">✏️ Modifier le personnage</h3>
-          <button 
+          <h3 className="text-lg font-semibold text-white">
+            ✏️ Modifier le personnage
+          </h3>
+          <button
             onClick={onClose}
             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
           >
@@ -2738,7 +2997,9 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
         <div className="flex-1 overflow-y-auto p-4">
           {/* Nom */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">Nom du personnage</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Nom du personnage
+            </label>
             <input
               type="text"
               value={name}
@@ -2761,10 +3022,14 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
                     onClick={() => !isUsed && setColor(c)}
                     disabled={isUsed}
                     className={`w-12 h-12 rounded-xl transition ${
-                      color === c ? 'ring-4 ring-white scale-110' : ''
-                    } ${isUsed ? 'opacity-30 cursor-not-allowed' : 'hover:scale-105'}`}
+                      color === c ? "ring-4 ring-white scale-110" : ""
+                    } ${
+                      isUsed
+                        ? "opacity-30 cursor-not-allowed"
+                        : "hover:scale-105"
+                    }`}
                     style={{ backgroundColor: c }}
-                    title={isUsed ? 'Déjà utilisé' : c}
+                    title={isUsed ? "Déjà utilisé" : c}
                   />
                 );
               })}
@@ -2774,7 +3039,7 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
           {/* Aperçu */}
           <div className="mb-4">
             <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
-            <div 
+            <div
               className="p-4 rounded-xl text-white font-bold text-center"
               style={{ backgroundColor: color }}
             >
@@ -2785,13 +3050,15 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
 
         {/* Bouton */}
         <div className="flex-none p-4 border-t border-gray-700 bg-dark">
-          <button 
+          <button
             onClick={handleSubmit}
             disabled={!name.trim() || saving}
             className={`w-full py-4 rounded-xl text-lg font-bold transition
-              ${name.trim() && !saving
-                ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-lg'
-                : 'bg-gray-700 text-gray-500 cursor-not-allowed'}`}
+              ${
+                name.trim() && !saving
+                  ? "bg-purple-600 hover:bg-purple-500 text-white shadow-lg"
+                  : "bg-gray-700 text-gray-500 cursor-not-allowed"
+              }`}
           >
             {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
           </button>
@@ -2806,19 +3073,21 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
  */
 function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
   const NOTE_TYPES = {
-    general: { icon: '📝', label: 'Note générale', color: 'amber' },
-    movement: { icon: '🚶', label: 'Déplacement', color: 'blue' },
-    intention: { icon: '🎭', label: 'Intention', color: 'purple' },
-    accessory: { icon: '🎒', label: 'Accessoire', color: 'green' },
-    cue: { icon: '⏰', label: 'Repère', color: 'red' },
+    general: { icon: "📝", label: "Note générale", color: "amber" },
+    movement: { icon: "🚶", label: "Déplacement", color: "blue" },
+    intention: { icon: "🎭", label: "Intention", color: "purple" },
+    accessory: { icon: "🎒", label: "Accessoire", color: "green" },
+    cue: { icon: "⏰", label: "Repère", color: "red" },
   };
 
   // Fonction pour obtenir le contexte (réplique associée)
   const getReplicaContext = (afterReplicaId) => {
     if (!afterReplicaId) return "Au début du texte";
-    const replica = replicas.find(r => r.id === afterReplicaId);
+    const replica = replicas.find((r) => r.id === afterReplicaId);
     if (!replica) return "Réplique inconnue";
-    return replica.text?.substring(0, 50) + (replica.text?.length > 50 ? "..." : "");
+    return (
+      replica.text?.substring(0, 50) + (replica.text?.length > 50 ? "..." : "")
+    );
   };
 
   return (
@@ -2826,8 +3095,15 @@ function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
       <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700 max-h-[80vh] flex flex-col">
         {/* Header */}
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">📝 Mes notes personnelles</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
+          <h3 className="text-lg font-semibold text-white">
+            📝 Mes notes personnelles
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-2"
+          >
+            ✕
+          </button>
         </div>
 
         {/* Liste */}
@@ -2837,19 +3113,24 @@ function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
               Aucune note pour ce texte
             </p>
           ) : (
-            notes.map(note => {
+            notes.map((note) => {
               const noteType = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
               return (
-                <div 
+                <div
                   key={note.id}
                   className={`p-4 rounded-lg border-l-4 bg-${noteType.color}-500/10 border-${noteType.color}-500`}
                   style={{
                     backgroundColor: `rgba(245, 158, 11, 0.1)`,
-                    borderLeftColor: noteType.color === 'amber' ? '#f59e0b' 
-                      : noteType.color === 'blue' ? '#3b82f6'
-                      : noteType.color === 'purple' ? '#8b5cf6'
-                      : noteType.color === 'green' ? '#22c55e'
-                      : '#ef4444'
+                    borderLeftColor:
+                      noteType.color === "amber"
+                        ? "#f59e0b"
+                        : noteType.color === "blue"
+                        ? "#3b82f6"
+                        : noteType.color === "purple"
+                        ? "#8b5cf6"
+                        : noteType.color === "green"
+                        ? "#22c55e"
+                        : "#ef4444",
                   }}
                 >
                   {/* Header note */}
@@ -2873,10 +3154,10 @@ function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* Contenu */}
                   <p className="text-white whitespace-pre-wrap">{note.text}</p>
-                  
+
                   {/* Contexte */}
                   <p className="text-gray-500 text-xs mt-2 italic">
                     Après : "{getReplicaContext(note.after_replica_id)}"
