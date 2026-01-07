@@ -1,20 +1,31 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { getUserRole } from '../lib/supabase';
+import { useAuthStore } from '../store/authStore';
 
 /**
- * Bouton flottant "+" avec menu d'actions
- * Affiché sur toutes les pages principales
+ * Bouton flottant "+" - GAUCHE - BLEU
  */
-function FloatingActionButton({ onAddVideo, onAddAudio }) {
+function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showVideoInfo, setShowVideoInfo] = useState(false);
+  const [userRole, setUserRole] = useState('member');
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuthStore();
 
-  // Ne pas afficher sur certaines pages
-  const hiddenPages = ['/login', '/upload'];
+  useEffect(() => {
+    if (user?.id) {
+      getUserRole(user.id).then(setUserRole);
+    }
+  }, [user]);
+
+  const hiddenPages = ['/login', '/upload', '/recordings'];
   if (hiddenPages.some(p => location.pathname.startsWith(p))) {
     return null;
   }
+
+  const canPostVideoAnywhere = userRole === 'dev' || userRole === 'director';
 
   const actions = [
     {
@@ -28,19 +39,29 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
     },
     {
       icon: '🎙️',
-      label: 'Enregistrer voix',
+      label: 'Voix personnage',
       color: 'bg-red-500',
       onClick: () => {
         if (onAddAudio) {
           onAddAudio();
+        } else if (location.pathname.startsWith('/script/')) {
+          const scriptId = location.pathname.split('/')[2];
+          navigate(`/script/${scriptId}/audio`);
         } else {
-          // Si on est sur un script, ouvrir mode audio
-          if (location.pathname.startsWith('/script/')) {
-            const scriptId = location.pathname.split('/')[2];
-            navigate(`/script/${scriptId}/audio`);
-          } else {
-            alert('Ouvrez d\'abord un texte pour enregistrer des voix');
-          }
+          alert('Ouvrez d\'abord un texte pour enregistrer des voix de personnages');
+        }
+        setIsOpen(false);
+      }
+    },
+    {
+      icon: '🎤',
+      label: 'Enregistrement libre',
+      color: 'bg-orange-500',
+      onClick: () => {
+        if (onRecordFree) {
+          onRecordFree();
+        } else {
+          navigate('/recordings');
         }
         setIsOpen(false);
       }
@@ -52,9 +73,11 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
       onClick: () => {
         if (onAddVideo) {
           onAddVideo();
-        } else {
-          // Rediriger vers partage si pas de callback
+        } else if (canPostVideoAnywhere) {
+          // Dev/director peut aller directement aux partagés
           navigate('/shared');
+        } else {
+          setShowVideoInfo(true);
         }
         setIsOpen(false);
       }
@@ -63,7 +86,6 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
 
   return (
     <>
-      {/* Overlay pour fermer */}
       {isOpen && (
         <div 
           className="fixed inset-0 bg-black/30 z-40"
@@ -71,9 +93,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
         />
       )}
 
-      {/* Menu d'actions */}
-      <div className="fixed bottom-20 right-4 z-50">
-        {/* Actions (visibles quand ouvert) */}
+      <div className="fixed bottom-20 left-4 z-50">
         {isOpen && (
           <div className="mb-3 space-y-2">
             {actions.map((action, index) => (
@@ -93,7 +113,6 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
           </div>
         )}
 
-        {/* Bouton principal */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`w-14 h-14 rounded-full shadow-lg
@@ -101,22 +120,51 @@ function FloatingActionButton({ onAddVideo, onAddAudio }) {
                      transition-all duration-300 transform
                      ${isOpen 
                        ? 'bg-gray-700 text-white rotate-45' 
-                       : 'bg-red-500 text-white hover:bg-red-400 hover:scale-110'}`}
+                       : 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-110'}`}
         >
           ➕
         </button>
       </div>
 
+      {showVideoInfo && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVideoInfo(false)}
+        >
+          <div 
+            className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
+            onClick={e => e.stopPropagation()}
+          >
+            <span className="text-5xl block mb-4">📹</span>
+            <h3 className="text-lg font-bold text-white mb-3">Ajouter une vidéo</h3>
+            <p className="text-gray-400 mb-4">
+              Pour ajouter une vidéo YouTube, allez dans <strong>Partagés</strong> et sélectionnez votre troupe.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowVideoInfo(false)}
+                className="flex-1 py-3 bg-gray-700 text-white rounded-lg"
+              >
+                Compris
+              </button>
+              <button
+                onClick={() => {
+                  setShowVideoInfo(false);
+                  navigate('/shared');
+                }}
+                className="flex-1 py-3 bg-primary-600 text-white rounded-lg"
+              >
+                Aller aux Partagés
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes fade-in-up {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in-up {
           animation: fade-in-up 0.2s ease-out forwards;

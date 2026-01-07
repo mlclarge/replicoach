@@ -1,16 +1,17 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuthStore } from "../store/authStore";
 import {
   fetchPublicDocuments,
   uploadPublicDocument,
   getPublicDocumentUrl,
   deletePublicDocument,
+  fetchUserTroupes,
 } from "../lib/supabase";
 import Loader from "./ui/Loader";
 
 /**
  * Bibliothèque de documents publics
- * Affiche les documents partagés par la communauté
+ * Upload réservé aux membres de troupes - visible par tous
  */
 function PublicLibrary() {
   const { user } = useAuthStore();
@@ -20,10 +21,28 @@ function PublicLibrary() {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [userTroupes, setUserTroupes] = useState([]);
+  const [canUpload, setCanUpload] = useState(false);
 
   useEffect(() => {
     loadDocuments();
-  }, [selectedCategory]);
+    checkUserTroupes();
+  }, [selectedCategory, user]);
+
+  const checkUserTroupes = async () => {
+    if (!user?.id) {
+      setCanUpload(false);
+      return;
+    }
+    try {
+      const troupes = await fetchUserTroupes(user.id);
+      setUserTroupes(troupes || []);
+      setCanUpload(troupes && troupes.length > 0);
+    } catch (err) {
+      console.error("Erreur vérification troupes:", err);
+      setCanUpload(false);
+    }
+  };
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -32,7 +51,6 @@ function PublicLibrary() {
       setDocuments(docs || []);
     } catch (err) {
       console.error("Erreur chargement documents publics:", err);
-      // La table n'existe peut-être pas encore
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -105,7 +123,7 @@ function PublicLibrary() {
             </div>
           ) : documents.length === 0 ? (
             <div className="text-center py-6">
-              <span className="text-4xl mb-2 block">📭</span>
+              <span className="text-4xl mb-2 block">🔭</span>
               <p className="text-gray-500 text-sm">Aucun document pour le moment</p>
               {selectedCategory && (
                 <button
@@ -125,7 +143,6 @@ function PublicLibrary() {
                   userId={user?.id}
                   onView={() => {
                     const url = getPublicDocumentUrl(doc.file_path);
-                    console.log("Opening document:", url);
                     if (url) {
                       window.open(url, '_blank');
                     } else {
@@ -150,15 +167,23 @@ function PublicLibrary() {
           )}
 
           {/* Bouton proposer un document */}
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="mt-4 w-full p-3 border-2 border-dashed border-gray-600 hover:border-primary-500 
-                       rounded-lg text-gray-400 hover:text-primary-400 text-sm transition
-                       flex items-center justify-center gap-2"
-          >
-            <span>📤</span>
-            <span>Proposer un document</span>
-          </button>
+          {canUpload ? (
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="mt-4 w-full p-3 border-2 border-dashed border-gray-600 hover:border-primary-500 
+                         rounded-lg text-gray-400 hover:text-primary-400 text-sm transition
+                         flex items-center justify-center gap-2"
+            >
+              <span>📤</span>
+              <span>Proposer un document</span>
+            </button>
+          ) : (
+            <div className="mt-4 p-3 bg-gray-700/30 rounded-lg text-center">
+              <p className="text-gray-500 text-sm">
+                💡 Rejoignez une troupe pour pouvoir partager des documents
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -179,6 +204,7 @@ function PublicLibrary() {
 
 /**
  * Modal pour uploader un document public
+ * Fix mobile: empêcher la propagation des events
  */
 function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const [file, setFile] = useState(null);
@@ -188,14 +214,18 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleFileChange = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
     const selectedFile = e.target.files?.[0];
     console.log("Fichier sélectionné:", selectedFile);
+    
     if (selectedFile) {
       setFile(selectedFile);
       setError(null);
-      // Auto-remplir le titre avec le nom du fichier si vide
       if (!title) {
         const nameWithoutExt = selectedFile.name.replace(/\.[^/.]+$/, "");
         setTitle(nameWithoutExt);
@@ -203,12 +233,13 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
     console.log("=== Début upload ===");
     console.log("File:", file);
     console.log("Title:", title);
-    console.log("Category:", category);
-    console.log("UserId:", userId);
 
     if (!file) {
       setError("Veuillez sélectionner un fichier");
@@ -227,7 +258,6 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
     setError(null);
 
     try {
-      console.log("Appel uploadPublicDocument...");
       const result = await uploadPublicDocument(file, { title, description, category }, userId);
       console.log("Upload réussi:", result);
       setSuccess(true);
@@ -248,55 +278,68 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div className="bg-dark rounded-xl max-w-md w-full border border-green-500 p-8 text-center">
           <span className="text-6xl block mb-4">✅</span>
-          <h3 className="text-xl font-bold text-green-400 mb-2">Document envoyé !</h3>
-          <p className="text-gray-400">Il sera visible après validation par un modérateur.</p>
+          <h3 className="text-xl font-bold text-green-400 mb-2">Document ajouté !</h3>
+          <p className="text-gray-400">Il est maintenant visible par tous.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700 max-h-[90vh] overflow-y-auto">
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-dark rounded-xl max-w-md w-full border border-gray-700 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-white">📤 Proposer un document</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
         </div>
 
-        <div className="p-4 space-y-4">
-          {/* Zone de fichier - AMÉLIORÉE POUR MOBILE */}
+        <form onSubmit={handleUpload} className="p-4 space-y-4">
+          {/* Zone de fichier - FIX MOBILE */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">Fichier</label>
-            <label className="block">
-              <div className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition
+            <div
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                fileInputRef.current?.click();
+              }}
+              className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition
                 ${file 
                   ? 'border-green-500 bg-green-500/10' 
                   : 'border-gray-600 hover:border-primary-500 bg-gray-800/50'}`}
-              >
-                {file ? (
-                  <div>
-                    <span className="text-3xl block mb-2">✅</span>
-                    <p className="text-green-400 font-medium">{file.name}</p>
-                    <p className="text-gray-500 text-xs mt-1">
-                      {(file.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                    <p className="text-primary-400 text-sm mt-2">Toucher pour changer</p>
-                  </div>
-                ) : (
-                  <div>
-                    <span className="text-3xl block mb-2">📄</span>
-                    <p className="text-gray-300">Toucher pour sélectionner</p>
-                    <p className="text-gray-500 text-xs mt-1">PDF, TXT, Images</p>
-                  </div>
-                )}
-              </div>
-              <input
-                type="file"
-                accept=".pdf,.txt,.png,.jpg,.jpeg"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-            </label>
+            >
+              {file ? (
+                <div>
+                  <span className="text-3xl block mb-2">✅</span>
+                  <p className="text-green-400 font-medium">{file.name}</p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    {(file.size / 1024 / 1024).toFixed(2)} MB
+                  </p>
+                  <p className="text-primary-400 text-sm mt-2">Toucher pour changer</p>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-3xl block mb-2">📄</span>
+                  <p className="text-gray-300">Toucher pour sélectionner</p>
+                  <p className="text-gray-500 text-xs mt-1">PDF, TXT, Images</p>
+                </div>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf,.txt,.png,.jpg,.jpeg"
+              onChange={handleFileChange}
+              className="hidden"
+            />
           </div>
 
           {/* Titre */}
@@ -333,6 +376,7 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
               ].map((cat) => (
                 <button
                   key={cat.id}
+                  type="button"
                   onClick={() => setCategory(cat.id)}
                   className={`flex-1 py-2 rounded-lg text-sm transition ${
                     category === cat.id
@@ -346,30 +390,28 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Note de modération */}
-          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
-            <p className="text-yellow-500 text-xs">
-              ℹ️ Votre document sera visible après validation par un modérateur.
-            </p>
-          </div>
-
           {error && (
             <p className="text-red-400 text-sm">{error}</p>
           )}
-        </div>
 
-        <div className="p-4 border-t border-gray-700 flex gap-3">
-          <button onClick={onClose} className="btn-secondary flex-1" disabled={uploading}>
-            Annuler
-          </button>
-          <button
-            onClick={handleUpload}
-            className="btn-gold flex-1"
-            disabled={!file || !title.trim() || uploading}
-          >
-            {uploading ? "Upload..." : "📤 Envoyer"}
-          </button>
-        </div>
+          <div className="flex gap-3 pt-2">
+            <button 
+              type="button"
+              onClick={onClose} 
+              className="btn-secondary flex-1" 
+              disabled={uploading}
+            >
+              Annuler
+            </button>
+            <button
+              type="submit"
+              className="btn-gold flex-1"
+              disabled={!file || !title.trim() || uploading}
+            >
+              {uploading ? "Upload..." : "📤 Envoyer"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
@@ -384,7 +426,6 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 
                     rounded-lg transition group">
-      {/* Icône et infos - cliquable pour ouvrir */}
       <div 
         className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
         onClick={onView}
@@ -398,13 +439,11 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         </div>
       </div>
       
-      {/* Boutons d'action */}
       <div className="flex items-center gap-2">
         <span className="text-gray-500 text-xs">
           {doc.download_count || 0} 📥
         </span>
         
-        {/* Bouton ouvrir */}
         <button
           onClick={onView}
           className="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-700 
@@ -414,7 +453,6 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           👁️
         </button>
         
-        {/* Bouton supprimer (seulement pour le propriétaire) */}
         {isOwner && (
           <button
             onClick={onDelete}

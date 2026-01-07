@@ -48,7 +48,7 @@ export const uploadPDF = async (file, userId) => {
   return data.path
 }
 
-// Alias pour compatibilité avec Upload.jsx
+// Alias pour compatibilitÃ© avec Upload.jsx
 export const uploadFile = uploadPDF
 
 export const getFileUrl = (path) => {
@@ -69,7 +69,7 @@ export const deleteFile = async (path) => {
 }
 
 // =====================================================
-// DIRECTOR NOTES (Consignes du metteur en scène)
+// DIRECTOR NOTES (Consignes du metteur en scÃ¨ne)
 // =====================================================
 
 export const uploadDirectorNote = async (file, userId) => {
@@ -87,7 +87,7 @@ export const uploadDirectorNote = async (file, userId) => {
     
   if (uploadError) throw uploadError
   
-  // Enregistrer les métadonnées
+  // Enregistrer les mÃ©tadonnÃ©es
   const { data, error } = await supabase
     .from('director_notes')
     .insert([{
@@ -124,7 +124,7 @@ export const deleteDirectorNote = async (noteId, filePath) => {
       .remove([filePath])
   }
   
-  // Supprimer l'entrée de la base
+  // Supprimer l'entrÃ©e de la base
   const { error } = await supabase
     .from('director_notes')
     .delete()
@@ -146,7 +146,7 @@ export const getDirectorNoteUrl = (path) => {
 // TROUPES
 // =====================================================
 
-// Créer une troupe
+// CrÃ©er une troupe
 export const createTroupe = async (name, ownerId) => {
   const { data, error } = await supabase
     .from('troupes')
@@ -158,7 +158,7 @@ export const createTroupe = async (name, ownerId) => {
   return data
 }
 
-// Récupérer les troupes de l'utilisateur
+// RÃ©cupÃ©rer les troupes de l'utilisateur
 export const fetchUserTroupes = async (userId) => {
   const { data, error } = await supabase
     .from('troupe_members')
@@ -195,7 +195,7 @@ export const joinTroupe = async (code, userId) => {
     throw findError
   }
   
-  // Vérifier si déjà membre
+  // VÃ©rifier si dÃ©jÃ  membre
   const { data: existing } = await supabase
     .from('troupe_members')
     .select('id')
@@ -204,7 +204,7 @@ export const joinTroupe = async (code, userId) => {
     .single()
   
   if (existing) {
-    throw new Error('Vous êtes déjà membre de cette troupe')
+    throw new Error('Vous Ãªtes dÃ©jÃ  membre de cette troupe')
   }
   
   // Rejoindre
@@ -240,7 +240,7 @@ export const deleteTroupe = async (troupeId) => {
   if (error) throw error
 }
 
-// Récupérer les membres d'une troupe
+// RÃ©cupÃ©rer les membres d'une troupe
 export const fetchTroupeMembers = async (troupeId) => {
   const { data, error } = await supabase
     .from('troupe_members')
@@ -273,7 +273,7 @@ export const shareScript = async (scriptId, troupeId, userId) => {
   
   if (error) {
     if (error.code === '23505') {
-      throw new Error('Ce texte est déjà partagé avec cette troupe')
+      throw new Error('Ce texte est dÃ©jÃ  partagÃ© avec cette troupe')
     }
     throw error
   }
@@ -291,9 +291,9 @@ export const unshareScript = async (scriptId, troupeId) => {
   if (error) throw error
 }
 
-// Récupérer les scripts partagés avec l'utilisateur
+// RÃ©cupÃ©rer les scripts partagÃ©s avec l'utilisateur
 export const fetchSharedScripts = async (userId) => {
-  // D'abord, récupérer les troupes de l'utilisateur
+  // D'abord, rÃ©cupÃ©rer les troupes de l'utilisateur
   const { data: memberships, error: memberError } = await supabase
     .from('troupe_members')
     .select('troupe_id')
@@ -307,7 +307,7 @@ export const fetchSharedScripts = async (userId) => {
   
   const troupeIds = memberships.map(m => m.troupe_id)
   
-  // Récupérer les scripts partagés avec ces troupes
+  // RÃ©cupÃ©rer les scripts partagÃ©s avec ces troupes
   const { data, error } = await supabase
     .from('shared_scripts')
     .select(`
@@ -330,7 +330,7 @@ export const fetchSharedScripts = async (userId) => {
   
   if (error) throw error
   
-  // Filtrer les scripts qui ne sont pas de l'utilisateur (pas ses propres scripts partagés)
+  // Filtrer les scripts qui ne sont pas de l'utilisateur (pas ses propres scripts partagÃ©s)
   return data?.filter(item => item.scripts?.user_id !== userId) || []
 }
 
@@ -354,13 +354,13 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
     
   if (uploadError) throw uploadError
   
-  // Déterminer le type de fichier
+  // DÃ©terminer le type de fichier
   let fileType = 'other'
   if (file.type === 'application/pdf') fileType = 'pdf'
   else if (file.type.startsWith('image/')) fileType = 'image'
   else if (file.type === 'text/plain') fileType = 'txt'
   
-  // Enregistrer les métadonnées
+  // Enregistrer les mÃ©tadonnÃ©es
   const { data, error } = await supabase
     .from('public_documents')
     .insert([{
@@ -372,7 +372,7 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
       file_type: fileType,
       category: metadata.category || 'script',
       uploaded_by: userId,
-      is_approved: false // En attente de modération
+      is_approved: true // En attente de modÃ©ration
     }])
     .select()
     .single()
@@ -382,7 +382,7 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
   return data
 }
 
-// Récupérer les documents publics approuvés
+// RÃ©cupÃ©rer les documents publics approuvÃ©s
 export const fetchPublicDocuments = async (category = null) => {
   let query = supabase
     .from('public_documents')
@@ -400,7 +400,7 @@ export const fetchPublicDocuments = async (category = null) => {
   return data
 }
 
-// Récupérer l'URL d'un document public
+// RÃ©cupÃ©rer l'URL d'un document public
 export const getPublicDocumentUrl = (path) => {
   if (!path) return null
   const { data } = supabase.storage
@@ -410,7 +410,7 @@ export const getPublicDocumentUrl = (path) => {
   return data.publicUrl
 }
 
-// Supprimer un document public (seulement par son propriétaire)
+// Supprimer un document public (seulement par son propriÃ©taire)
 export const deletePublicDocument = async (documentId, filePath) => {
   // Supprimer le fichier du storage
   if (filePath) {
@@ -423,7 +423,7 @@ export const deletePublicDocument = async (documentId, filePath) => {
     }
   }
   
-  // Supprimer l'entrée dans la table
+  // Supprimer l'entrÃ©e dans la table
   const { error } = await supabase
     .from('public_documents')
     .delete()
@@ -432,7 +432,7 @@ export const deletePublicDocument = async (documentId, filePath) => {
   if (error) throw error
 }
 
-// Incrémenter le compteur de téléchargement
+// IncrÃ©menter le compteur de tÃ©lÃ©chargement
 export const incrementDownloadCount = async (documentId) => {
   const { error } = await supabase.rpc('increment_download_count', {
     doc_id: documentId
@@ -445,10 +445,10 @@ export const incrementDownloadCount = async (documentId) => {
 }
 
 // =====================================================
-// SYSTÈME DE TAGS
+// SYSTÃˆME DE TAGS
 // =====================================================
 
-// Récupérer tous les tags de l'utilisateur
+// RÃ©cupÃ©rer tous les tags de l'utilisateur
 export const fetchUserTags = async (userId) => {
   const { data, error } = await supabase
     .from('user_tags')
@@ -463,7 +463,7 @@ export const fetchUserTags = async (userId) => {
   return data || []
 }
 
-// Créer un nouveau tag
+// CrÃ©er un nouveau tag
 export const createTag = async (userId, name, color = '#6B7280') => {
   const { data, error } = await supabase
     .from('user_tags')
@@ -498,7 +498,7 @@ export const updateTag = async (tagId, updates) => {
   return data
 }
 
-// Récupérer les tags d'un script
+// RÃ©cupÃ©rer les tags d'un script
 export const fetchScriptTags = async (scriptId) => {
   const { data, error } = await supabase
     .from('script_tags')
@@ -520,7 +520,7 @@ export const fetchScriptTags = async (scriptId) => {
   return data?.map(st => st.user_tags) || []
 }
 
-// Ajouter un tag à un script
+// Ajouter un tag Ã  un script
 export const addTagToScript = async (scriptId, tagId) => {
   const { data, error } = await supabase
     .from('script_tags')
@@ -543,7 +543,7 @@ export const removeTagFromScript = async (scriptId, tagId) => {
   if (error) throw error
 }
 
-// Récupérer tous les scripts avec leurs tags
+// RÃ©cupÃ©rer tous les scripts avec leurs tags
 export const fetchScriptsWithTags = async (userId) => {
   const { data: scripts, error: scriptsError } = await supabase
     .from('scripts')
@@ -566,7 +566,7 @@ export const fetchScriptsWithTags = async (userId) => {
     return []
   }
   
-  // Transformer les données pour avoir les tags directement
+  // Transformer les donnÃ©es pour avoir les tags directement
   return scripts?.map(script => ({
     ...script,
     tags: script.script_tags?.map(st => st.user_tags).filter(Boolean) || []
@@ -574,12 +574,12 @@ export const fetchScriptsWithTags = async (userId) => {
 }
 
 // =====================================================
-// COPIE DE SCRIPTS PARTAGÉS
+// COPIE DE SCRIPTS PARTAGÃ‰S
 // =====================================================
 
-// Créer une copie personnelle d'un script partagé
+// CrÃ©er une copie personnelle d'un script partagÃ©
 export const copySharedScript = async (originalScriptId, troupeId, userId) => {
-  // 1. Récupérer le script original avec ses personnages et répliques
+  // 1. RÃ©cupÃ©rer le script original avec ses personnages et rÃ©pliques
   const { data: original, error: fetchError } = await supabase
     .from('scripts')
     .select(`
@@ -592,7 +592,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
 
   if (fetchError) throw fetchError
 
-  // 2. Créer la copie du script
+  // 2. CrÃ©er la copie du script
   const { data: newScript, error: scriptError } = await supabase
     .from('scripts')
     .insert([{
@@ -610,7 +610,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
 
   if (scriptError) throw scriptError
 
-  // 3. Copier les personnages et créer un mapping ancien_id -> nouveau_id
+  // 3. Copier les personnages et crÃ©er un mapping ancien_id -> nouveau_id
   const characterMap = {}
   for (const char of original.characters || []) {
     const { data: newChar, error: charError } = await supabase
@@ -628,7 +628,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     characterMap[char.id] = newChar.id
   }
 
-  // 4. Copier les répliques avec les nouveaux character_id
+  // 4. Copier les rÃ©pliques avec les nouveaux character_id
   const replicasToInsert = (original.replicas || []).map(rep => ({
     script_id: newScript.id,
     character_id: characterMap[rep.character_id],
@@ -650,10 +650,10 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
 }
 
 // =====================================================
-// RÔLES TROUPE (admin/member)
+// RÃ”LES TROUPE (admin/member)
 // =====================================================
 
-// Vérifier si l'utilisateur est admin d'une troupe
+// VÃ©rifier si l'utilisateur est admin d'une troupe
 export const isUserTroupeAdmin = async (troupeId, userId) => {
   const { data, error } = await supabase
     .from('troupe_members')
@@ -666,7 +666,7 @@ export const isUserTroupeAdmin = async (troupeId, userId) => {
   return data?.role === 'admin'
 }
 
-// Promouvoir/rétrograder un membre
+// Promouvoir/rÃ©trograder un membre
 export const updateMemberRole = async (troupeId, userId, newRole) => {
   const { error } = await supabase
     .from('troupe_members')
@@ -678,7 +678,7 @@ export const updateMemberRole = async (troupeId, userId, newRole) => {
 }
 
 // =====================================================
-// CONSIGNES TROUPE (documents partagés)
+// CONSIGNES TROUPE (documents partagÃ©s)
 // =====================================================
 
 // Upload un document de consignes
@@ -694,7 +694,7 @@ export const uploadTroupeDocument = async (file, troupeId, userId, title) => {
 
   if (uploadError) throw uploadError
 
-  // Créer l'entrée en base
+  // CrÃ©er l'entrÃ©e en base
   const { data, error } = await supabase
     .from('troupe_documents')
     .insert([{
@@ -712,7 +712,7 @@ export const uploadTroupeDocument = async (file, troupeId, userId, title) => {
   return data
 }
 
-// Récupérer les documents d'une troupe
+// RÃ©cupÃ©rer les documents d'une troupe
 export const fetchTroupeDocuments = async (troupeId) => {
   const { data, error } = await supabase
     .from('troupe_documents')
@@ -729,7 +729,7 @@ export const deleteTroupeDocument = async (documentId, filePath) => {
   // Supprimer le fichier
   await supabase.storage.from('scripts-pdfs').remove([filePath])
   
-  // Supprimer l'entrée
+  // Supprimer l'entrÃ©e
   const { error } = await supabase
     .from('troupe_documents')
     .delete()
@@ -739,10 +739,10 @@ export const deleteTroupeDocument = async (documentId, filePath) => {
 }
 
 // =====================================================
-// SOUS-ENSEMBLES DE RÉPLIQUES
+// SOUS-ENSEMBLES DE RÃ‰PLIQUES
 // =====================================================
 
-// Créer un groupe de répliques
+// CrÃ©er un groupe de rÃ©pliques
 export const createReplicaGroup = async (scriptId, userId, name, color, tagId = null) => {
   const { data, error } = await supabase
     .from('replica_groups')
@@ -760,7 +760,7 @@ export const createReplicaGroup = async (scriptId, userId, name, color, tagId = 
   return data
 }
 
-// Récupérer les groupes d'un script pour un utilisateur
+// RÃ©cupÃ©rer les groupes d'un script pour un utilisateur
 export const fetchReplicaGroups = async (scriptId, userId) => {
   const { data, error } = await supabase
     .from('replica_groups')
@@ -780,7 +780,7 @@ export const fetchReplicaGroups = async (scriptId, userId) => {
   return data || []
 }
 
-// Ajouter des répliques à un groupe
+// Ajouter des rÃ©pliques Ã  un groupe
 export const addReplicasToGroup = async (groupId, replicaIds) => {
   const items = replicaIds.map((replicaId, index) => ({
     group_id: groupId,
@@ -795,7 +795,7 @@ export const addReplicasToGroup = async (groupId, replicaIds) => {
   if (error) throw error
 }
 
-// Retirer une réplique d'un groupe
+// Retirer une rÃ©plique d'un groupe
 export const removeReplicaFromGroup = async (groupId, replicaId) => {
   const { error } = await supabase
     .from('replica_group_items')
@@ -816,7 +816,7 @@ export const deleteReplicaGroup = async (groupId) => {
   if (error) throw error
 }
 
-// Mettre à jour un groupe
+// Mettre Ã  jour un groupe
 export const updateReplicaGroup = async (groupId, updates) => {
   const { data, error } = await supabase
     .from('replica_groups')
@@ -833,7 +833,7 @@ export const updateReplicaGroup = async (groupId, updates) => {
 // MONITORING (Sessions actives)
 // =====================================================
 
-// Mettre à jour la session de l'utilisateur
+// Mettre Ã  jour la session de l'utilisateur
 export const updateUserSession = async (userId, page = null) => {
   const { error } = await supabase
     .from('active_sessions')
@@ -846,7 +846,7 @@ export const updateUserSession = async (userId, page = null) => {
   if (error) console.error('Session update error:', error)
 }
 
-// Récupérer le nombre d'utilisateurs actifs
+// RÃ©cupÃ©rer le nombre d'utilisateurs actifs
 export const getActiveUsersCount = async () => {
   const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
   
@@ -863,10 +863,10 @@ export const getActiveUsersCount = async () => {
 }
 
 // =====================================================
-// RÔLES UTILISATEURS (dev, director, member)
+// RÃ”LES UTILISATEURS (dev, director, member)
 // =====================================================
 
-// Récupérer le rôle d'un utilisateur
+// RÃ©cupÃ©rer le rÃ´le d'un utilisateur
 export const getUserRole = async (userId) => {
   const { data, error } = await supabase
     .from('user_roles')
@@ -874,11 +874,11 @@ export const getUserRole = async (userId) => {
     .eq('user_id', userId)
     .single()
 
-  if (error) return 'member' // Par défaut
+  if (error) return 'member' // Par dÃ©faut
   return data?.role || 'member'
 }
 
-// Mettre à jour le rôle d'un utilisateur (dev only)
+// Mettre Ã  jour le rÃ´le d'un utilisateur (dev only)
 export const setUserRole = async (userId, role) => {
   const { data, error } = await supabase
     .from('user_roles')
@@ -890,9 +890,9 @@ export const setUserRole = async (userId, role) => {
   return data
 }
 
-// Récupérer tous les utilisateurs avec leurs rôles (admin panel)
+// RÃ©cupÃ©rer tous les utilisateurs avec leurs rÃ´les (admin panel)
 export const getAllUsersWithRoles = async () => {
-  // D'abord récupérer les rôles
+  // D'abord rÃ©cupÃ©rer les rÃ´les
   const { data: roles, error: rolesError } = await supabase
     .from('user_roles')
     .select('*')
@@ -901,13 +901,13 @@ export const getAllUsersWithRoles = async () => {
   return roles || []
 }
 
-// Vérifier si l'utilisateur est dev
+// VÃ©rifier si l'utilisateur est dev
 export const isUserDev = async (userId) => {
   const role = await getUserRole(userId)
   return role === 'dev'
 }
 
-// Vérifier si l'utilisateur est metteur en scène ou dev
+// VÃ©rifier si l'utilisateur est metteur en scÃ¨ne ou dev
 export const isUserDirectorOrDev = async (userId) => {
   const role = await getUserRole(userId)
   return role === 'dev' || role === 'director'
@@ -932,7 +932,7 @@ export const uploadVoiceNote = async (audioBlob, scriptId, userId, afterReplicaI
 
   if (uploadError) throw uploadError
 
-  // Créer l'entrée en base
+  // CrÃ©er l'entrÃ©e en base
   const { data, error } = await supabase
     .from('voice_notes')
     .insert([{
@@ -948,7 +948,7 @@ export const uploadVoiceNote = async (audioBlob, scriptId, userId, afterReplicaI
   return data
 }
 
-// Récupérer les notes vocales d'un script
+// RÃ©cupÃ©rer les notes vocales d'un script
 export const fetchVoiceNotes = async (scriptId, userId) => {
   const { data, error } = await supabase
     .from('voice_notes')
@@ -966,7 +966,7 @@ export const deleteVoiceNote = async (noteId, audioPath) => {
   // Supprimer le fichier
   await supabase.storage.from('audio-recordings').remove([audioPath])
   
-  // Supprimer l'entrée
+  // Supprimer l'entrÃ©e
   const { error } = await supabase
     .from('voice_notes')
     .delete()
@@ -1013,7 +1013,7 @@ export const uploadCharacterRecording = async (audioBlob, characterId, userId) =
     await supabase.storage.from('audio-recordings').remove([existing.audio_path])
   }
 
-  // Upsert l'entrée
+  // Upsert l'entrÃ©e
   const { data, error } = await supabase
     .from('character_recordings')
     .upsert({
@@ -1028,7 +1028,7 @@ export const uploadCharacterRecording = async (audioBlob, characterId, userId) =
   return data
 }
 
-// Récupérer les enregistrements de personnages pour un script
+// RÃ©cupÃ©rer les enregistrements de personnages pour un script
 export const fetchCharacterRecordings = async (characterIds, userId) => {
   const { data, error } = await supabase
     .from('character_recordings')
@@ -1063,10 +1063,10 @@ export const deleteCharacterRecording = async (characterId, userId) => {
 }
 
 // =====================================================
-// VIDÉOS YOUTUBE (Troupe)
+// VIDÃ‰OS YOUTUBE (Troupe)
 // =====================================================
 
-// Ajouter une vidéo YouTube à une troupe
+// Ajouter une vidÃ©o YouTube Ã  une troupe
 export const addTroupeVideo = async (troupeId, userId, title, youtubeUrl, description = '') => {
   const { data, error } = await supabase
     .from('troupe_videos')
@@ -1084,7 +1084,7 @@ export const addTroupeVideo = async (troupeId, userId, title, youtubeUrl, descri
   return data
 }
 
-// Récupérer les vidéos d'une troupe
+// RÃ©cupÃ©rer les vidÃ©os d'une troupe
 export const fetchTroupeVideos = async (troupeId) => {
   const { data, error } = await supabase
     .from('troupe_videos')
@@ -1096,7 +1096,7 @@ export const fetchTroupeVideos = async (troupeId) => {
   return data || []
 }
 
-// Supprimer une vidéo
+// Supprimer une vidÃ©o
 export const deleteTroupeVideo = async (videoId) => {
   const { error } = await supabase
     .from('troupe_videos')
@@ -1112,4 +1112,85 @@ export const extractYoutubeId = (url) => {
   const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
   const match = url.match(regExp)
   return (match && match[2].length === 11) ? match[2] : null
+}
+// =====================================================
+// ENREGISTREMENTS AUDIO PARTAGÉS (Troupe)
+// À AJOUTER À LA FIN DE supabase.js
+// =====================================================
+
+// Upload un enregistrement partagé vers une troupe
+export const uploadSharedRecording = async (audioBlob, name, troupeId, userId, duration) => {
+  const timestamp = Date.now()
+  const fileName = `shared-recordings/${troupeId}/${userId}/${timestamp}.webm`
+
+  // Upload du fichier audio
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('audio-recordings')
+    .upload(fileName, audioBlob, { 
+      cacheControl: '3600', 
+      contentType: 'audio/webm'
+    })
+
+  if (uploadError) throw uploadError
+
+  // Créer l'entrée en base
+  const { data, error } = await supabase
+    .from('shared_recordings')
+    .insert([{
+      troupe_id: troupeId,
+      user_id: userId,
+      name: name,
+      audio_path: uploadData.path,
+      duration: duration
+    }])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Récupérer les enregistrements partagés des troupes
+export const fetchSharedRecordings = async (troupeIds) => {
+  if (!troupeIds || troupeIds.length === 0) return []
+
+  const { data, error } = await supabase
+    .from('shared_recordings')
+    .select(`
+      *,
+      troupes (name)
+    `)
+    .in('troupe_id', troupeIds)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  
+  // Ajouter l'URL audio et le nom de troupe
+  return (data || []).map(rec => ({
+    ...rec,
+    troupe_name: rec.troupes?.name,
+    audio_url: getSharedRecordingUrl(rec.audio_path)
+  }))
+}
+
+// URL d'un enregistrement partagé
+export const getSharedRecordingUrl = (audioPath) => {
+  const { data } = supabase.storage
+    .from('audio-recordings')
+    .getPublicUrl(audioPath)
+  return data.publicUrl
+}
+
+// Supprimer un enregistrement partagé
+export const deleteSharedRecording = async (recordingId, audioPath) => {
+  // Supprimer le fichier
+  await supabase.storage.from('audio-recordings').remove([audioPath])
+  
+  // Supprimer l'entrée
+  const { error } = await supabase
+    .from('shared_recordings')
+    .delete()
+    .eq('id', recordingId)
+
+  if (error) throw error
 }

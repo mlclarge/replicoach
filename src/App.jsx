@@ -11,6 +11,7 @@ import AudioMode from "./pages/AudioMode";
 import Shared from "./pages/Shared";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
+import FreeRecordings from "./pages/FreeRecordings";
 
 // Components
 import ProtectedRoute from "./components/auth/ProtectedRoute";
@@ -52,6 +53,7 @@ function App() {
           <Route path="/script/:id/audio" element={<AudioMode />} />
           <Route path="/shared" element={<Shared />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/recordings" element={<FreeRecordings />} />
         </Route>
 
         {/* 404 */}

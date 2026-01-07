@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import ReplicaGroupsManager from "../components/ReplicaGroups";
+import FloatingRecorder from "../components/FloatingRecorder";
 import {
   DndContext,
   closestCenter,
@@ -74,6 +75,7 @@ function ScriptDetail() {
   // SOUS-ENSEMBLES DE RÉPLIQUES
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null); // { replicaIds: [], name: '' }
+  const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -549,6 +551,14 @@ function ScriptDetail() {
               title="Partager avec ma troupe"
             >
               👥
+            </button>
+            {/* Bouton micro - ORANGE */}
+            <button
+              onClick={() => setShowFloatingRecorder(true)}
+              className="p-3 bg-orange-500 text-white rounded-xl"
+              title="Enregistrer en lisant"
+            >
+              🎤
             </button>
             {/* Bouton supprimer - ROUGE */}
             <button
@@ -1060,6 +1070,16 @@ function ScriptDetail() {
           onSelectGroup={(replicaIds, name) => {
             setStudyingGroup({ replicaIds, name });
           }}
+        />
+      )}
+      {/* Floating recorder */}
+      {showFloatingRecorder && (
+        <FloatingRecorder
+          onSave={(recording) => {
+            console.log('Enregistrement sauvegardé:', recording);
+            setShowFloatingRecorder(false);
+          }}
+          onClose={() => setShowFloatingRecorder(false)}
         />
       )}
     </div>
