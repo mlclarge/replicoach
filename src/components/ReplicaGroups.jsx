@@ -123,8 +123,8 @@ export function ReplicaGroupsManager({
   // Mode sélection des répliques
   if (selectingForGroup) {
     return (
-      <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center">
-        <div className="bg-white w-full max-w-lg max-h-[90vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col">
+      <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white w-full max-w-lg max-h-[85vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
           <div className="p-4 border-b bg-primary-800 text-white">
             <div className="flex justify-between items-center">
               <div>
@@ -199,10 +199,10 @@ export function ReplicaGroupsManager({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-end sm:items-center justify-center">
-      <div className="bg-white w-full max-w-lg max-h-[85vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-black/70 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-lg max-h-[80vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
         {/* Header */}
-        <div className="p-4 border-b bg-primary-800 text-white">
+        <div className="p-4 border-b bg-primary-800 text-white flex-shrink-0">
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-bold">📚 Sous-ensembles</h2>
             <button onClick={onClose} className="text-2xl">✕</button>
@@ -213,7 +213,7 @@ export function ReplicaGroupsManager({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-8">
           {loading ? (
             <div className="text-center py-8 text-gray-500">Chargement...</div>
           ) : (

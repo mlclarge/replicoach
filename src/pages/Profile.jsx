@@ -5,8 +5,9 @@ import { useScriptStore } from "../store/scriptStore";
 import { fetchDirectorNotes } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
+import AdminPanel from "../components/AdminPanel";
 
-// Emails autorisés à voir le monitoring
+// Emails autorisés à voir le monitoring (legacy, maintenant géré par user_roles)
 const ADMIN_EMAILS = [
   'moz2611@gmail.com',
 ];
@@ -135,6 +136,13 @@ function Profile() {
       {ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
         <div className="mb-6">
           <MonitoringPanel />
+        </div>
+      )}
+
+      {/* Admin Panel (dev only) */}
+      {ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
+        <div className="mb-6">
+          <AdminPanel currentUserId={user?.id} />
         </div>
       )}
 

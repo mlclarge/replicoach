@@ -861,3 +861,255 @@ export const getActiveUsersCount = async () => {
   }
   return count || 0
 }
+
+// =====================================================
+// RÔLES UTILISATEURS (dev, director, member)
+// =====================================================
+
+// Récupérer le rôle d'un utilisateur
+export const getUserRole = async (userId) => {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .select('role')
+    .eq('user_id', userId)
+    .single()
+
+  if (error) return 'member' // Par défaut
+  return data?.role || 'member'
+}
+
+// Mettre à jour le rôle d'un utilisateur (dev only)
+export const setUserRole = async (userId, role) => {
+  const { data, error } = await supabase
+    .from('user_roles')
+    .upsert({ user_id: userId, role }, { onConflict: 'user_id' })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Récupérer tous les utilisateurs avec leurs rôles (admin panel)
+export const getAllUsersWithRoles = async () => {
+  // D'abord récupérer les rôles
+  const { data: roles, error: rolesError } = await supabase
+    .from('user_roles')
+    .select('*')
+
+  if (rolesError) throw rolesError
+  return roles || []
+}
+
+// Vérifier si l'utilisateur est dev
+export const isUserDev = async (userId) => {
+  const role = await getUserRole(userId)
+  return role === 'dev'
+}
+
+// Vérifier si l'utilisateur est metteur en scène ou dev
+export const isUserDirectorOrDev = async (userId) => {
+  const role = await getUserRole(userId)
+  return role === 'dev' || role === 'director'
+}
+
+// =====================================================
+// NOTES VOCALES PERSONNELLES
+// =====================================================
+
+// Upload une note vocale
+export const uploadVoiceNote = async (audioBlob, scriptId, userId, afterReplicaId = null) => {
+  const timestamp = Date.now()
+  const fileName = `voice-notes/${userId}/${scriptId}/${timestamp}.webm`
+
+  // Upload du fichier audio
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('audio-recordings')
+    .upload(fileName, audioBlob, { 
+      cacheControl: '3600', 
+      contentType: 'audio/webm'
+    })
+
+  if (uploadError) throw uploadError
+
+  // Créer l'entrée en base
+  const { data, error } = await supabase
+    .from('voice_notes')
+    .insert([{
+      script_id: scriptId,
+      user_id: userId,
+      after_replica_id: afterReplicaId,
+      audio_path: uploadData.path
+    }])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Récupérer les notes vocales d'un script
+export const fetchVoiceNotes = async (scriptId, userId) => {
+  const { data, error } = await supabase
+    .from('voice_notes')
+    .select('*')
+    .eq('script_id', scriptId)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
+// Supprimer une note vocale
+export const deleteVoiceNote = async (noteId, audioPath) => {
+  // Supprimer le fichier
+  await supabase.storage.from('audio-recordings').remove([audioPath])
+  
+  // Supprimer l'entrée
+  const { error } = await supabase
+    .from('voice_notes')
+    .delete()
+    .eq('id', noteId)
+
+  if (error) throw error
+}
+
+// URL d'une note vocale
+export const getVoiceNoteUrl = (audioPath) => {
+  const { data } = supabase.storage
+    .from('audio-recordings')
+    .getPublicUrl(audioPath)
+  return data.publicUrl
+}
+
+// =====================================================
+// ENREGISTREMENTS AUDIO PAR PERSONNAGE
+// =====================================================
+
+// Upload un enregistrement pour un personnage
+export const uploadCharacterRecording = async (audioBlob, characterId, userId) => {
+  const timestamp = Date.now()
+  const fileName = `character-recordings/${userId}/${characterId}/${timestamp}.webm`
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from('audio-recordings')
+    .upload(fileName, audioBlob, { 
+      cacheControl: '3600', 
+      contentType: 'audio/webm'
+    })
+
+  if (uploadError) throw uploadError
+
+  // Supprimer l'ancien enregistrement s'il existe
+  const { data: existing } = await supabase
+    .from('character_recordings')
+    .select('audio_path')
+    .eq('character_id', characterId)
+    .eq('user_id', userId)
+    .single()
+
+  if (existing?.audio_path) {
+    await supabase.storage.from('audio-recordings').remove([existing.audio_path])
+  }
+
+  // Upsert l'entrée
+  const { data, error } = await supabase
+    .from('character_recordings')
+    .upsert({
+      character_id: characterId,
+      user_id: userId,
+      audio_path: uploadData.path
+    }, { onConflict: 'character_id,user_id' })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Récupérer les enregistrements de personnages pour un script
+export const fetchCharacterRecordings = async (characterIds, userId) => {
+  const { data, error } = await supabase
+    .from('character_recordings')
+    .select('*')
+    .in('character_id', characterIds)
+    .eq('user_id', userId)
+
+  if (error) throw error
+  return data || []
+}
+
+// Supprimer un enregistrement de personnage
+export const deleteCharacterRecording = async (characterId, userId) => {
+  const { data: existing } = await supabase
+    .from('character_recordings')
+    .select('audio_path')
+    .eq('character_id', characterId)
+    .eq('user_id', userId)
+    .single()
+
+  if (existing?.audio_path) {
+    await supabase.storage.from('audio-recordings').remove([existing.audio_path])
+  }
+
+  const { error } = await supabase
+    .from('character_recordings')
+    .delete()
+    .eq('character_id', characterId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+// =====================================================
+// VIDÉOS YOUTUBE (Troupe)
+// =====================================================
+
+// Ajouter une vidéo YouTube à une troupe
+export const addTroupeVideo = async (troupeId, userId, title, youtubeUrl, description = '') => {
+  const { data, error } = await supabase
+    .from('troupe_videos')
+    .insert([{
+      troupe_id: troupeId,
+      uploaded_by: userId,
+      title,
+      youtube_url: youtubeUrl,
+      description
+    }])
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+// Récupérer les vidéos d'une troupe
+export const fetchTroupeVideos = async (troupeId) => {
+  const { data, error } = await supabase
+    .from('troupe_videos')
+    .select('*')
+    .eq('troupe_id', troupeId)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return data || []
+}
+
+// Supprimer une vidéo
+export const deleteTroupeVideo = async (videoId) => {
+  const { error } = await supabase
+    .from('troupe_videos')
+    .delete()
+    .eq('id', videoId)
+
+  if (error) throw error
+}
+
+// Extraire l'ID YouTube d'une URL
+export const extractYoutubeId = (url) => {
+  if (!url) return null
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/
+  const match = url.match(regExp)
+  return (match && match[2].length === 11) ? match[2] : null
+}

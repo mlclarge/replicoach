@@ -16,6 +16,7 @@ import {
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import TroupeDocuments from "../components/TroupeDocuments";
+import TroupeVideos from "../components/TroupeVideos";
 
 /**
  * Page des textes partagés et gestion des troupes
@@ -423,18 +424,28 @@ function Shared() {
                                text-sm text-gray-300 transition flex items-center justify-center gap-2"
                   >
                     <span>📋</span>
-                    <span>Consignes du metteur en scène</span>
+                    <span>Consignes & Vidéos</span>
                     <span>{expandedTroupe === troupe.id ? '▲' : '▼'}</span>
                   </button>
                   
-                  {/* Section consignes expandable */}
+                  {/* Section consignes et vidéos expandable */}
                   {expandedTroupe === troupe.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-700">
+                    <div className="mt-4 pt-4 border-t border-gray-700 space-y-6">
+                      {/* Documents */}
                       <TroupeDocuments 
                         troupeId={troupe.id}
                         userId={user.id}
                         troupeName={troupe.name}
                       />
+                      
+                      {/* Vidéos YouTube */}
+                      <div className="pt-4 border-t border-gray-700">
+                        <TroupeVideos 
+                          troupeId={troupe.id}
+                          userId={user.id}
+                          troupeName={troupe.name}
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
