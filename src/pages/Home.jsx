@@ -426,6 +426,9 @@ function Home() {
   const [directorNotes, setDirectorNotes] = useState([]);
   const [uploadingNote, setUploadingNote] = useState(false);
   const [uploadError, setUploadError] = useState(null);
+  const [showTroupeSelector, setShowTroupeSelector] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState(null);
+  const [uploadTroupes, setUploadTroupes] = useState([]);
   
   // État pour le viewer de document
   const [viewingDocument, setViewingDocument] = useState(null);
@@ -458,6 +461,7 @@ function Home() {
     if (user) {
       fetchScripts(user.id);
       loadDirectorNotes();
+      loadUploadTroupes();
       loadNotesCounts();
       loadUserTags();
     }
@@ -516,6 +520,16 @@ function Home() {
       setDirectorNotes(notes || []);
     } catch (error) {
       console.error('Erreur chargement consignes:', error);
+    }
+  };
+
+  const loadUploadTroupes = async () => {
+    if (!user) return;
+    try {
+      const troupes = await fetchUserTroupes(user.id);
+      setUploadTroupes(troupes || []);
+    } catch (err) {
+      console.error("Erreur chargement troupes:", err);
     }
   };
 
@@ -611,6 +625,17 @@ function Home() {
   const handleUploadDirectorNote = async (files) => {
     if (!user) return;
     
+    // Si l'utilisateur a des troupes, demander à laquelle partager
+    if (uploadTroupes.length > 0) {
+      setPendingFiles(Array.from(files));
+      setShowTroupeSelector(true);
+    } else {
+      // Pas de troupe, upload sans partage
+      await doUploadDirectorNotes(Array.from(files), null);
+    }
+  };
+
+  const doUploadDirectorNotes = async (files, troupeId) => {
     setUploadingNote(true);
     setUploadError(null);
 
@@ -621,7 +646,7 @@ function Home() {
           continue;
         }
         
-        const uploaded = await uploadDirectorNote(file, user.id);
+        const uploaded = await uploadDirectorNote(file, user.id, troupeId);
         setDirectorNotes(prev => [uploaded, ...prev]);
       }
     } catch (error) {
@@ -629,6 +654,8 @@ function Home() {
       setUploadError(`Erreur lors de l'upload: ${error.message}`);
     } finally {
       setUploadingNote(false);
+      setPendingFiles(null);
+      setShowTroupeSelector(false);
     }
   };
 
@@ -1023,6 +1050,70 @@ function Home() {
             loadUserTags();
           }}
         />
+      )}
+
+      {/* Modal sélection troupe pour consignes */}
+      {showTroupeSelector && pendingFiles && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">
+            <div className="p-4 border-b border-gray-700">
+              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                📁 Partager avec quelle troupe ?
+              </h3>
+              <p className="text-gray-400 text-sm mt-1">
+                {pendingFiles.length} fichier{pendingFiles.length > 1 ? 's' : ''} à uploader
+              </p>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {uploadTroupes.map((troupe) => (
+                <button
+                  key={troupe.id}
+                  onClick={() => doUploadDirectorNotes(pendingFiles, troupe.id)}
+                  className="w-full p-4 bg-gray-800 hover:bg-yellow-600/30 rounded-xl 
+                             text-left transition flex items-center justify-between
+                             border border-gray-700 hover:border-yellow-500"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-2xl">🎭</span>
+                    <div>
+                      <p className="text-white font-medium">{troupe.name}</p>
+                      <p className="text-gray-500 text-xs">Visible par tous les membres</p>
+                    </div>
+                  </div>
+                  <span className="text-yellow-400 text-xl">→</span>
+                </button>
+              ))}
+              
+              <button
+                onClick={() => doUploadDirectorNotes(pendingFiles, null)}
+                className="w-full p-4 bg-gray-800/50 hover:bg-gray-700 rounded-xl 
+                           text-left transition flex items-center justify-between
+                           border border-gray-700"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">🔒</span>
+                  <div>
+                    <p className="text-gray-400 font-medium">Garder privé</p>
+                    <p className="text-gray-600 text-xs">Visible par moi uniquement</p>
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <div className="p-4 border-t border-gray-700">
+              <button 
+                onClick={() => {
+                  setShowTroupeSelector(false);
+                  setPendingFiles(null);
+                }} 
+                className="btn-secondary w-full"
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
