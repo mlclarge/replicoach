@@ -2,25 +2,62 @@ import { useEffect, useState, useRef, forwardRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
-import { 
-  fetchCharacterRecordings, 
-  uploadCharacterRecording, 
+import {
+  fetchCharacterRecordings,
+  uploadCharacterRecording,
   deleteCharacterRecording,
-  supabase 
+  supabase,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 
 // Prénoms pour détection du genre
 const MALE_NAMES = [
-  "maurice", "jean", "christophe", "pierre", "paul", "jacques", "michel",
-  "philippe", "alain", "bernard", "françois", "patrick", "daniel", "nicolas",
-  "marc", "david", "thomas", "louis", "antoine", "charles", "henri", "robert",
+  "maurice",
+  "jean",
+  "christophe",
+  "pierre",
+  "paul",
+  "jacques",
+  "michel",
+  "philippe",
+  "alain",
+  "bernard",
+  "françois",
+  "patrick",
+  "daniel",
+  "nicolas",
+  "marc",
+  "david",
+  "thomas",
+  "louis",
+  "antoine",
+  "charles",
+  "henri",
+  "robert",
 ];
 
 const FEMALE_NAMES = [
-  "valérie", "fabienne", "audrey", "marie", "anne", "sophie", "christine",
-  "nathalie", "isabelle", "catherine", "sylvie", "martine", "françoise",
-  "claire", "julie", "céline", "amavi", "laura", "emma", "léa", "sarah",
+  "valérie",
+  "fabienne",
+  "audrey",
+  "marie",
+  "anne",
+  "sophie",
+  "christine",
+  "nathalie",
+  "isabelle",
+  "catherine",
+  "sylvie",
+  "martine",
+  "françoise",
+  "claire",
+  "julie",
+  "céline",
+  "amavi",
+  "laura",
+  "emma",
+  "léa",
+  "sarah",
 ];
 
 function detectGender(name) {
@@ -33,18 +70,18 @@ function detectGender(name) {
 
 // Nettoyer le texte pour la lecture audio
 function cleanTextForSpeech(text) {
-  if (!text) return '';
+  if (!text) return "";
   return text
-    .replace(/\([^)]*\)/g, '')
-    .replace(/\[[^\]]*\]/g, '')
-    .replace(/\{[^}]*\}/g, '')
-    .replace(/^[\s]*[-–—]+[\s]*/g, '')
-    .replace(/[\s]*[-–—]+[\s]*$/g, '')
-    .replace(/[\s]+[-–—]+[\s]+/g, ' ')
-    .replace(/[*_#~`•·]/g, '')
-    .replace(/^["«»'']+|["«»'']+$/g, '')
-    .replace(/\.{4,}/g, '...')
-    .replace(/\s+/g, ' ')
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/\{[^}]*\}/g, "")
+    .replace(/^[\s]*[-–—]+[\s]*/g, "")
+    .replace(/[\s]*[-–—]+[\s]*$/g, "")
+    .replace(/[\s]+[-–—]+[\s]+/g, " ")
+    .replace(/[*_#~`•·]/g, "")
+    .replace(/^["«»'']+|["«»'']+$/g, "")
+    .replace(/\.{4,}/g, "...")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -61,7 +98,7 @@ function AudioMode() {
   const [voices, setVoices] = useState({ male: [], female: [], all: [] });
   const [characterVoices, setCharacterVoices] = useState({});
   const [characterGenders, setCharacterGenders] = useState({});
-  
+
   // Voix enregistrées
   const [characterRecordings, setCharacterRecordings] = useState({}); // { charId: { audioPath, audioUrl } }
   const [replicaRecordings, setReplicaRecordings] = useState({}); // { replicaId: { data, name, date } }
@@ -69,21 +106,20 @@ function AudioMode() {
   const [recordingCharacter, setRecordingCharacter] = useState(null); // Personnage en cours d'enregistrement
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
-  
+
   // Lecture
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rate, setRate] = useState(1);
   const [femalePitch, setFemalePitch] = useState(1.8);
   const [malePitch, setMalePitch] = useState(0.5);
-  
+
   // Mode italienne
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
   const [waitingForClick, setWaitingForClick] = useState(false);
-  
+
   // UI
   const [showSettings, setShowSettings] = useState(!isMobile());
-  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
   const [savingRecording, setSavingRecording] = useState(false);
 
@@ -111,7 +147,10 @@ function AudioMode() {
       try {
         setReplicaRecordings(JSON.parse(saved));
       } catch (e) {
-        console.warn('Impossible de parser replicaRecordings depuis localStorage', e);
+        console.warn(
+          "Impossible de parser replicaRecordings depuis localStorage",
+          e
+        );
       }
     }
   }, [id]);
@@ -120,27 +159,32 @@ function AudioMode() {
   useEffect(() => {
     const loadVoices = () => {
       const availableVoices = speechSynthesis.getVoices();
-      const frenchVoices = availableVoices.filter((v) => v.lang.startsWith("fr"));
-      const voicesToUse = frenchVoices.length > 0 ? frenchVoices : availableVoices;
+      const frenchVoices = availableVoices.filter((v) =>
+        v.lang.startsWith("fr")
+      );
+      const voicesToUse =
+        frenchVoices.length > 0 ? frenchVoices : availableVoices;
 
-      const maleVoices = voicesToUse.filter((v) =>
-        v.name.toLowerCase().includes("male") ||
-        v.name.toLowerCase().includes("homme") ||
-        v.name.toLowerCase().includes("paul") ||
-        v.name.toLowerCase().includes("thomas") ||
-        (!v.name.toLowerCase().includes("female") &&
-          !v.name.toLowerCase().includes("femme") &&
-          !v.name.toLowerCase().includes("julie") &&
-          !v.name.toLowerCase().includes("marie"))
+      const maleVoices = voicesToUse.filter(
+        (v) =>
+          v.name.toLowerCase().includes("male") ||
+          v.name.toLowerCase().includes("homme") ||
+          v.name.toLowerCase().includes("paul") ||
+          v.name.toLowerCase().includes("thomas") ||
+          (!v.name.toLowerCase().includes("female") &&
+            !v.name.toLowerCase().includes("femme") &&
+            !v.name.toLowerCase().includes("julie") &&
+            !v.name.toLowerCase().includes("marie"))
       );
 
-      const femaleVoices = voicesToUse.filter((v) =>
-        v.name.toLowerCase().includes("female") ||
-        v.name.toLowerCase().includes("femme") ||
-        v.name.toLowerCase().includes("julie") ||
-        v.name.toLowerCase().includes("marie") ||
-        v.name.toLowerCase().includes("hortense") ||
-        v.name.toLowerCase().includes("amélie")
+      const femaleVoices = voicesToUse.filter(
+        (v) =>
+          v.name.toLowerCase().includes("female") ||
+          v.name.toLowerCase().includes("femme") ||
+          v.name.toLowerCase().includes("julie") ||
+          v.name.toLowerCase().includes("marie") ||
+          v.name.toLowerCase().includes("hortense") ||
+          v.name.toLowerCase().includes("amélie")
       );
 
       setVoices({
@@ -168,31 +212,31 @@ function AudioMode() {
 
   const loadRecordings = async () => {
     if (!currentScript?.characters || !user) return;
-    
+
     try {
-      const charIds = currentScript.characters.map(c => c.id);
+      const charIds = currentScript.characters.map((c) => c.id);
       const recordings = await fetchCharacterRecordings(charIds, user.id);
-      
+
       const recordingsMap = {};
       const modeMap = {};
-      
+
       for (const rec of recordings) {
         // Générer l'URL signée pour l'audio
         const { data } = await supabase.storage
-          .from('audio-recordings')
+          .from("audio-recordings")
           .createSignedUrl(rec.audio_path, 3600); // 1h
-        
+
         recordingsMap[rec.character_id] = {
           audioPath: rec.audio_path,
-          audioUrl: data?.signedUrl
+          audioUrl: data?.signedUrl,
         };
-        modeMap[rec.character_id] = 'recorded'; // Par défaut utiliser l'enregistrement si dispo
+        modeMap[rec.character_id] = "recorded"; // Par défaut utiliser l'enregistrement si dispo
       }
-      
+
       setCharacterRecordings(recordingsMap);
-      setVoiceMode(prev => ({ ...prev, ...modeMap }));
+      setVoiceMode((prev) => ({ ...prev, ...modeMap }));
     } catch (err) {
-      console.error('Error loading recordings:', err);
+      console.error("Error loading recordings:", err);
     }
   };
 
@@ -201,17 +245,17 @@ function AudioMode() {
     if (currentScript?.characters && voices.all?.length > 0) {
       const autoVoices = {};
       const autoModes = {};
-      
+
       currentScript.characters.forEach((char) => {
         autoVoices[char.id] = voices.all[0]?.name;
         // Si pas d'enregistrement, utiliser synth par défaut
         if (!voiceMode[char.id]) {
-          autoModes[char.id] = 'synth';
+          autoModes[char.id] = "synth";
         }
       });
-      
+
       setCharacterVoices(autoVoices);
-      setVoiceMode(prev => ({ ...autoModes, ...prev }));
+      setVoiceMode((prev) => ({ ...autoModes, ...prev }));
     }
   }, [currentScript, voices]);
 
@@ -219,54 +263,54 @@ function AudioMode() {
   useEffect(() => {
     if (currentReplicaRef.current && isPlaying) {
       currentReplicaRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
+        behavior: "smooth",
+        block: "center",
       });
     }
   }, [currentIndex, isPlaying]);
 
   // ==================== ENREGISTREMENT ====================
-  
+
   const startRecording = async (charId) => {
     try {
       chunksRef.current = [];
       setRecordingCharacter(charId);
       setRecordingDuration(0);
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
+        mimeType: "audio/webm;codecs=opus",
       });
-      
+
       mediaRecorderRef.current = mediaRecorder;
-      
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
           chunksRef.current.push(e.data);
         }
       };
-      
+
       mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
-      
+
       mediaRecorder.start();
       setIsRecording(true);
-      
+
       timerRef.current = setInterval(() => {
-        setRecordingDuration(d => {
-          if (d >= 30) { // Max 30 secondes
+        setRecordingDuration((d) => {
+          if (d >= 30) {
+            // Max 30 secondes
             stopRecording();
             return d;
           }
           return d + 1;
         });
       }, 1000);
-      
     } catch (err) {
-      console.error('Error starting recording:', err);
-      alert('Impossible d\'accéder au microphone. Vérifiez les permissions.');
+      console.error("Error starting recording:", err);
+      alert("Impossible d'accéder au microphone. Vérifiez les permissions.");
       setRecordingCharacter(null);
     }
   };
@@ -284,25 +328,24 @@ function AudioMode() {
 
   const saveRecording = async () => {
     if (chunksRef.current.length === 0 || !recordingCharacter || !user) return;
-    
+
     setSavingRecording(true);
-    
+
     try {
-      const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+      const blob = new Blob(chunksRef.current, { type: "audio/webm" });
       await uploadCharacterRecording(blob, recordingCharacter, user.id);
-      
+
       // Recharger les enregistrements
       await loadRecordings();
-      
+
       setRecordingCharacter(null);
       setShowVoiceRecorder(false);
       chunksRef.current = [];
-      
     } catch (err) {
-      console.error('Error saving recording:', err);
-      alert('Erreur lors de la sauvegarde: ' + err.message);
+      console.error("Error saving recording:", err);
+      alert("Erreur lors de la sauvegarde: " + err.message);
     }
-    
+
     setSavingRecording(false);
   };
 
@@ -322,33 +365,38 @@ function AudioMode() {
       chunksRef.current = [];
       setRecordingReplicaId(replicaId);
       setRecordingDuration(0);
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+        mimeType: MediaRecorder.isTypeSupported("audio/webm")
+          ? "audio/webm"
+          : "audio/mp4",
       });
-      
+
       mediaRecorderRef.current = mediaRecorder;
-      
+
       mediaRecorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      
+
       mediaRecorder.onstop = () => {
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
-      
+
       mediaRecorder.start();
       setIsRecording(true);
-      
+
       timerRef.current = setInterval(() => {
-        setRecordingDuration(d => {
-          if (d >= 60) { stopReplicaRecording(); return d; }
+        setRecordingDuration((d) => {
+          if (d >= 60) {
+            stopReplicaRecording();
+            return d;
+          }
           return d + 1;
         });
       }, 1000);
     } catch (err) {
-      alert('Impossible d\'accéder au microphone');
+      alert("Impossible d'accéder au microphone");
       setRecordingReplicaId(null);
     }
   };
@@ -365,30 +413,30 @@ function AudioMode() {
 
   const saveReplicaRecording = async (replicaId, characterName) => {
     if (chunksRef.current.length === 0) return;
-    
-    const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+
+    const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     const reader = new FileReader();
-    
+
     reader.onloadend = () => {
       const newRecording = {
         data: reader.result,
         name: `${characterName} - Réplique`,
         date: new Date().toISOString(),
-        duration: recordingDuration
+        duration: recordingDuration,
       };
-      
+
       const updated = {
         ...replicaRecordings,
-        [replicaId]: newRecording
+        [replicaId]: newRecording,
       };
-      
+
       setReplicaRecordings(updated);
       localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
-      
+
       setRecordingReplicaId(null);
       chunksRef.current = [];
     };
-    
+
     reader.readAsDataURL(blob);
   };
 
@@ -408,21 +456,20 @@ function AudioMode() {
   };
 
   const deleteRecording = async (charId) => {
-    if (!confirm('Supprimer cet enregistrement ?')) return;
-    
+    if (!confirm("Supprimer cet enregistrement ?")) return;
+
     try {
       await deleteCharacterRecording(charId, user.id);
-      
-      setCharacterRecordings(prev => {
+
+      setCharacterRecordings((prev) => {
         const newRec = { ...prev };
         delete newRec[charId];
         return newRec;
       });
-      
-      setVoiceMode(prev => ({ ...prev, [charId]: 'synth' }));
-      
+
+      setVoiceMode((prev) => ({ ...prev, [charId]: "synth" }));
     } catch (err) {
-      console.error('Error deleting recording:', err);
+      console.error("Error deleting recording:", err);
     }
   };
 
@@ -432,24 +479,29 @@ function AudioMode() {
   const speakSynth = (text, characterId) => {
     return new Promise((resolve) => {
       const cleanedText = cleanTextForSpeech(text);
-      
+
       if (!cleanedText) {
         resolve();
         return;
       }
 
       const utterance = new SpeechSynthesisUtterance(cleanedText);
-      
-      const character = currentScript?.characters?.find(c => c.id === characterId);
-      const gender = characterGenders[characterId] || character?.gender || detectGender(character?.name || '');
-      
+
+      const character = currentScript?.characters?.find(
+        (c) => c.id === characterId
+      );
+      const gender =
+        characterGenders[characterId] ||
+        character?.gender ||
+        detectGender(character?.name || "");
+
       const voiceName = characterVoices[characterId];
       const selectedVoice = voices.all?.find((v) => v.name === voiceName);
       if (selectedVoice) utterance.voice = selectedVoice;
-      
+
       utterance.lang = "fr-FR";
 
-      if (gender === 'female') {
+      if (gender === "female") {
         utterance.pitch = femalePitch;
         utterance.rate = rate * 1.05;
       } else {
@@ -468,7 +520,7 @@ function AudioMode() {
   const speakRecorded = (characterId) => {
     return new Promise((resolve) => {
       const recording = characterRecordings[characterId];
-      
+
       if (!recording?.audioUrl) {
         resolve();
         return;
@@ -477,19 +529,19 @@ function AudioMode() {
       const audio = new Audio(recording.audioUrl);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
-      
+
       audio.onended = resolve;
       audio.onerror = resolve;
-      
+
       audio.play().catch(resolve);
     });
   };
 
   // Fonction speak unifiée
   const speak = (text, characterId) => {
-    const mode = voiceMode[characterId] || 'synth';
-    
-    if (mode === 'recorded' && characterRecordings[characterId]?.audioUrl) {
+    const mode = voiceMode[characterId] || "synth";
+
+    if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
       return speakRecorded(characterId);
     } else {
       return speakSynth(text, characterId);
@@ -499,19 +551,20 @@ function AudioMode() {
   // Test voix synthétique
   const testVoice = (gender) => {
     speechSynthesis.cancel();
-    const testText = gender === 'female' 
-      ? "Bonjour, je suis une voix féminine."
-      : "Bonjour, je suis une voix masculine.";
-    
+    const testText =
+      gender === "female"
+        ? "Bonjour, je suis une voix féminine."
+        : "Bonjour, je suis une voix masculine.";
+
     const utterance = new SpeechSynthesisUtterance(testText);
     utterance.lang = "fr-FR";
-    utterance.pitch = gender === 'female' ? femalePitch : malePitch;
+    utterance.pitch = gender === "female" ? femalePitch : malePitch;
     utterance.rate = rate;
-    
+
     if (voices.all?.length > 0) {
       utterance.voice = voices.all[0];
     }
-    
+
     speechSynthesis.speak(utterance);
   };
 
@@ -519,7 +572,7 @@ function AudioMode() {
   const testRecording = (charId) => {
     const recording = characterRecordings[charId];
     if (!recording?.audioUrl) return;
-    
+
     const audio = new Audio(recording.audioUrl);
     audio.play();
   };
@@ -544,13 +597,13 @@ function AudioMode() {
       if (hiddenCharacters.has(replica.character_id)) {
         setWaitingForClick(true);
         waitingRef.current = true;
-        
+
         while (waitingRef.current && playingRef.current) {
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise((r) => setTimeout(r, 100));
         }
-        
+
         setWaitingForClick(false);
-        
+
         if (!playingRef.current) break;
         continue;
       }
@@ -566,18 +619,18 @@ function AudioMode() {
   // Lecture d'une seule bulle
   const playSingleBubble = async (index) => {
     if (!currentScript?.replicas) return;
-    
+
     stop();
-    await new Promise(r => setTimeout(r, 50));
-    
+    await new Promise((r) => setTimeout(r, 50));
+
     const replica = currentScript.replicas[index];
-    
+
     setPlayingSingleBubble(index);
     setCurrentIndex(index);
     singleBubbleRef.current = true;
-    
+
     await speak(replica.text, replica.character_id);
-    
+
     setPlayingSingleBubble(null);
     singleBubbleRef.current = false;
   };
@@ -608,7 +661,7 @@ function AudioMode() {
 
   const onBubbleClick = (index) => {
     const replica = currentScript?.replicas[index];
-    
+
     if (waitingForClick && hiddenCharacters.has(replica?.character_id)) {
       waitingRef.current = false;
     }
@@ -626,7 +679,10 @@ function AudioMode() {
 
   const goToNext = () => {
     if (!currentScript?.replicas) return;
-    const newIndex = Math.min(currentScript.replicas.length - 1, currentIndex + 1);
+    const newIndex = Math.min(
+      currentScript.replicas.length - 1,
+      currentIndex + 1
+    );
     setCurrentIndex(newIndex);
     if (isPlaying) {
       stop();
@@ -635,7 +691,7 @@ function AudioMode() {
   };
 
   const toggleHideCharacter = (charId) => {
-    setHiddenCharacters(prev => {
+    setHiddenCharacters((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(charId)) {
         newSet.delete(charId);
@@ -647,14 +703,14 @@ function AudioMode() {
   };
 
   const toggleCharacterGender = (charId, currentGender) => {
-    const newGender = currentGender === 'female' ? 'male' : 'female';
+    const newGender = currentGender === "female" ? "male" : "female";
     setCharacterGenders((prev) => ({ ...prev, [charId]: newGender }));
   };
 
   const toggleVoiceMode = (charId) => {
-    setVoiceMode(prev => ({
+    setVoiceMode((prev) => ({
       ...prev,
-      [charId]: prev[charId] === 'recorded' ? 'synth' : 'recorded'
+      [charId]: prev[charId] === "recorded" ? "synth" : "recorded",
     }));
   };
 
@@ -667,7 +723,8 @@ function AudioMode() {
   }
 
   const { title, characters = [], replicas = [] } = currentScript;
-  const progress = replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
+  const progress =
+    replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
 
   const characterPositions = {};
   characters.forEach((char, index) => {
@@ -677,7 +734,7 @@ function AudioMode() {
   const formatDuration = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -685,30 +742,33 @@ function AudioMode() {
       {/* Header */}
       <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 shadow-lg sticky top-0 z-30">
         <div className="flex items-center justify-between">
+          {/* Bouton retour VISIBLE */}
           <div className="flex items-center gap-3">
-            <Link to={`/script/${id}`} className="text-white hover:text-gold-400 text-xl">
-              ←
-            </Link>
+            <button
+              onClick={() => window.history.back()}
+              className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-900 
+                         text-white rounded-lg transition font-medium border border-gray-700"
+            >
+              <span className="text-xl">←</span>
+              <span className="text-sm">Retour au texte</span>
+            </button>
+
             <div>
-              <h1 className="text-lg font-display text-gold-400">🔊 Mode Audio</h1>
+              <h2 className="text-gold-400 text-lg font-semibold flex items-center gap-2">
+                🔊 Mode Audio
+              </h2>
               <p className="text-gray-300 text-xs">{title}</p>
             </div>
           </div>
-          
+
           <div className="flex gap-2">
-            <button
-              onClick={() => setShowVoiceRecorder(!showVoiceRecorder)}
-              className={`p-2 rounded-lg transition ${
-                showVoiceRecorder ? 'bg-red-500 text-white' : 'bg-white/20 text-white'
-              }`}
-              title="Enregistrer voix"
-            >
-              🎙️
-            </button>
+            {/* bouton enregistrement supprimé */}
             <button
               onClick={() => setShowSettings(!showSettings)}
               className={`p-2 rounded-lg transition ${
-                showSettings ? 'bg-gold-500 text-dark' : 'bg-white/20 text-white'
+                showSettings
+                  ? "bg-gold-500 text-dark"
+                  : "bg-white/20 text-white"
               }`}
             >
               ⚙️
@@ -718,7 +778,7 @@ function AudioMode() {
 
         {/* Barre de progression */}
         <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-          <div 
+          <div
             className="h-full bg-gold-500 transition-all duration-300"
             style={{ width: `${progress}%` }}
           />
@@ -728,132 +788,13 @@ function AudioMode() {
         </p>
       </div>
 
-      {/* ====== ENREGISTREMENT VOIX PAR PERSONNAGE ====== */}
-      {showVoiceRecorder && (
-        <div className="bg-red-900/20 border-b border-red-500/30 p-4">
-          <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
-            🎙️ Enregistrer une voix par personnage
-          </h3>
-          <p className="text-xs text-red-200 mb-3">
-            Enregistrez votre voix pour remplacer la synthèse vocale
-          </p>
-          
-          <div className="space-y-2">
-            {characters.map((char) => {
-              const hasRecording = !!characterRecordings[char.id];
-              const isRecordingThis = recordingCharacter === char.id;
-              const currentMode = voiceMode[char.id] || 'synth';
-              
-              return (
-                <div 
-                  key={char.id}
-                  className="p-3 bg-gray-800 rounded-lg"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span 
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: char.color }}
-                      />
-                      <span className="text-white font-medium">{char.name}</span>
-                      
-                      {hasRecording && (
-                        <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">
-                          ✓ Enregistré
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      {/* Toggle mode */}
-                      {hasRecording && (
-                        <button
-                          onClick={() => toggleVoiceMode(char.id)}
-                          className={`px-2 py-1 rounded text-xs font-semibold transition ${
-                            currentMode === 'recorded' 
-                              ? 'bg-green-500 text-white' 
-                              : 'bg-gray-600 text-gray-300'
-                          }`}
-                        >
-                          {currentMode === 'recorded' ? '🎙️ Enreg.' : '🔊 Synth'}
-                        </button>
-                      )}
-                      
-                      {/* Boutons actions */}
-                      {hasRecording ? (
-                        <>
-                          <button
-                            onClick={() => testRecording(char.id)}
-                            className="p-1.5 bg-blue-500 text-white rounded text-sm"
-                            title="Écouter"
-                          >
-                            ▶️
-                          </button>
-                          <button
-                            onClick={() => deleteRecording(char.id)}
-                            className="p-1.5 bg-red-500 text-white rounded text-sm"
-                            title="Supprimer"
-                          >
-                            🗑️
-                          </button>
-                        </>
-                      ) : isRecordingThis ? (
-                        <div className="flex items-center gap-2">
-                          <span className="text-red-400 text-sm animate-pulse">
-                            ● {formatDuration(recordingDuration)}
-                          </span>
-                          {isRecording ? (
-                            <button
-                              onClick={stopRecording}
-                              className="px-3 py-1 bg-red-500 text-white rounded text-sm"
-                            >
-                              ⏹️ Stop
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={cancelRecording}
-                                className="px-2 py-1 bg-gray-600 text-white rounded text-sm"
-                              >
-                                ✕
-                              </button>
-                              <button
-                                onClick={saveRecording}
-                                disabled={savingRecording}
-                                className="px-3 py-1 bg-green-500 text-white rounded text-sm disabled:opacity-50"
-                              >
-                                {savingRecording ? '⏳' : '✓ Sauver'}
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => startRecording(char.id)}
-                          className="px-3 py-1 bg-red-500 text-white rounded text-sm"
-                        >
-                          🎙️ Enregistrer
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          
-          <p className="text-xs text-gray-400 mt-3">
-            💡 L'enregistrement représente LA VOIX du personnage (pas une réplique spécifique).
-            Chaque réplique sera lue avec cet enregistrement audio.
-          </p>
-        </div>
-      )}
-
       {/* ====== PARAMÈTRES VOIX SYNTHÉTIQUE ====== */}
       {showSettings && (
         <div className="bg-white border-b border-gray-200 p-4 shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3">🔊 Réglages voix synthétique</h3>
-          
+          <h3 className="font-semibold text-gray-800 mb-3">
+            🔊 Réglages voix synthétique
+          </h3>
+
           <div className="space-y-4">
             {/* Vitesse */}
             <div>
@@ -876,7 +817,9 @@ function AudioMode() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-gray-600 text-sm">Pitch ♀ (aigu)</span>
-                <span className="text-pink-600 font-semibold">{femalePitch.toFixed(1)}</span>
+                <span className="text-pink-600 font-semibold">
+                  {femalePitch.toFixed(1)}
+                </span>
               </div>
               <input
                 type="range"
@@ -893,7 +836,9 @@ function AudioMode() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <span className="text-gray-600 text-sm">Pitch ♂ (grave)</span>
-                <span className="text-blue-600 font-semibold">{malePitch.toFixed(1)}</span>
+                <span className="text-blue-600 font-semibold">
+                  {malePitch.toFixed(1)}
+                </span>
               </div>
               <input
                 type="range"
@@ -909,13 +854,13 @@ function AudioMode() {
             {/* Test voix */}
             <div className="flex gap-2">
               <button
-                onClick={() => testVoice('female')}
+                onClick={() => testVoice("female")}
                 className="flex-1 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-semibold"
               >
                 🔊 Test ♀
               </button>
               <button
-                onClick={() => testVoice('male')}
+                onClick={() => testVoice("male")}
                 className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold"
               >
                 🔊 Test ♂
@@ -924,21 +869,27 @@ function AudioMode() {
 
             {/* Genre par personnage */}
             <div className="pt-3 border-t border-gray-200">
-              <p className="text-sm text-gray-600 mb-2 font-semibold">Genre des personnages :</p>
+              <p className="text-sm text-gray-600 mb-2 font-semibold">
+                Genre des personnages :
+              </p>
               <div className="flex flex-wrap gap-2">
                 {characters.map((char) => {
-                  const gender = characterGenders[char.id] || char.gender || detectGender(char.name);
+                  const gender =
+                    characterGenders[char.id] ||
+                    char.gender ||
+                    detectGender(char.name);
                   return (
                     <button
                       key={char.id}
                       onClick={() => toggleCharacterGender(char.id, gender)}
                       className={`px-3 py-1 rounded-full text-xs font-bold transition ${
-                        gender === 'female' 
-                          ? 'bg-pink-100 text-pink-600 border-2 border-pink-300' 
-                          : 'bg-blue-100 text-blue-600 border-2 border-blue-300'
+                        gender === "female"
+                          ? "bg-pink-100 text-pink-600 border-2 border-pink-300"
+                          : "bg-blue-100 text-blue-600 border-2 border-blue-300"
                       }`}
                     >
-                      {char.name.substring(0, 10)} {gender === 'female' ? '♀' : '♂'}
+                      {char.name.substring(0, 10)}{" "}
+                      {gender === "female" ? "♀" : "♂"}
                     </button>
                   );
                 })}
@@ -948,11 +899,13 @@ function AudioMode() {
             {/* Choix de voix par personnage (DESKTOP) */}
             {!isMobile() && voices.all?.length > 1 && (
               <div className="pt-3 border-t border-gray-200">
-                <p className="text-sm text-gray-600 mb-2 font-semibold">Voix par personnage :</p>
+                <p className="text-sm text-gray-600 mb-2 font-semibold">
+                  Voix par personnage :
+                </p>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {characters.map((char) => (
                     <div key={char.id} className="flex items-center gap-2">
-                      <span 
+                      <span
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: char.color }}
                       />
@@ -960,13 +913,20 @@ function AudioMode() {
                         {char.name}
                       </span>
                       <select
-                        value={characterVoices[char.id] || ''}
-                        onChange={(e) => setCharacterVoices(prev => ({ ...prev, [char.id]: e.target.value }))}
+                        value={characterVoices[char.id] || ""}
+                        onChange={(e) =>
+                          setCharacterVoices((prev) => ({
+                            ...prev,
+                            [char.id]: e.target.value,
+                          }))
+                        }
                         className="flex-1 p-1 border rounded text-xs bg-white"
                       >
                         {voices.all?.map((voice) => (
                           <option key={voice.name} value={voice.name}>
-                            {voice.name.replace(/Microsoft|Google/gi, '').trim()}
+                            {voice.name
+                              .replace(/Microsoft|Google/gi, "")
+                              .trim()}
                           </option>
                         ))}
                       </select>
@@ -988,20 +948,22 @@ function AudioMode() {
           {characters.map((char) => {
             const isHidden = hiddenCharacters.has(char.id);
             const hasRecording = !!characterRecordings[char.id];
-            const currentMode = voiceMode[char.id] || 'synth';
-            
+            const currentMode = voiceMode[char.id] || "synth";
+
             return (
               <button
                 key={char.id}
                 onClick={() => toggleHideCharacter(char.id)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition shadow
-                  ${isHidden 
-                    ? 'bg-gray-400 text-white ring-2 ring-red-500' 
-                    : 'text-white'}`}
+                  ${
+                    isHidden
+                      ? "bg-gray-400 text-white ring-2 ring-red-500"
+                      : "text-white"
+                  }`}
                 style={!isHidden ? { backgroundColor: char.color } : {}}
               >
-                {isHidden ? '🙈' : '👁️'} {char.name}
-                {hasRecording && currentMode === 'recorded' && (
+                {isHidden ? "🙈" : "👁️"} {char.name}
+                {hasRecording && currentMode === "recorded" && (
                   <span className="text-xs">🎙️</span>
                 )}
               </button>
@@ -1010,7 +972,8 @@ function AudioMode() {
         </div>
         {hiddenCharacters.size > 0 && (
           <p className="text-xs text-amber-700 mt-2">
-            ℹ️ Vos répliques seront masquées. Cliquez dessus quand c'est votre tour !
+            ℹ️ Vos répliques seront masquées. Cliquez dessus quand c'est votre
+            tour !
           </p>
         )}
       </div>
@@ -1026,14 +989,16 @@ function AudioMode() {
       {/* Liste des répliques */}
       <div className="p-4 space-y-3">
         {replicas.map((replica, index) => {
-          const character = characters.find((c) => c.id === replica.character_id);
+          const character = characters.find(
+            (c) => c.id === replica.character_id
+          );
           const isRight = characterPositions[replica.character_id] === 1;
           const isCurrent = index === currentIndex;
           const isHidden = hiddenCharacters.has(replica.character_id);
           const isWaitingOnThis = waitingForClick && isCurrent && isHidden;
           const isBubblePlaying = playingSingleBubble === index;
           const hasRecording = !!characterRecordings[replica.character_id];
-          const currentMode = voiceMode[replica.character_id] || 'synth';
+          const currentMode = voiceMode[replica.character_id] || "synth";
 
           return (
             <AudioBubble
@@ -1044,11 +1009,13 @@ function AudioMode() {
               isRight={isRight}
               number={index + 1}
               isCurrent={isCurrent}
-              isPlaying={(isPlaying && isCurrent && !isHidden) || isBubblePlaying}
+              isPlaying={
+                (isPlaying && isCurrent && !isHidden) || isBubblePlaying
+              }
               isHidden={isHidden}
               isWaiting={isWaitingOnThis}
               isBubblePlaying={isBubblePlaying}
-              hasRecording={hasRecording && currentMode === 'recorded'}
+              hasRecording={hasRecording && currentMode === "recorded"}
               onBubbleClick={() => onBubbleClick(index)}
               onPlay={() => playSingleBubble(index)}
               onStop={stopSingleBubble}
@@ -1069,15 +1036,24 @@ function AudioMode() {
       <div className="fixed bottom-16 left-0 right-0 z-50 bg-gray-900 border-t-2 border-gold-500 shadow-2xl">
         <div className="px-4 py-2 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center gap-3">
-            <div className={`text-2xl ${isPlaying && !waitingForClick ? 'animate-pulse' : ''}`}>
-              {waitingForClick ? '🎭' : isPlaying ? '🔊' : '⏸️'}
+            <div
+              className={`text-2xl ${
+                isPlaying && !waitingForClick ? "animate-pulse" : ""
+              }`}
+            >
+              {waitingForClick ? "🎭" : isPlaying ? "🔊" : "⏸️"}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-sm font-medium truncate">
-                {characters.find(c => c.id === replicas[currentIndex]?.character_id)?.name || '-'}
+                {characters.find(
+                  (c) => c.id === replicas[currentIndex]?.character_id
+                )?.name || "-"}
               </p>
               <p className="text-gray-400 text-xs truncate">
-                {waitingForClick ? 'À vous de jouer !' : (replicas[currentIndex]?.text?.substring(0, 40) || '') + '...'}
+                {waitingForClick
+                  ? "À vous de jouer !"
+                  : (replicas[currentIndex]?.text?.substring(0, 40) || "") +
+                    "..."}
               </p>
             </div>
             <span className="text-gold-500 text-sm font-bold">
@@ -1108,14 +1084,16 @@ function AudioMode() {
             </button>
 
             <button
-              onClick={() => isPlaying ? stop() : playAll(currentIndex)}
+              onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
               className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center 
                          text-2xl sm:text-3xl shadow-lg transition active:scale-95
-                ${isPlaying 
-                  ? 'bg-orange-500 hover:bg-orange-400 text-white' 
-                  : 'bg-gold-500 hover:bg-gold-400 text-dark'}`}
+                ${
+                  isPlaying
+                    ? "bg-orange-500 hover:bg-orange-400 text-white"
+                    : "bg-gold-500 hover:bg-gold-400 text-dark"
+                }`}
             >
-              {isPlaying ? '⏸️' : '▶️'}
+              {isPlaying ? "⏸️" : "▶️"}
             </button>
 
             <button
@@ -1129,7 +1107,11 @@ function AudioMode() {
             </button>
 
             <button
-              onClick={() => { stop(); setCurrentIndex(0); setTimeout(() => playAll(0), 100); }}
+              onClick={() => {
+                stop();
+                setCurrentIndex(0);
+                setTimeout(() => playAll(0), 100);
+              }}
               className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gray-700 hover:bg-gray-600 
                          flex items-center justify-center text-lg sm:text-xl text-white transition
                          active:scale-95"
@@ -1146,160 +1128,184 @@ function AudioMode() {
 /**
  * Bulle audio
  */
-const AudioBubble = forwardRef(({ 
-  replica, 
-  character, 
-  isRight, 
-  number, 
-  isCurrent, 
-  isPlaying, 
-  isHidden, 
-  isWaiting,
-  isBubblePlaying,
-  hasRecording,
-  onBubbleClick,
-  onPlay,
-  onStop,
-  replicaRecordings,
-  recordingReplicaId,
-  recordingDuration,
-  startReplicaRecording,
-  stopReplicaRecording,
-  saveReplicaRecording,
-  deleteReplicaRecording,
-  playReplicaRecording
-}, ref) => {
-  const bubbleColor = character?.color || '#6B7280';
-  
-  const hexToRgba = (hex, alpha) => {
-    if (!hex) return `rgba(107, 114, 128, ${alpha})`;
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
+const AudioBubble = forwardRef(
+  (
+    {
+      replica,
+      character,
+      isRight,
+      number,
+      isCurrent,
+      isPlaying,
+      isHidden,
+      isWaiting,
+      isBubblePlaying,
+      hasRecording,
+      onBubbleClick,
+      onPlay,
+      onStop,
+      replicaRecordings,
+      recordingReplicaId,
+      recordingDuration,
+      startReplicaRecording,
+      stopReplicaRecording,
+      saveReplicaRecording,
+      deleteReplicaRecording,
+      playReplicaRecording,
+    },
+    ref
+  ) => {
+    const bubbleColor = character?.color || "#6B7280";
 
-  return (
-    <div 
-      ref={ref}
-      className={`flex ${isRight ? 'justify-end' : 'justify-start'} mb-2`}
-    >
+    const hexToRgba = (hex, alpha) => {
+      if (!hex) return `rgba(107, 114, 128, ${alpha})`;
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    return (
       <div
-        className={`
+        ref={ref}
+        className={`flex ${isRight ? "justify-end" : "justify-start"} mb-2`}
+      >
+        <div
+          className={`
           max-w-[85%] px-4 py-3 rounded-2xl
           transition-all duration-200 shadow-md
-          ${isRight ? 'rounded-br-md' : 'rounded-bl-md'}
-          ${isCurrent ? 'ring-2 ring-gold-500 scale-[1.02]' : ''}
-          ${isPlaying ? 'animate-pulse' : ''}
-          ${isWaiting ? 'ring-4 ring-green-500 animate-bounce' : ''}
+          ${isRight ? "rounded-br-md" : "rounded-bl-md"}
+          ${isCurrent ? "ring-2 ring-gold-500 scale-[1.02]" : ""}
+          ${isPlaying ? "animate-pulse" : ""}
+          ${isWaiting ? "ring-4 ring-green-500 animate-bounce" : ""}
         `}
-        style={{
-          backgroundColor: isHidden ? '#9ca3af' : hexToRgba(bubbleColor, 0.9),
-        }}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <span className="text-sm font-bold text-white drop-shadow flex items-center gap-1">
-            {character?.name || "Inconnu"}
-            {hasRecording && <span className="text-xs">🎙️</span>}
-          </span>
-          <div className="flex items-center gap-2">
-            {isPlaying && <span className="text-lg">🔊</span>}
-            {isWaiting && <span className="text-lg">👆</span>}
-            <span className="text-xs text-white/70">#{number}</span>
+          style={{
+            backgroundColor: isHidden ? "#9ca3af" : hexToRgba(bubbleColor, 0.9),
+          }}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-sm font-bold text-white drop-shadow flex items-center gap-1">
+              {character?.name || "Inconnu"}
+              {hasRecording && <span className="text-xs">🎙️</span>}
+            </span>
+            <div className="flex items-center gap-2">
+              {isPlaying && <span className="text-lg">🔊</span>}
+              {isWaiting && <span className="text-lg">👆</span>}
+              <span className="text-xs text-white/70">#{number}</span>
+            </div>
           </div>
-        </div>
 
-        {/* Contenu */}
-        {isHidden ? (
-          <div 
-            className="py-3 text-center cursor-pointer"
-            onClick={onBubbleClick}
-          >
-            {isWaiting ? (
-              <>
-                <p className="text-white text-sm font-bold">🎭 C'est à vous !</p>
-                <p className="text-white/80 text-xs mt-1">Cliquez ici pour continuer</p>
-              </>
-            ) : (
-              <>
-                <p className="text-white/80 text-sm italic">Votre réplique (masquée)</p>
-                <p className="text-white/60 text-xs mt-1">Cliquez pour révéler</p>
-              </>
-            )}
-          </div>
-        ) : (
-          <>
-            <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
-              {replica.text}
-            </p>
-            
-            {/* Bouton play/stop */}
-            <div className="flex justify-end mt-2 pt-2 border-t border-white/20">
-              {isBubblePlaying ? (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onStop(); }}
-                  className="flex items-center gap-1 px-3 py-1 bg-red-500 hover:bg-red-400 
-                             text-white rounded-full text-xs font-semibold transition active:scale-95"
-                >
-                  ⏹️ Stop
-                </button>
+          {/* Contenu */}
+          {isHidden ? (
+            <div
+              className="py-3 text-center cursor-pointer"
+              onClick={onBubbleClick}
+            >
+              {isWaiting ? (
+                <>
+                  <p className="text-white text-sm font-bold">
+                    🎭 C'est à vous !
+                  </p>
+                  <p className="text-white/80 text-xs mt-1">
+                    Cliquez ici pour continuer
+                  </p>
+                </>
               ) : (
-                <button
-                  onClick={(e) => { e.stopPropagation(); onPlay(); }}
-                  className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 
-                             text-white rounded-full text-xs font-semibold transition active:scale-95"
-                >
-                  ▶️ Écouter {hasRecording && '🎙️'}
-                </button>
+                <>
+                  <p className="text-white/80 text-sm italic">
+                    Votre réplique (masquée)
+                  </p>
+                  <p className="text-white/60 text-xs mt-1">
+                    Cliquez pour révéler
+                  </p>
+                </>
               )}
             </div>
-            {/* Sous chaque bulle de réplique : enregistrement / lecture locale */}
-            <div className="flex gap-2 mt-2">
-              {replicaRecordings[replica.id] ? (
-                <>
-                  <button 
-                    onClick={() => playReplicaRecording(replica.id)}
-                    className="text-xs px-2 py-1 bg-green-600 text-white rounded"
-                  >
-                    ▶️ Écouter
-                  </button>
-                  <button 
-                    onClick={() => deleteReplicaRecording(replica.id)}
-                    className="text-xs px-2 py-1 bg-red-600 text-white rounded"
-                  >
-                    🗑️
-                  </button>
-                </>
-              ) : recordingReplicaId === replica.id ? (
-                <div className="flex items-center gap-2">
-                  <span className="text-red-500 animate-pulse">🔴 {recordingDuration}s</span>
-                  <button 
-                    onClick={() => {
-                      stopReplicaRecording();
-                      saveReplicaRecording(replica.id, character?.name || 'Inconnu');
+          ) : (
+            <>
+              <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
+                {replica.text}
+              </p>
+
+              {/* Bouton play/stop */}
+              <div className="flex justify-end mt-2 pt-2 border-t border-white/20">
+                {isBubblePlaying ? (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onStop();
                     }}
-                    className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                    className="flex items-center gap-1 px-3 py-1 bg-red-500 hover:bg-red-400 
+                             text-white rounded-full text-xs font-semibold transition active:scale-95"
                   >
                     ⏹️ Stop
                   </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => startReplicaRecording(replica.id)}
-                  className="text-xs px-2 py-1 bg-orange-500 text-white rounded"
-                >
-                  🎤 Enregistrer
-                </button>
-              )}
-            </div>
-          </>
-        )}
+                ) : (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onPlay();
+                    }}
+                    className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 
+                             text-white rounded-full text-xs font-semibold transition active:scale-95"
+                  >
+                    ▶️ Écouter {hasRecording && "🎙️"}
+                  </button>
+                )}
+              </div>
+              {/* Sous chaque bulle de réplique : enregistrement / lecture locale */}
+              <div className="flex gap-2 mt-2">
+                {replicaRecordings[replica.id] ? (
+                  <>
+                    <button
+                      onClick={() => playReplicaRecording(replica.id)}
+                      className="text-xs px-2 py-1 bg-green-600 text-white rounded"
+                    >
+                      ▶️ Écouter
+                    </button>
+                    <button
+                      onClick={() => deleteReplicaRecording(replica.id)}
+                      className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                    >
+                      🗑️
+                    </button>
+                  </>
+                ) : recordingReplicaId === replica.id ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-red-500 animate-pulse">
+                      🔴 {recordingDuration}s
+                    </span>
+                    <button
+                      onClick={() => {
+                        stopReplicaRecording();
+                        saveReplicaRecording(
+                          replica.id,
+                          character?.name || "Inconnu"
+                        );
+                      }}
+                      className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                    >
+                      ⏹️ Stop
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => startReplicaRecording(replica.id)}
+                    className="text-xs px-2 py-1 bg-orange-500 text-white rounded"
+                  >
+                    🎤 Enregistrer
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
-    </div>
-  );
-});
+    );
+  }
+);
 
-AudioBubble.displayName = 'AudioBubble';
+AudioBubble.displayName = "AudioBubble";
 
 export default AudioMode;

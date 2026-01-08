@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { getUserRole, addGlobalVideo } from '../lib/supabase';
-import { useAuthStore } from '../store/authStore';
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { getUserRole } from "../lib/supabase";
+import { useAuthStore } from "../store/authStore";
 
 /**
  * Bouton flottant "+" - GAUCHE - BLEU
@@ -9,11 +9,11 @@ import { useAuthStore } from '../store/authStore';
 function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const [isOpen, setIsOpen] = useState(false);
   const [showVideoInfo, setShowVideoInfo] = useState(false);
-  const [userRole, setUserRole] = useState('member');
   const [showVideoModal, setShowVideoModal] = useState(false);
-  const [videoUrl, setVideoUrl] = useState('');
-  const [videoTitle, setVideoTitle] = useState('');
+  const [videoUrl, setVideoUrl] = useState("");
+  const [videoTitle, setVideoTitle] = useState("");
   const [videoSaving, setVideoSaving] = useState(false);
+  const [userRole, setUserRole] = useState("member");
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -24,79 +24,64 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
     }
   }, [user]);
 
-  const hiddenPages = ['/login', '/upload', '/recordings'];
-  if (hiddenPages.some(p => location.pathname.startsWith(p))) {
+  const hiddenPages = ["/login", "/upload", "/recordings"];
+  if (hiddenPages.some((p) => location.pathname.startsWith(p))) {
     return null;
   }
 
-  const canPostVideoAnywhere = userRole === 'dev' || userRole === 'director';
+  const canPostVideoAnywhere = userRole === "dev" || userRole === "director";
 
   const actions = [
     {
-      icon: '📄',
-      label: 'Nouveau texte',
-      color: 'bg-gold-500',
+      icon: "📄",
+      label: "Nouveau texte",
+      color: "bg-gold-500",
       onClick: () => {
-        navigate('/upload');
+        navigate("/upload");
         setIsOpen(false);
-      }
+      },
     },
     {
-      icon: '🎙️',
-      label: 'Voix personnage',
-      color: 'bg-red-500',
-      onClick: () => {
-        if (onAddAudio) {
-          onAddAudio();
-        } else if (location.pathname.startsWith('/script/')) {
-          const scriptId = location.pathname.split('/')[2];
-          navigate(`/script/${scriptId}/audio`);
-        } else {
-          alert('Ouvrez d\'abord un texte pour enregistrer des voix de personnages');
-        }
-        setIsOpen(false);
-      }
-    },
-    {
-      icon: '🎤',
-      label: 'Enregistrement libre',
-      color: 'bg-orange-500',
+      icon: "🎤",
+      label: "Enregistrement libre",
+      color: "bg-orange-500",
       onClick: () => {
         if (onRecordFree) {
           onRecordFree();
         } else {
-          navigate('/recordings');
+          navigate("/recordings");
         }
         setIsOpen(false);
-      }
+      },
     },
     {
-      icon: '📹',
-      label: 'Ajouter vidéo',
-      color: 'bg-purple-500',
+      icon: "📹",
+      label: "Ajouter vidéo",
+      color: "bg-purple-500",
       onClick: () => {
         if (onAddVideo) {
           onAddVideo();
         } else if (canPostVideoAnywhere) {
-          setShowVideoModal(true); // Ouvrir modal directement
+          setShowVideoModal(true);
         } else {
           setShowVideoInfo(true);
         }
         setIsOpen(false);
-      }
+      },
     },
   ];
 
   return (
     <>
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/30 z-40"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      <div className="fixed bottom-20 left-4 z-50">
+      {/* POSITION GAUCHE - bottom-24 pour alignement */}
+      <div className="fixed bottom-24 left-4 z-50">
         {isOpen && (
           <div className="mb-3 space-y-2">
             {actions.map((action, index) => (
@@ -110,38 +95,47 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <span className="text-xl">{action.icon}</span>
-                <span className="text-sm whitespace-nowrap">{action.label}</span>
+                <span className="text-sm whitespace-nowrap">
+                  {action.label}
+                </span>
               </button>
             ))}
           </div>
         )}
 
+        {/* COULEUR BLEUE */}
         <button
           onClick={() => setIsOpen(!isOpen)}
           className={`w-14 h-14 rounded-full shadow-lg
                      flex items-center justify-center text-2xl
                      transition-all duration-300 transform
-                     ${isOpen 
-                       ? 'bg-gray-700 text-white rotate-45' 
-                       : 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-110'}`}
+                     ${
+                       isOpen
+                         ? "bg-gray-700 text-white rotate-45"
+                         : "bg-blue-600 text-white hover:bg-blue-500 hover:scale-110"
+                     }`}
         >
           ➕
         </button>
       </div>
 
+      {/* Modal info vidéo (membres sans troupe) */}
       {showVideoInfo && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
           onClick={() => setShowVideoInfo(false)}
         >
-          <div 
+          <div
             className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <span className="text-5xl block mb-4">📹</span>
-            <h3 className="text-lg font-bold text-white mb-3">Ajouter une vidéo</h3>
+            <h3 className="text-lg font-bold text-white mb-3">
+              Ajouter une vidéo
+            </h3>
             <p className="text-gray-400 mb-4">
-              Pour ajouter une vidéo YouTube, allez dans <strong>Partagés</strong> et sélectionnez votre troupe.
+              Pour ajouter une vidéo YouTube, allez dans{" "}
+              <strong>Partagés</strong> et sélectionnez votre troupe.
             </p>
             <div className="flex gap-3">
               <button
@@ -153,7 +147,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
               <button
                 onClick={() => {
                   setShowVideoInfo(false);
-                  navigate('/shared');
+                  navigate("/shared");
                 }}
                 className="flex-1 py-3 bg-primary-600 text-white rounded-lg"
               >
@@ -164,18 +158,30 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
         </div>
       )}
 
-      {/* Modal ajout vidéo globale */}
+      {/* Modal ajout vidéo (dev/director) */}
       {showVideoModal && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
           onClick={() => setShowVideoModal(false)}
         >
-          <div 
+          <div
             className="bg-gray-800 rounded-xl p-6 max-w-sm w-full"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold text-white mb-4">📹 Ajouter une vidéo YouTube</h3>
-            
+            <h3 className="text-lg font-bold text-white mb-2">
+              📹 Ajouter une vidéo YouTube
+            </h3>
+            <div className="bg-gray-700/50 rounded-lg p-3 mb-4 text-sm text-gray-300">
+              <p className="mb-2">
+                📌 <strong>Comment faire :</strong>
+              </p>
+              <ol className="list-decimal list-inside space-y-1 text-xs">
+                <li>Ouvrez YouTube et trouvez votre vidéo</li>
+                <li>Appuyez sur "Partager" puis "Copier le lien"</li>
+                <li>Collez le lien ci-dessous</li>
+              </ol>
+            </div>
+
             <input
               type="text"
               value={videoTitle}
@@ -183,21 +189,21 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
               placeholder="Titre de la vidéo"
               className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg mb-3"
             />
-            
+
             <input
               type="text"
               value={videoUrl}
               onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="URL YouTube (ex: https://youtube.com/watch?v=...)"
+              placeholder="URL YouTube"
               className="w-full bg-gray-700 text-white px-4 py-3 rounded-lg mb-4"
             />
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowVideoModal(false);
-                  setVideoUrl('');
-                  setVideoTitle('');
+                  setVideoUrl("");
+                  setVideoTitle("");
                 }}
                 className="flex-1 py-3 bg-gray-700 text-white rounded-lg"
               >
@@ -206,25 +212,26 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
               <button
                 onClick={async () => {
                   if (!videoUrl.trim() || !videoTitle.trim()) {
-                    alert('Titre et URL requis');
+                    alert("Titre et URL requis");
                     return;
                   }
                   setVideoSaving(true);
                   try {
+                    const { addGlobalVideo } = await import("../lib/supabase");
                     await addGlobalVideo(user.id, videoTitle, videoUrl);
-                    alert('Vidéo ajoutée !');
+                    alert("Vidéo ajoutée !");
                     setShowVideoModal(false);
-                    setVideoUrl('');
-                    setVideoTitle('');
+                    setVideoUrl("");
+                    setVideoTitle("");
                   } catch (err) {
-                    alert('Erreur: ' + err.message);
+                    alert("Erreur: " + err.message);
                   }
                   setVideoSaving(false);
                 }}
                 disabled={videoSaving || !videoUrl.trim() || !videoTitle.trim()}
                 className="flex-1 py-3 bg-purple-600 text-white rounded-lg disabled:opacity-50"
               >
-                {videoSaving ? '...' : '📤 Ajouter'}
+                {videoSaving ? "..." : "📤 Ajouter"}
               </button>
             </div>
           </div>

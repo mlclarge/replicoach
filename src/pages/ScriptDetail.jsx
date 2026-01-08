@@ -502,7 +502,7 @@ function ScriptDetail() {
   return (
     <div className="pb-32 min-h-screen bg-amber-50">
       {/* ===== EN-TÊTE AVEC FOND COLORÉ ===== */}
-      <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 mb-4 border-b-2 border-primary-600 shadow-lg">
+      <div className="bg-black p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
         <div className="flex justify-between items-start">
           <div className="flex-1">
             {/* Titre éditable */}
@@ -576,13 +576,7 @@ function ScriptDetail() {
               👥
             </button>
             {/* Bouton micro - ORANGE */}
-            <button
-              onClick={() => setShowFloatingRecorder(true)}
-              className="p-3 bg-orange-500 text-white rounded-xl"
-              title="Enregistrer en lisant"
-            >
-              🎤
-            </button>
+
             {/* Bouton supprimer - ROUGE */}
             <button
               onClick={() => setShowDeleteConfirm(true)}
@@ -1127,6 +1121,9 @@ function ScriptDetail() {
 /**
  * Menu flottant unique avec actions
  */
+/**
+ * Menu flottant avec style pilule (même UI que FAB gauche)
+ */
 function FloatingActionMenu({
   onAddNote,
   onAddCharacter,
@@ -1134,101 +1131,137 @@ function FloatingActionMenu({
   audioLink,
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
+  const navigate = useNavigate();
+
+  const actions = [
+    {
+      icon: "🎙️",
+      label: "Voix personnage",
+      color: "bg-gold-500",
+      onClick: () => setShowVoiceHelp(true), // Affiche popup d'abord
+    },
+    {
+      icon: "💬",
+      label: "Ajouter réplique",
+      color: "bg-green-600",
+      onClick: onAddReplica,
+    },
+    {
+      icon: "👤",
+      label: "Ajouter personnage",
+      color: "bg-purple-600",
+      onClick: onAddCharacter,
+    },
+    {
+      icon: "📝",
+      label: "Ajouter note",
+      color: "bg-amber-500",
+      onClick: onAddNote,
+    },
+  ];
 
   return (
     <div className="fixed bottom-24 right-4 z-40">
-      {/* Menu déployé */}
+      {/* Overlay pour fermer */}
       {isOpen && (
-        <>
-          {/* Overlay pour fermer */}
-          <div
-            className="fixed inset-0 bg-black/30 -z-10"
-            onClick={() => setIsOpen(false)}
-          />
-
-          {/* Options du menu */}
-          <div className="absolute bottom-16 right-0 flex flex-col gap-3 items-end mb-3">
-            {/* Audio */}
-            <Link
-              to={audioLink}
-              className="flex items-center gap-3 animate-fade-in"
-              onClick={() => setIsOpen(false)}
-            >
-              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
-                Mode audio
-              </span>
-              <div className="w-12 h-12 bg-gold-500 rounded-full flex items-center justify-center text-xl shadow-lg">
-                🔊
-              </div>
-            </Link>
-
-            {/* Ajouter réplique */}
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onAddReplica();
-              }}
-              className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: "50ms" }}
-            >
-              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
-                Ajouter réplique
-              </span>
-              <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center text-xl shadow-lg">
-                💬
-              </div>
-            </button>
-
-            {/* Ajouter personnage */}
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onAddCharacter();
-              }}
-              className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: "100ms" }}
-            >
-              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
-                Ajouter personnage
-              </span>
-              <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-xl shadow-lg">
-                👤
-              </div>
-            </button>
-
-            {/* Ajouter note */}
-            <button
-              onClick={() => {
-                setIsOpen(false);
-                onAddNote();
-              }}
-              className="flex items-center gap-3 animate-fade-in"
-              style={{ animationDelay: "150ms" }}
-            >
-              <span className="bg-gray-800 text-white text-sm px-3 py-1 rounded-lg shadow">
-                Ajouter note
-              </span>
-              <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-xl shadow-lg">
-                📝
-              </div>
-            </button>
-          </div>
-        </>
+        <div
+          className="fixed inset-0 bg-black/30 -z-10"
+          onClick={() => setIsOpen(false)}
+        />
       )}
 
-      {/* Bouton principal */}
+      {/* Menu déployé - Style pilule */}
+      {isOpen && (
+        <div className="absolute bottom-16 right-0 mb-3 space-y-2">
+          {actions.map((action, index) =>
+            action.link ? (
+              <Link
+                key={index}
+                to={action.link}
+                onClick={() => setIsOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg ${action.color} text-white font-semibold transform transition-all duration-200 animate-fade-in`}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span className="text-xl">{action.icon}</span>
+                <span className="text-sm whitespace-nowrap">
+                  {action.label}
+                </span>
+              </Link>
+            ) : (
+              <button
+                key={index}
+                onClick={() => {
+                  setIsOpen(false);
+                  action.onClick();
+                }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg ${action.color} text-white font-semibold transform transition-all duration-200 animate-fade-in`}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span className="text-xl">{action.icon}</span>
+                <span className="text-sm whitespace-nowrap">
+                  {action.label}
+                </span>
+              </button>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Bouton principal - Style identique FAB gauche */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl shadow-lg
-                   transition-all duration-300 transform
-                   ${
-                     isOpen
-                       ? "bg-gray-700 rotate-45"
-                       : "bg-primary-600 hover:bg-primary-500 hover:scale-110"
-                   }`}
+        className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-300 transform ${
+          isOpen
+            ? "bg-gray-700 text-white rotate-45"
+            : "bg-red-500 text-white hover:bg-red-400 hover:scale-110"
+        }`}
       >
         ➕
       </button>
+
+      {/* Modal aide voix personnage */}
+      {showVoiceHelp && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVoiceHelp(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-5xl block mb-4">🎙️</span>
+            <h3 className="text-lg font-bold text-white mb-3">
+              Enregistrer vos répliques
+            </h3>
+            <p className="text-gray-300 mb-4">
+              Enregistrez votre voix sur <strong>chaque réplique</strong>{" "}
+              individuellement.
+            </p>
+            <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 mb-4">
+              <p className="text-orange-300 text-sm">
+                👉 Appuyez sur le bouton{" "}
+                <span className="bg-orange-500 text-white px-2 py-1 rounded text-xs">
+                  🎤 Enregistrer
+                </span>{" "}
+                sous chaque bulle
+              </p>
+            </div>
+            <p className="text-gray-500 text-xs mb-4">
+              Vous pouvez effacer et recommencer autant de fois que vous voulez.
+            </p>
+            <button
+              onClick={() => {
+                setShowVoiceHelp(false);
+                navigate(audioLink);
+              }}
+              className="w-full py-3 bg-red-600 text-white rounded-lg font-bold"
+            >
+              C'est compris ! →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
