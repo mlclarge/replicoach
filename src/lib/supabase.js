@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+﻿import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -856,8 +856,13 @@ export const updateReplicaGroup = async (groupId, updates) => {
 // MONITORING (Sessions actives)
 // =====================================================
 
-// Mettre Ã  jour la session de l'utilisateur
+// Mettre à jour la session de l'utilisateur
+let sessionUpdateDisabled = false; // Flag pour éviter les boucles
+
 export const updateUserSession = async (userId, page = null) => {
+  // Si déjà désactivé suite à une erreur 404, ne pas réessayer
+  if (sessionUpdateDisabled) return;
+  
   const { error } = await supabase.from("active_sessions").upsert(
     {
       user_id: userId,
@@ -867,7 +872,15 @@ export const updateUserSession = async (userId, page = null) => {
     { onConflict: "user_id" }
   );
 
-  if (error) console.error("Session update error:", error);
+  if (error) {
+    // Si table inexistante (404/PGRST205), désactiver les futures tentatives
+    if (error.code === 'PGRST205' || error.message?.includes('active_sessions')) {
+      sessionUpdateDisabled = true;
+      console.warn("Table active_sessions non trouvée - monitoring désactivé");
+    } else {
+      console.error("Session update error:", error);
+    }
+  }
 };
 
 // RÃ©cupÃ©rer le nombre d'utilisateurs actifs
@@ -890,15 +903,27 @@ export const getActiveUsersCount = async () => {
 // RÃ”LES UTILISATEURS (dev, director, member)
 // =====================================================
 
-// RÃ©cupÃ©rer le rÃ´le d'un utilisateur
+// Récupérer le rôle d'un utilisateur
+let userRolesDisabled = false;
+
 export const getUserRole = async (userId) => {
+  // Si table inexistante, retourner directement member
+  if (userRolesDisabled) return "member";
+  
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
-    .single();
+    .maybeSingle();  // <-- maybeSingle au lieu de single
 
-  if (error) return "member"; // Par dÃ©faut
+  if (error) {
+    // Si table inexistante (406/PGRST), désactiver
+    if (error.code === '406' || error.code === 'PGRST116' || error.message?.includes('user_roles')) {
+      userRolesDisabled = true;
+      console.warn("Table user_roles non trouvée - rôles désactivés");
+    }
+    return "member";
+  }
   return data?.role || "member";
 };
 

@@ -1,0 +1,58 @@
+Structure du dossier pour le volume data
+Le num‚ro de s‚rie du volume est 1CFA-C5CA
+D:.
+|   App.jsx
+|   arborescence_src.txt
+|   index.css
+|   main.jsx
+|   
++---components
+|   |   AdminPanel.jsx
+|   |   DocumentViewer.jsx
+|   |   FloatingActionButton.jsx
+|   |   FloatingRecorder.jsx
+|   |   InstallPrompt.jsx
+|   |   Monitoring.jsx
+|   |   OfflineIndicator.jsx
+|   |   Onboarding.jsx
+|   |   PublicLibrary.jsx
+|   |   ReplicaGroups.jsx
+|   |   TagManager.jsx
+|   |   TroupeDocuments.jsx
+|   |   TroupeVideos.jsx
+|   |   VoiceRecorder.jsx
+|   |   
+|   +---auth
+|   |       ProtectedRoute.jsx
+|   |       
+|   +---layout
+|   |       BottomNav.jsx
+|   |       Header.jsx
+|   |       Layout.jsx
+|   |       
+|   \---ui
+|           Button.jsx
+|           Card.jsx
+|           Loader.jsx
+|           
++---lib
+|       docProcessor.js
+|       pdfProcessor.js
+|       scriptParser.js
+|       supabase.js
+|       
++---pages
+|       AudioMode.jsx
+|       FreeRecordings.jsx
+|       Home.jsx
+|       Login.jsx
+|       NotFound.jsx
+|       Profile.jsx
+|       ScriptDetail.jsx
+|       Shared.jsx
+|       Upload.jsx
+|       
+\---store
+        authStore.js
+        scriptStore.js
+        

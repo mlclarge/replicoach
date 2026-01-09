@@ -2,10 +2,11 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
-import { 
-  uploadDirectorNote, 
-  fetchDirectorNotes, 
+import {
+  uploadDirectorNote,
+  fetchDirectorNotes,
   deleteDirectorNote,
+  getDirectorNoteUrl,
   fetchUserTroupes,
   shareScript as shareScriptToTroupe,
   fetchUserTags,
@@ -14,7 +15,11 @@ import {
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
 import PublicLibrary from "../components/PublicLibrary";
-import { ScriptTagsModal, ScriptTagBadges, TagFilter } from "../components/TagManager";
+import {
+  ScriptTagsModal,
+  ScriptTagBadges,
+  TagFilter,
+} from "../components/TagManager";
 import {
   DndContext,
   closestCenter,
@@ -39,13 +44,21 @@ import { CSS } from "@dnd-kit/utilities";
 
 // Couleurs de fond CLAIRES pour les cartes (alternées)
 const CARD_BACKGROUNDS = [
-  { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900' },
-  { bg: 'bg-stone-100', border: 'border-stone-300', text: 'text-stone-900' },
-  { bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-900' },
-  { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-900' },
+  { bg: "bg-amber-50", border: "border-amber-200", text: "text-amber-900" },
+  { bg: "bg-stone-100", border: "border-stone-300", text: "text-stone-900" },
+  { bg: "bg-orange-50", border: "border-orange-200", text: "text-orange-900" },
+  { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-900" },
 ];
 
-function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, index = 0, notesCount = 0 }) {
+function SortableScriptCard({
+  script,
+  onDelete,
+  onOpen,
+  onShare,
+  onManageTags,
+  index = 0,
+  notesCount = 0,
+}) {
   const {
     attributes,
     listeners,
@@ -70,9 +83,10 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
       {/* ===== CARTE AVEC FOND BEIGE/CRÈME ===== */}
       <div
         className={`block transition rounded-xl border-2 shadow-md
-          ${isDragging 
-            ? "shadow-lg ring-2 ring-gold-500 bg-amber-100 border-gold-500" 
-            : `${colorScheme.bg} ${colorScheme.border} hover:border-primary-500 hover:shadow-lg`
+          ${
+            isDragging
+              ? "shadow-lg ring-2 ring-gold-500 bg-amber-100 border-gold-500"
+              : `${colorScheme.bg} ${colorScheme.border} hover:border-primary-500 hover:shadow-lg`
           }`}
       >
         <div className="p-4">
@@ -84,15 +98,15 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
               className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
                          hover:text-primary-600 hover:bg-primary-100 rounded-lg transition
                          touch-none select-none"
-              style={{ touchAction: 'none' }}
+              style={{ touchAction: "none" }}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+                <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
               </svg>
             </div>
 
             {/* Contenu cliquable */}
-            <div 
+            <div
               className="flex-1 cursor-pointer"
               onClick={() => onOpen(script.id)}
             >
@@ -103,11 +117,13 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
                 </span>
                 <div className="flex-1">
                   {/* TITRE - Texte foncé sur fond clair */}
-                  <h3 className={`font-bold text-lg ${colorScheme.text}`}>{script.title}</h3>
+                  <h3 className={`font-bold text-lg ${colorScheme.text}`}>
+                    {script.title}
+                  </h3>
                   {/* SOUS-TITRE - Gris foncé */}
                   <p className="text-gray-600 text-sm">
                     {script.characters?.length || 0} personnage
-                    {(script.characters?.length || 0) > 1 ? "s" : ""} • {" "}
+                    {(script.characters?.length || 0) > 1 ? "s" : ""} •{" "}
                     {script.replicas?.length || 0} réplique
                     {(script.replicas?.length || 0) > 1 ? "s" : ""}
                     {notesCount > 0 && (
@@ -147,9 +163,9 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
                       className="text-xs px-3 py-1.5 rounded-full font-semibold border-2 shadow-sm"
                       style={{
                         backgroundColor: char.color,
-                        color: 'white',
+                        color: "white",
                         borderColor: char.color,
-                        textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                        textShadow: "0 1px 2px rgba(0,0,0,0.3)",
                       }}
                     >
                       {char.name}
@@ -179,7 +195,7 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
               >
                 🏷️
               </button>
-              
+
               {/* Bouton partager - FOND VERT SOLIDE */}
               <button
                 onClick={(e) => {
@@ -193,7 +209,7 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
               >
                 👥
               </button>
-              
+
               {/* Bouton supprimer - FOND ROUGE SOLIDE */}
               <button
                 onClick={(e) => {
@@ -218,15 +234,15 @@ function SortableScriptCard({ script, onDelete, onOpen, onShare, onManageTags, i
 /**
  * Section Consignes Metteur en Scène - Expandable avec documents visibles
  */
-function DirectorNotesSection({ 
-  notes, 
-  onUpload, 
-  onDelete, 
+function DirectorNotesSection({
+  notes,
+  onUpload,
+  onDelete,
   onViewDocument,
-  uploading, 
+  uploading,
   error,
   expanded,
-  onToggleExpand 
+  onToggleExpand,
 }) {
   const [dragActive, setDragActive] = useState(false);
 
@@ -240,31 +256,35 @@ function DirectorNotesSection({
     }
   }, []);
 
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      onUpload(e.dataTransfer.files);
-    }
-  }, [onUpload]);
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragActive(false);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        onUpload(e.dataTransfer.files);
+      }
+    },
+    [onUpload]
+  );
 
   const handleFileSelect = (e) => {
     if (e.target.files && e.target.files.length > 0) {
       onUpload(e.target.files);
-      e.target.value = '';
+      e.target.value = "";
     }
   };
 
   const getFileIcon = (note) => {
-    const name = note.file_name?.toLowerCase() || '';
-    const type = note.file_type || '';
-    
-    if (type.includes('pdf') || name.endsWith('.pdf')) return '📕';
-    if (type.includes('image') || /\.(jpg|jpeg|png|gif)$/.test(name)) return '🖼️';
-    if (type.includes('word') || /\.(doc|docx)$/.test(name)) return '📘';
-    if (type.includes('text') || name.endsWith('.txt')) return '📝';
-    return '📄';
+    const name = note.file_name?.toLowerCase() || "";
+    const type = note.file_type || "";
+
+    if (type.includes("pdf") || name.endsWith(".pdf")) return "📕";
+    if (type.includes("image") || /\.(jpg|jpeg|png|gif)$/.test(name))
+      return "🖼️";
+    if (type.includes("word") || /\.(doc|docx)$/.test(name)) return "📘";
+    if (type.includes("text") || name.endsWith(".txt")) return "📝";
+    return "📄";
   };
 
   return (
@@ -275,24 +295,41 @@ function DirectorNotesSection({
         className="card cursor-pointer hover:border-yellow-500/50 transition group"
       >
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
-                          group-hover:bg-yellow-500/30 transition">
+          <div
+            className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
+                          group-hover:bg-yellow-500/30 transition"
+          >
             <span className="text-3xl">📁</span>
           </div>
-          
+
           <div className="flex-1">
-            <h3 className="font-semibold text-yellow-500">Consignes du metteur en scène</h3>
+            <h3 className="font-semibold text-yellow-500">
+              Consignes du metteur en scène
+            </h3>
             <p className="text-gray-500 text-sm">
-              {notes.length > 0 
-                ? `${notes.length} document${notes.length > 1 ? 's' : ''}`
-                : 'Aucun document pour le moment'
-              }
+              {notes.length > 0
+                ? `${notes.length} document${notes.length > 1 ? "s" : ""}`
+                : "Aucun document pour le moment"}
             </p>
           </div>
-          
-          <div className={`text-gray-500 group-hover:text-yellow-500 transition transform ${expanded ? 'rotate-90' : ''}`}>
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+
+          <div
+            className={`text-gray-500 group-hover:text-yellow-500 transition transform ${
+              expanded ? "rotate-90" : ""
+            }`}
+          >
+            <svg
+              className="w-6 h-6"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
             </svg>
           </div>
         </div>
@@ -309,9 +346,10 @@ function DirectorNotesSection({
             onDrop={handleDrop}
             className={`
               border-2 border-dashed rounded-xl p-4 text-center transition
-              ${dragActive 
-                ? 'border-yellow-500 bg-yellow-500/10' 
-                : 'border-gray-700 hover:border-yellow-500/50'
+              ${
+                dragActive
+                  ? "border-yellow-500 bg-yellow-500/10"
+                  : "border-gray-700 hover:border-yellow-500/50"
               }
             `}
           >
@@ -323,7 +361,9 @@ function DirectorNotesSection({
             ) : (
               <label className="cursor-pointer flex items-center justify-center gap-2">
                 <span className="text-xl">📤</span>
-                <span className="text-gray-400 text-sm">Ajouter un document</span>
+                <span className="text-gray-400 text-sm">
+                  Ajouter un document
+                </span>
                 <input
                   type="file"
                   accept=".pdf,.txt,.doc,.docx,image/*"
@@ -355,8 +395,8 @@ function DirectorNotesSection({
                   className="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800 transition group"
                 >
                   <span className="text-2xl">{getFileIcon(note)}</span>
-                  
-                  <div 
+
+                  <div
                     className="flex-1 min-w-0 cursor-pointer"
                     onClick={() => onViewDocument(note)}
                   >
@@ -364,8 +404,9 @@ function DirectorNotesSection({
                       {note.file_name}
                     </p>
                     <p className="text-gray-500 text-xs">
-                      {new Date(note.created_at).toLocaleDateString('fr-FR')}
-                      {note.file_size && ` • ${(note.file_size / 1024).toFixed(0)} Ko`}
+                      {new Date(note.created_at).toLocaleDateString("fr-FR")}
+                      {note.file_size &&
+                        ` • ${(note.file_size / 1024).toFixed(0)} Ko`}
                     </p>
                   </div>
 
@@ -405,22 +446,22 @@ function DirectorNotesSection({
 function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { 
-    scripts, 
-    loading, 
-    fetchScripts, 
-    deleteScript, 
+  const {
+    scripts,
+    loading,
+    fetchScripts,
+    deleteScript,
     updateScriptOrder,
     countNotesForScripts,
   } = useScriptStore();
-  
+
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
   const [sortBy, setSortBy] = useState("order");
   const [searchQuery, setSearchQuery] = useState(""); // Recherche par titre
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
-  
+
   // États pour les consignes metteur en scène
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
   const [directorNotes, setDirectorNotes] = useState([]);
@@ -429,10 +470,10 @@ function Home() {
   const [showTroupeSelector, setShowTroupeSelector] = useState(false);
   const [pendingFiles, setPendingFiles] = useState(null);
   const [uploadTroupes, setUploadTroupes] = useState([]);
-  
+
   // État pour le viewer de document
   const [viewingDocument, setViewingDocument] = useState(null);
-  
+
   // États pour le partage
   const [scriptToShare, setScriptToShare] = useState(null);
   const [shareTroupes, setShareTroupes] = useState([]);
@@ -519,7 +560,7 @@ function Home() {
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
     } catch (error) {
-      console.error('Erreur chargement consignes:', error);
+      console.error("Erreur chargement consignes:", error);
     }
   };
 
@@ -538,18 +579,19 @@ function Home() {
 
     // Filtrer par tag si sélectionné
     if (selectedTagFilter) {
-      sorted = sorted.filter(script => {
+      sorted = sorted.filter((script) => {
         const scriptTags = scriptTagsMap[script.id] || [];
-        return scriptTags.some(tag => tag.id === selectedTagFilter);
+        return scriptTags.some((tag) => tag.id === selectedTagFilter);
       });
     }
 
     // Filtrer par recherche
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      sorted = sorted.filter(script => 
-        script.title.toLowerCase().includes(query) ||
-        script.characters?.some(c => c.name.toLowerCase().includes(query))
+      sorted = sorted.filter(
+        (script) =>
+          script.title.toLowerCase().includes(query) ||
+          script.characters?.some((c) => c.name.toLowerCase().includes(query))
       );
     }
 
@@ -613,10 +655,12 @@ function Home() {
       display_order: index + 1,
     }));
 
-    setLocalScripts(prev => prev.map((script, index) => ({
-      ...script,
-      display_order: index + 1,
-    })));
+    setLocalScripts((prev) =>
+      prev.map((script, index) => ({
+        ...script,
+        display_order: index + 1,
+      }))
+    );
 
     await updateScriptOrder(updates);
   };
@@ -624,7 +668,7 @@ function Home() {
   // Gestion des consignes metteur en scène
   const handleUploadDirectorNote = async (files) => {
     if (!user) return;
-    
+
     // Si l'utilisateur a des troupes, demander à laquelle partager
     if (uploadTroupes.length > 0) {
       setPendingFiles(Array.from(files));
@@ -642,15 +686,17 @@ function Home() {
     try {
       for (const file of files) {
         if (file.size > 10 * 1024 * 1024) {
-          setUploadError(`Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`);
+          setUploadError(
+            `Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`
+          );
           continue;
         }
-        
+
         const uploaded = await uploadDirectorNote(file, user.id, troupeId);
-        setDirectorNotes(prev => [uploaded, ...prev]);
+        setDirectorNotes((prev) => [uploaded, ...prev]);
       }
     } catch (error) {
-      console.error('Erreur upload:', error);
+      console.error("Erreur upload:", error);
       setUploadError(`Erreur lors de l'upload: ${error.message}`);
     } finally {
       setUploadingNote(false);
@@ -660,20 +706,25 @@ function Home() {
   };
 
   const handleDeleteDirectorNote = async (noteId) => {
-    const note = directorNotes.find(n => n.id === noteId);
+    const note = directorNotes.find((n) => n.id === noteId);
     if (!note) return;
-    
+
     try {
       await deleteDirectorNote(noteId, note.file_path);
-      setDirectorNotes(prev => prev.filter(n => n.id !== noteId));
+      setDirectorNotes((prev) => prev.filter((n) => n.id !== noteId));
     } catch (error) {
-      console.error('Erreur suppression:', error);
-      alert('Erreur lors de la suppression');
+      console.error("Erreur suppression:", error);
+      alert("Erreur lors de la suppression");
     }
   };
 
   const handleViewDocument = (note) => {
-    setViewingDocument(note);
+    // Transformer la note pour DocumentViewer (qui attend file_url)
+    setViewingDocument({
+      file_name: note.file_name,
+      file_url: getDirectorNoteUrl(note.file_path),
+      file_type: note.file_type,
+    });
   };
 
   // Handlers pour le partage
@@ -681,7 +732,7 @@ function Home() {
     setScriptToShare(script);
     setShareError(null);
     setShareSuccess(null);
-    
+
     try {
       const troupes = await fetchUserTroupes(user.id);
       setShareTroupes(troupes || []);
@@ -693,10 +744,10 @@ function Home() {
 
   const handleConfirmShare = async (troupeId) => {
     if (!scriptToShare || !user) return;
-    
+
     setSharingLoading(true);
     setShareError(null);
-    
+
     try {
       await shareScriptToTroupe(scriptToShare.id, troupeId, user.id);
       setShareSuccess("✓ Texte partagé !");
@@ -715,8 +766,8 @@ function Home() {
     }
   };
 
-  const activeScript = activeId 
-    ? localScripts.find(s => s.id === activeId) 
+  const activeScript = activeId
+    ? localScripts.find((s) => s.id === activeId)
     : null;
 
   if (loading) {
@@ -778,7 +829,8 @@ function Home() {
           </div>
           {searchQuery && (
             <p className="text-xs text-gray-500 mt-1">
-              {localScripts.length} résultat{localScripts.length > 1 ? 's' : ''} pour "{searchQuery}"
+              {localScripts.length} résultat{localScripts.length > 1 ? "s" : ""}{" "}
+              pour "{searchQuery}"
             </p>
           )}
         </div>
@@ -787,7 +839,7 @@ function Home() {
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-white">Mes saynètes</h2>
-        
+
         <div className="flex items-center gap-2">
           {localScripts.length > 1 && (
             <button
@@ -799,7 +851,7 @@ function Home() {
               🔄 1,2,3...
             </button>
           )}
-          
+
           {localScripts.length > 1 && (
             <div className="flex gap-1 ml-2">
               <button
@@ -843,7 +895,7 @@ function Home() {
       {/* Filtre par Tags */}
       {userTags.length > 0 && (
         <div className="mb-4">
-          <TagFilter 
+          <TagFilter
             tags={userTags}
             selectedTagId={selectedTagFilter}
             onSelect={setSelectedTagFilter}
@@ -887,7 +939,7 @@ function Home() {
                   key={script.id}
                   script={{
                     ...script,
-                    tags: scriptTagsMap[script.id] || []
+                    tags: scriptTagsMap[script.id] || [],
                   }}
                   index={index}
                   onDelete={handleDelete}
@@ -907,7 +959,9 @@ function Home() {
                   <span className="text-gold-500 font-bold text-lg">
                     #{activeScript.display_order}
                   </span>
-                  <h3 className="font-semibold text-white">{activeScript.title}</h3>
+                  <h3 className="font-semibold text-white">
+                    {activeScript.title}
+                  </h3>
                 </div>
               </div>
             ) : null}
@@ -970,12 +1024,14 @@ function Home() {
               {shareTroupes.length === 0 ? (
                 <div className="text-center py-6">
                   <span className="text-4xl mb-3 block">🎭</span>
-                  <p className="text-gray-400 mb-2">Vous n'avez pas encore de troupe</p>
+                  <p className="text-gray-400 mb-2">
+                    Vous n'avez pas encore de troupe
+                  </p>
                   <p className="text-gray-500 text-sm mb-4">
                     Créez ou rejoignez une troupe pour partager vos textes.
                   </p>
-                  <Link 
-                    to="/shared" 
+                  <Link
+                    to="/shared"
                     onClick={() => setScriptToShare(null)}
                     className="btn-gold inline-block"
                   >
@@ -1001,8 +1057,12 @@ function Home() {
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">🎭</span>
                           <div>
-                            <p className="text-white font-medium">{troupe.name}</p>
-                            <p className="text-gray-500 text-xs">Code: {troupe.code}</p>
+                            <p className="text-white font-medium">
+                              {troupe.name}
+                            </p>
+                            <p className="text-gray-500 text-xs">
+                              Code: {troupe.code}
+                            </p>
                           </div>
                         </div>
                         <span className="text-primary-400 text-xl">→</span>
@@ -1014,7 +1074,9 @@ function Home() {
 
               {shareSuccess && (
                 <div className="mt-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
-                  <p className="text-green-400 text-center font-medium">{shareSuccess}</p>
+                  <p className="text-green-400 text-center font-medium">
+                    {shareSuccess}
+                  </p>
                 </div>
               )}
 
@@ -1026,8 +1088,8 @@ function Home() {
             </div>
 
             <div className="p-4 border-t border-gray-700">
-              <button 
-                onClick={() => setScriptToShare(null)} 
+              <button
+                onClick={() => setScriptToShare(null)}
                 className="btn-secondary w-full"
               >
                 Fermer
@@ -1061,7 +1123,8 @@ function Home() {
                 📁 Partager avec quelle troupe ?
               </h3>
               <p className="text-gray-400 text-sm mt-1">
-                {pendingFiles.length} fichier{pendingFiles.length > 1 ? 's' : ''} à uploader
+                {pendingFiles.length} fichier
+                {pendingFiles.length > 1 ? "s" : ""} à uploader
               </p>
             </div>
 
@@ -1078,13 +1141,15 @@ function Home() {
                     <span className="text-2xl">🎭</span>
                     <div>
                       <p className="text-white font-medium">{troupe.name}</p>
-                      <p className="text-gray-500 text-xs">Visible par tous les membres</p>
+                      <p className="text-gray-500 text-xs">
+                        Visible par tous les membres
+                      </p>
                     </div>
                   </div>
                   <span className="text-yellow-400 text-xl">→</span>
                 </button>
               ))}
-              
+
               <button
                 onClick={() => doUploadDirectorNotes(pendingFiles, null)}
                 className="w-full p-4 bg-gray-800/50 hover:bg-gray-700 rounded-xl 
@@ -1095,18 +1160,20 @@ function Home() {
                   <span className="text-2xl">🔒</span>
                   <div>
                     <p className="text-gray-400 font-medium">Garder privé</p>
-                    <p className="text-gray-600 text-xs">Visible par moi uniquement</p>
+                    <p className="text-gray-600 text-xs">
+                      Visible par moi uniquement
+                    </p>
                   </div>
                 </div>
               </button>
             </div>
 
             <div className="p-4 border-t border-gray-700">
-              <button 
+              <button
                 onClick={() => {
                   setShowTroupeSelector(false);
                   setPendingFiles(null);
-                }} 
+                }}
                 className="btn-secondary w-full"
               >
                 Annuler

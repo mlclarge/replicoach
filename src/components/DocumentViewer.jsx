@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from "react";
 
 /**
  * Visionneuse de documents intégrée
@@ -11,12 +11,15 @@ function DocumentViewer({ document, onClose }) {
   if (!document) return null;
 
   const { file_name, file_url, file_type } = document;
-  
+
   // Déterminer le type de contenu
-  const isPDF = file_type === 'application/pdf' || file_name?.endsWith('.pdf');
-  const isImage = file_type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(file_name);
-  const isText = file_type === 'text/plain' || file_name?.endsWith('.txt');
-  const isWord = file_type?.includes('word') || /\.(doc|docx)$/i.test(file_name);
+  const isPDF = file_type === "application/pdf" || file_name?.endsWith(".pdf");
+  const isImage =
+    file_type?.startsWith("image/") ||
+    /\.(jpg|jpeg|png|gif|webp)$/i.test(file_name);
+  const isText = file_type === "text/plain" || file_name?.endsWith(".txt");
+  const isWord =
+    file_type?.includes("word") || /\.(doc|docx)$/i.test(file_name);
 
   const handleLoad = () => setLoading(false);
   const handleError = () => {
@@ -31,10 +34,18 @@ function DocumentViewer({ document, onClose }) {
         <div className="flex-1 min-w-0">
           <h3 className="text-white font-semibold truncate">{file_name}</h3>
           <p className="text-gray-500 text-xs">
-            {isPDF ? 'PDF' : isImage ? 'Image' : isText ? 'Texte' : isWord ? 'Word' : 'Document'}
+            {isPDF
+              ? "PDF"
+              : isImage
+              ? "Image"
+              : isText
+              ? "Texte"
+              : isWord
+              ? "Word"
+              : "Document"}
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2 ml-4">
           {/* Bouton télécharger */}
           <a
@@ -47,7 +58,7 @@ function DocumentViewer({ document, onClose }) {
           >
             📥
           </a>
-          
+
           {/* Bouton fermer */}
           <button
             onClick={onClose}
@@ -88,7 +99,9 @@ function DocumentViewer({ document, onClose }) {
         {isPDF && (
           <iframe
             src={`${file_url}#toolbar=0&navpanes=0`}
-            className={`w-full h-full min-h-[70vh] rounded-lg bg-white ${loading ? 'hidden' : ''}`}
+            className={`w-full h-full min-h-[70vh] rounded-lg bg-white ${
+              loading ? "hidden" : ""
+            }`}
             onLoad={handleLoad}
             onError={handleError}
             title={file_name}
@@ -97,7 +110,11 @@ function DocumentViewer({ document, onClose }) {
 
         {/* Image */}
         {isImage && (
-          <div className={`flex items-center justify-center h-full ${loading ? 'hidden' : ''}`}>
+          <div
+            className={`flex items-center justify-center h-full ${
+              loading ? "hidden" : ""
+            }`}
+          >
             <img
               src={file_url}
               alt={file_name}
@@ -109,7 +126,13 @@ function DocumentViewer({ document, onClose }) {
         )}
 
         {/* Texte - On charge le contenu via fetch */}
-        {isText && <TextViewer url={file_url} onLoad={handleLoad} onError={handleError} />}
+        {isText && (
+          <TextViewer
+            url={file_url}
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+        )}
 
         {/* Word - Afficher un message car non supporté nativement */}
         {isWord && !loading && (
@@ -119,11 +142,7 @@ function DocumentViewer({ document, onClose }) {
             <p className="text-gray-500 mb-6">
               Les fichiers Word ne peuvent pas être prévisualisés directement.
             </p>
-            <a
-              href={file_url}
-              download={file_name}
-              className="btn-gold"
-            >
+            <a href={file_url} download={file_name} className="btn-gold">
               📥 Télécharger le document
             </a>
           </div>
@@ -137,11 +156,7 @@ function DocumentViewer({ document, onClose }) {
             <p className="text-gray-500 mb-6">
               Ce type de fichier ne peut pas être prévisualisé.
             </p>
-            <a
-              href={file_url}
-              download={file_name}
-              className="btn-gold"
-            >
+            <a href={file_url} download={file_name} className="btn-gold">
               📥 Télécharger
             </a>
           </div>
@@ -155,16 +170,16 @@ function DocumentViewer({ document, onClose }) {
  * Composant pour afficher les fichiers texte
  */
 function TextViewer({ url, onLoad, onError }) {
-  const [content, setContent] = useState('');
+  const [content, setContent] = useState("");
   const [loaded, setLoaded] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     fetch(url)
-      .then(res => {
-        if (!res.ok) throw new Error('Erreur chargement');
+      .then((res) => {
+        if (!res.ok) throw new Error("Erreur chargement");
         return res.text();
       })
-      .then(text => {
+      .then((text) => {
         setContent(text);
         setLoaded(true);
         onLoad();
