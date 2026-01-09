@@ -115,19 +115,19 @@ export const fetchDirectorNotes = async (userId) => {
 
   const troupeIds = memberships?.map((m) => m.troupe_id) || [];
 
-  // Récupérer les notes personnelles + notes des troupes
+  // Construire la requête
   let query = supabase
     .from("director_notes")
     .select("*")
     .order("created_at", { ascending: false });
 
   if (troupeIds.length > 0) {
-    // Notes personnelles OU notes des troupes de l'utilisateur
+    // Notes perso (user_id) OU notes des troupes OU notes sans troupe du user
     query = query.or(
       `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")})`
     );
   } else {
-    // Seulement notes personnelles
+    // Seulement notes personnelles (avec ou sans troupe_id)
     query = query.eq("user_id", userId);
   }
 
