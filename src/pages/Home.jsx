@@ -692,9 +692,12 @@ function Home() {
           continue;
         }
 
-        const uploaded = await uploadDirectorNote(file, user.id, troupeId);
-        setDirectorNotes((prev) => [uploaded, ...prev]);
+        await uploadDirectorNote(file, user.id, troupeId);
       }
+      
+      // Recharger toutes les notes depuis la base après l'upload
+      await loadDirectorNotes();
+      
     } catch (error) {
       console.error("Erreur upload:", error);
       setUploadError(`Erreur lors de l'upload: ${error.message}`);
@@ -1128,8 +1131,15 @@ function Home() {
               </p>
             </div>
 
-            <div className="p-4 space-y-2">
-              {uploadTroupes.map((troupe) => (
+            {uploadingNote ? (
+              <div className="p-8 text-center">
+                <Loader size="lg" />
+                <p className="text-gray-400 mt-4">Upload en cours...</p>
+              </div>
+            ) : (
+              <>
+                <div className="p-4 space-y-2">
+                  {uploadTroupes.map((troupe) => (
                 <button
                   key={troupe.id}
                   onClick={() => doUploadDirectorNotes(pendingFiles, troupe.id)}
@@ -1179,6 +1189,8 @@ function Home() {
                 Annuler
               </button>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
