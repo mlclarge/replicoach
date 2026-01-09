@@ -107,33 +107,15 @@ export const uploadDirectorNote = async (file, userId, troupeId = null) => {
 };
 
 export const fetchDirectorNotes = async (userId) => {
-  // Récupérer les troupes de l'utilisateur
-  const { data: memberships } = await supabase
-    .from("troupe_members")
-    .select("troupe_id")
-    .eq("user_id", userId);
+  // Utiliser la fonction RPC pour contourner les politiques RLS
+  const { data, error } = await supabase
+    .rpc('get_accessible_director_notes', { p_user_id: userId });
 
-  const troupeIds = memberships?.map((m) => m.troupe_id) || [];
-
-  // Construire la requête
-  let query = supabase
-    .from("director_notes")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (troupeIds.length > 0) {
-    // Notes perso (user_id) OU notes des troupes OU notes sans troupe du user
-    query = query.or(
-      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")})`
-    );
-  } else {
-    // Seulement notes personnelles (avec ou sans troupe_id)
-    query = query.eq("user_id", userId);
+  if (error) {
+    console.error("Erreur fetchDirectorNotes:", error);
+    throw error;
   }
-
-  const { data, error } = await query;
-  if (error) throw error;
-  return data;
+  return data || [];
 };
 
 export const deleteDirectorNote = async (noteId, filePath) => {
