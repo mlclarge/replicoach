@@ -107,12 +107,31 @@ export const uploadDirectorNote = async (file, userId, troupeId = null) => {
 };
 
 export const fetchDirectorNotes = async (userId) => {
-  const { data, error } = await supabase
+  // Récupérer les troupes de l'utilisateur
+  const { data: memberships } = await supabase
+    .from("troupe_members")
+    .select("troupe_id")
+    .eq("user_id", userId);
+
+  const troupeIds = memberships?.map((m) => m.troupe_id) || [];
+
+  // Récupérer les notes personnelles + notes des troupes
+  let query = supabase
     .from("director_notes")
     .select("*")
-    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
+  if (troupeIds.length > 0) {
+    // Notes personnelles OU notes des troupes de l'utilisateur
+    query = query.or(
+      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")})`
+    );
+  } else {
+    // Seulement notes personnelles
+    query = query.eq("user_id", userId);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 };
@@ -862,7 +881,7 @@ let sessionUpdateDisabled = false; // Flag pour éviter les boucles
 export const updateUserSession = async (userId, page = null) => {
   // Si déjà désactivé suite à une erreur 404, ne pas réessayer
   if (sessionUpdateDisabled) return;
-  
+
   const { error } = await supabase.from("active_sessions").upsert(
     {
       user_id: userId,
@@ -874,7 +893,10 @@ export const updateUserSession = async (userId, page = null) => {
 
   if (error) {
     // Si table inexistante (404/PGRST205), désactiver les futures tentatives
-    if (error.code === 'PGRST205' || error.message?.includes('active_sessions')) {
+    if (
+      error.code === "PGRST205" ||
+      error.message?.includes("active_sessions")
+    ) {
       sessionUpdateDisabled = true;
       console.warn("Table active_sessions non trouvée - monitoring désactivé");
     } else {
@@ -909,16 +931,20 @@ let userRolesDisabled = false;
 export const getUserRole = async (userId) => {
   // Si table inexistante, retourner directement member
   if (userRolesDisabled) return "member";
-  
+
   const { data, error } = await supabase
     .from("user_roles")
     .select("role")
     .eq("user_id", userId)
-    .maybeSingle();  // <-- maybeSingle au lieu de single
+    .maybeSingle(); // <-- maybeSingle au lieu de single
 
   if (error) {
     // Si table inexistante (406/PGRST), désactiver
-    if (error.code === '406' || error.code === 'PGRST116' || error.message?.includes('user_roles')) {
+    if (
+      error.code === "406" ||
+      error.code === "PGRST116" ||
+      error.message?.includes("user_roles")
+    ) {
       userRolesDisabled = true;
       console.warn("Table user_roles non trouvée - rôles désactivés");
     }
