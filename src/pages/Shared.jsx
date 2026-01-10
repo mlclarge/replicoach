@@ -24,7 +24,7 @@ import TroupeVideos from "../components/TroupeVideos";
 
 // Liste des emails autorisés à créer des troupes (metteur en scène + dev)
 const ADMIN_EMAILS = [
-  'moz2611@gmail.com',  // Moz - développeur
+  "moz2611@gmail.com", // Moz - développeur
   // Ajoute ici les emails des metteurs en scène
 ];
 
@@ -32,21 +32,22 @@ function Shared() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { scripts, fetchScripts } = useScriptStore();
-  
+
   // Vérifie si l'utilisateur peut créer des troupes
-  const canCreateTroupe = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
-  
+  const canCreateTroupe =
+    user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
+
   const [loading, setLoading] = useState(true);
   const [troupes, setTroupes] = useState([]);
   const [sharedScripts, setSharedScripts] = useState([]);
   const [activeTab, setActiveTab] = useState("shared"); // shared, troupes, share
-  
+
   // Modals
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [selectedScript, setSelectedScript] = useState(null);
-  
+
   // États des formulaires
   const [joinCode, setJoinCode] = useState("");
   const [newTroupeName, setNewTroupeName] = useState("");
@@ -57,23 +58,27 @@ function Shared() {
   const [deleteTroupeConfirm, setDeleteTroupeConfirm] = useState(null);
   const [expandedTroupe, setExpandedTroupe] = useState(null); // Pour voir les consignes
 
+  // Mode sélection pour copie en lot
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedScripts, setSelectedScripts] = useState([]);
+
   useEffect(() => {
     loadData();
   }, [user]);
 
   const loadData = async () => {
     if (!user) return;
-    
+
     setLoading(true);
     try {
       // Charger les troupes de l'utilisateur
       const userTroupes = await fetchUserTroupes(user.id);
       setTroupes(userTroupes || []);
-      
+
       // Charger les scripts partagés
       const shared = await fetchSharedScripts(user.id);
       setSharedScripts(shared || []);
-      
+
       // Charger les scripts de l'utilisateur (pour pouvoir les partager)
       await fetchScripts(user.id);
     } catch (err) {
@@ -89,10 +94,10 @@ function Shared() {
   // Créer une troupe
   const handleCreateTroupe = async () => {
     if (!newTroupeName.trim()) return;
-    
+
     setActionLoading(true);
     setError(null);
-    
+
     try {
       const newTroupe = await createTroupe(newTroupeName.trim(), user.id);
       // Afficher le code généré
@@ -117,10 +122,10 @@ function Shared() {
   // Rejoindre une troupe
   const handleJoinTroupe = async () => {
     if (!joinCode.trim()) return;
-    
+
     setActionLoading(true);
     setError(null);
-    
+
     try {
       await joinTroupe(joinCode.trim(), user.id);
       setSuccess("Vous avez rejoint la troupe !");
@@ -137,7 +142,7 @@ function Shared() {
   // Quitter une troupe
   const handleLeaveTroupe = async (troupeId) => {
     if (!confirm("Voulez-vous vraiment quitter cette troupe ?")) return;
-    
+
     try {
       await leaveTroupe(troupeId, user.id);
       loadData();
@@ -150,7 +155,7 @@ function Shared() {
   const handleShareScript = async (scriptId, troupeId) => {
     setActionLoading(true);
     setError(null);
-    
+
     try {
       await shareScript(scriptId, troupeId, user.id);
       setSuccess("Texte partagé avec succès !");
@@ -173,7 +178,7 @@ function Shared() {
   // Supprimer une troupe
   const handleDeleteTroupe = async () => {
     if (!deleteTroupeConfirm) return;
-    
+
     setActionLoading(true);
     try {
       await deleteTroupe(deleteTroupeConfirm.id);
@@ -188,6 +193,75 @@ function Shared() {
     }
   };
 
+  // Gérer la sélection/désélection d'un script
+  const toggleScriptSelection = (scriptId) => {
+    setSelectedScripts((prev) =>
+      prev.includes(scriptId)
+        ? prev.filter((id) => id !== scriptId)
+        : [...prev, scriptId]
+    );
+  };
+
+  // Copier tous les scripts sélectionnés
+  const handleBulkCopy = async () => {
+    if (selectedScripts.length === 0) return;
+
+    const count = selectedScripts.length;
+    if (
+      !confirm(
+        `Copier ${count} texte${count > 1 ? "s" : ""} dans "Mes textes" ?`
+      )
+    )
+      return;
+
+    setActionLoading(true);
+    setError(null);
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const scriptId of selectedScripts) {
+      try {
+        const item = sharedScripts.find((s) => s.scripts?.id === scriptId);
+        if (!item) continue;
+
+        await copySharedScript(item.scripts.id, item.troupe_id, user.id);
+        successCount++;
+      } catch (err) {
+        console.error("Erreur copie script:", scriptId, err);
+        errorCount++;
+      }
+    }
+
+    // Rafraîchir la liste
+    await fetchScripts(user.id);
+
+    // Afficher le résultat
+    if (errorCount === 0) {
+      setSuccess(
+        `✅ ${successCount} texte${successCount > 1 ? "s" : ""} copié${
+          successCount > 1 ? "s" : ""
+        } avec succès !`
+      );
+    } else {
+      setError(
+        `⚠️ ${successCount} copié${
+          successCount > 1 ? "s" : ""
+        }, ${errorCount} erreur${errorCount > 1 ? "s" : ""}`
+      );
+    }
+
+    // Réinitialiser le mode sélection
+    setSelectedScripts([]);
+    setSelectionMode(false);
+    setActionLoading(false);
+
+    setTimeout(() => {
+      setSuccess(null);
+      setError(null);
+    }, 3000);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -198,9 +272,7 @@ function Shared() {
 
   return (
     <div className="p-4 pb-24">
-      <h1 className="text-2xl font-display text-gold-500 mb-4">
-        👥 Partage
-      </h1>
+      <h1 className="text-2xl font-display text-gold-500 mb-4">👥 Partage</h1>
 
       {/* Messages */}
       {success && (
@@ -209,14 +281,27 @@ function Shared() {
         </div>
       )}
 
+      {error && (
+        <div className="mb-4 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+          <p className="text-red-400 text-sm">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-300 text-xs underline mt-1"
+          >
+            Fermer
+          </button>
+        </div>
+      )}
+
       {/* Onglets */}
       <div className="flex gap-2 mb-6">
         <button
           onClick={() => setActiveTab("shared")}
           className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
-            ${activeTab === "shared" 
-              ? "bg-primary-700 text-white" 
-              : "bg-gray-800 text-gray-400"
+            ${
+              activeTab === "shared"
+                ? "bg-primary-700 text-white"
+                : "bg-gray-800 text-gray-400"
             }`}
         >
           📜 Reçus ({sharedScripts.length})
@@ -224,9 +309,10 @@ function Shared() {
         <button
           onClick={() => setActiveTab("troupes")}
           className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
-            ${activeTab === "troupes" 
-              ? "bg-primary-700 text-white" 
-              : "bg-gray-800 text-gray-400"
+            ${
+              activeTab === "troupes"
+                ? "bg-primary-700 text-white"
+                : "bg-gray-800 text-gray-400"
             }`}
         >
           🎭 Troupes ({troupes.length})
@@ -234,9 +320,10 @@ function Shared() {
         <button
           onClick={() => setActiveTab("share")}
           className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
-            ${activeTab === "share" 
-              ? "bg-primary-700 text-white" 
-              : "bg-gray-800 text-gray-400"
+            ${
+              activeTab === "share"
+                ? "bg-primary-700 text-white"
+                : "bg-gray-800 text-gray-400"
             }`}
         >
           📤 Partager
@@ -250,18 +337,75 @@ function Shared() {
             <EmptySharedState onJoin={() => setShowJoinModal(true)} />
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-gray-400 mb-2">
-                💡 Copiez un texte pour le personnaliser sans affecter l'original
-              </p>
+              {/* Barre d'action avec bouton de sélection multiple */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-400">
+                  💡 Copiez un texte pour le personnaliser sans affecter
+                  l'original
+                </p>
+
+                {!selectionMode ? (
+                  <button
+                    onClick={() => setSelectionMode(true)}
+                    className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 rounded-lg text-xs font-medium transition"
+                  >
+                    ☑️ Sélectionner
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectionMode(false);
+                        setSelectedScripts([]);
+                      }}
+                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition"
+                    >
+                      Annuler
+                    </button>
+                    {selectedScripts.length > 0 && (
+                      <button
+                        onClick={handleBulkCopy}
+                        disabled={actionLoading}
+                        className="px-3 py-1.5 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg text-xs font-bold transition disabled:opacity-50"
+                      >
+                        📋 Copier ({selectedScripts.length})
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {sharedScripts.map((item) => (
                 <div
                   key={item.id}
-                  className="card hover:border-primary-500 transition"
+                  className={`card transition ${
+                    selectionMode && selectedScripts.includes(item.scripts?.id)
+                      ? "border-gold-500 bg-gold-500/5"
+                      : "hover:border-primary-500"
+                  }`}
                 >
                   <div className="flex items-center gap-4">
-                    <div 
+                    {/* Case à cocher en mode sélection */}
+                    {selectionMode && (
+                      <div className="flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={selectedScripts.includes(item.scripts?.id)}
+                          onChange={() =>
+                            toggleScriptSelection(item.scripts?.id)
+                          }
+                          className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-gold-500 
+                                     focus:ring-2 focus:ring-gold-500 cursor-pointer"
+                        />
+                      </div>
+                    )}
+
+                    <div
                       className="flex-1 flex items-center gap-4 cursor-pointer"
-                      onClick={() => navigate(`/script/${item.scripts?.id}`)}
+                      onClick={() =>
+                        !selectionMode &&
+                        navigate(`/script/${item.scripts?.id}`)
+                      }
                     >
                       <div className="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center">
                         <span className="text-2xl">📜</span>
@@ -271,44 +415,74 @@ function Shared() {
                           {item.scripts?.title || "Sans titre"}
                         </h3>
                         <p className="text-gray-500 text-sm">
-                          via {item.troupes?.name} • {item.scripts?.characters?.length || 0} personnages
+                          via {item.troupes?.name} •{" "}
+                          {item.scripts?.characters?.length || 0} personnages
                         </p>
                       </div>
                     </div>
-                    
-                    {/* Bouton copier */}
-                    <button
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (!confirm('Créer une copie personnelle de ce texte ?')) return;
-                        setActionLoading(true);
-                        try {
-                          const newScript = await copySharedScript(
-                            item.scripts?.id, 
-                            item.troupe_id, 
-                            user.id
-                          );
-                          setSuccess('Copie créée ! Retrouvez-la dans "Mes textes"');
-                          setTimeout(() => navigate('/'), 1500);
-                        } catch (err) {
-                          setError('Erreur lors de la copie: ' + err.message);
-                        }
-                        setActionLoading(false);
-                      }}
-                      disabled={actionLoading}
-                      className="p-2 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg 
-                                 font-semibold text-sm transition disabled:opacity-50"
-                      title="Créer ma copie personnelle"
-                    >
-                      📋 Copier
-                    </button>
-                    
-                    <span 
-                      className="text-gray-500 cursor-pointer"
-                      onClick={() => navigate(`/script/${item.scripts?.id}`)}
-                    >
-                      →
-                    </span>
+
+                    {/* Bouton copier - caché en mode sélection */}
+                    {!selectionMode && (
+                      <>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (
+                              !confirm(
+                                "Créer une copie personnelle de ce texte ?"
+                              )
+                            )
+                              return;
+                            setActionLoading(true);
+                            setError(null);
+                            try {
+                              console.log(
+                                "🔄 Tentative de copie du script:",
+                                item.scripts?.id
+                              );
+                              const newScript = await copySharedScript(
+                                item.scripts?.id,
+                                item.troupe_id,
+                                user.id
+                              );
+                              console.log(
+                                "✅ Script copié avec succès:",
+                                newScript
+                              );
+                              // 🔥 FIX: Rafraîchir la liste des scripts pour que la copie apparaisse
+                              await fetchScripts(user.id);
+                              setSuccess(
+                                'Copie créée ! Retrouvez-la dans "Mes textes"'
+                              );
+                              setTimeout(() => navigate("/"), 1500);
+                            } catch (err) {
+                              console.error("❌ Erreur copie complète:", err);
+                              setError(
+                                "Erreur lors de la copie: " +
+                                  (err.message || JSON.stringify(err))
+                              );
+                            } finally {
+                              setActionLoading(false);
+                            }
+                          }}
+                          disabled={actionLoading}
+                          className="p-2 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg 
+                                     font-semibold text-sm transition disabled:opacity-50"
+                          title="Créer ma copie personnelle"
+                        >
+                          📋 Copier
+                        </button>
+
+                        <span
+                          className="text-gray-500 cursor-pointer"
+                          onClick={() =>
+                            navigate(`/script/${item.scripts?.id}`)
+                          }
+                        >
+                          →
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}
@@ -332,7 +506,7 @@ function Shared() {
               <span className="text-gray-300 font-medium">Rejoindre</span>
               <span className="text-gray-500 text-xs">Avec un code</span>
             </button>
-            
+
             {/* ===== BOUTON CRÉER - SEULEMENT POUR ADMINS ===== */}
             {canCreateTroupe ? (
               <button
@@ -345,11 +519,15 @@ function Shared() {
                 <span className="text-dark/70 text-xs">Nouvelle troupe</span>
               </button>
             ) : (
-              <div className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 
-                              flex flex-col items-center gap-2 opacity-50">
+              <div
+                className="p-4 bg-gray-800/50 rounded-xl border border-gray-700 
+                              flex flex-col items-center gap-2 opacity-50"
+              >
                 <span className="text-3xl">🔒</span>
                 <span className="text-gray-400 font-medium">Créer</span>
-                <span className="text-gray-500 text-xs">Réservé au metteur en scène</span>
+                <span className="text-gray-500 text-xs">
+                  Réservé au metteur en scène
+                </span>
               </div>
             )}
           </div>
@@ -366,20 +544,27 @@ function Shared() {
           ) : (
             <div className="space-y-3">
               {troupes.map((troupe) => (
-                <div key={troupe.id} className="bg-gray-800/80 rounded-xl p-4 border border-gray-700">
+                <div
+                  key={troupe.id}
+                  className="bg-gray-800/80 rounded-xl p-4 border border-gray-700"
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 bg-gold-500/20 rounded-xl flex items-center justify-center">
                         <span className="text-2xl">🎭</span>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-white">{troupe.name}</h3>
+                        <h3 className="font-semibold text-white">
+                          {troupe.name}
+                        </h3>
                         <p className="text-gray-500 text-xs">
-                          {troupe.role === 'owner' ? '👑 Créateur' : '👤 Membre'}
+                          {troupe.role === "owner"
+                            ? "👑 Créateur"
+                            : "👤 Membre"}
                         </p>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-2">
                       {/* Code de la troupe - PLUS VISIBLE */}
                       <button
@@ -392,9 +577,9 @@ function Shared() {
                         <span>📋</span>
                         <span>{troupe.code}</span>
                       </button>
-                      
+
                       {/* Quitter (si pas owner) */}
-                      {troupe.role !== 'owner' && (
+                      {troupe.role !== "owner" && (
                         <button
                           onClick={() => handleLeaveTroupe(troupe.id)}
                           className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
@@ -403,9 +588,9 @@ function Shared() {
                           🚪
                         </button>
                       )}
-                      
+
                       {/* Supprimer (si owner) */}
-                      {troupe.role === 'owner' && (
+                      {troupe.role === "owner" && (
                         <button
                           onClick={() => setDeleteTroupeConfirm(troupe)}
                           className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
@@ -416,31 +601,35 @@ function Shared() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Bouton voir consignes */}
                   <button
-                    onClick={() => setExpandedTroupe(expandedTroupe === troupe.id ? null : troupe.id)}
+                    onClick={() =>
+                      setExpandedTroupe(
+                        expandedTroupe === troupe.id ? null : troupe.id
+                      )
+                    }
                     className="mt-3 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg 
                                text-sm text-gray-300 transition flex items-center justify-center gap-2"
                   >
                     <span>📋</span>
                     <span>Consignes & Vidéos</span>
-                    <span>{expandedTroupe === troupe.id ? '▲' : '▼'}</span>
+                    <span>{expandedTroupe === troupe.id ? "▲" : "▼"}</span>
                   </button>
-                  
+
                   {/* Section consignes et vidéos expandable */}
                   {expandedTroupe === troupe.id && (
                     <div className="mt-4 pt-4 border-t border-gray-700 space-y-6">
                       {/* Documents */}
-                      <TroupeDocuments 
+                      <TroupeDocuments
                         troupeId={troupe.id}
                         userId={user.id}
                         troupeName={troupe.name}
                       />
-                      
+
                       {/* Vidéos YouTube */}
                       <div className="pt-4 border-t border-gray-700">
-                        <TroupeVideos 
+                        <TroupeVideos
                           troupeId={troupe.id}
                           userId={user.id}
                           troupeName={troupe.name}
@@ -485,13 +674,15 @@ function Shared() {
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">📜</span>
                       <div>
-                        <h3 className="font-semibold text-white">{script.title}</h3>
+                        <h3 className="font-semibold text-white">
+                          {script.title}
+                        </h3>
                         <p className="text-gray-500 text-xs">
                           {script.characters?.length || 0} personnages
                         </p>
                       </div>
                     </div>
-                    
+
                     <button
                       onClick={() => {
                         setSelectedScript(script);
@@ -516,11 +707,11 @@ function Shared() {
           <h3 className="text-lg font-semibold text-white mb-4">
             🔑 Rejoindre une troupe
           </h3>
-          
+
           <p className="text-gray-400 text-sm mb-4">
             Entrez le code de la troupe (8 caractères)
           </p>
-          
+
           <input
             type="text"
             value={joinCode}
@@ -531,9 +722,7 @@ function Shared() {
             autoFocus
           />
 
-          {error && (
-            <p className="text-red-400 text-sm mb-4">{error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
           <div className="flex gap-3">
             <button
@@ -562,22 +751,22 @@ function Shared() {
               <div className="w-20 h-20 mx-auto mb-4 bg-green-500/20 rounded-full flex items-center justify-center">
                 <span className="text-5xl">✓</span>
               </div>
-              
+
               <h3 className="text-xl font-semibold text-white mb-2">
                 Troupe créée !
               </h3>
-              
+
               <p className="text-gray-400 mb-6">
                 Partagez ce code avec les membres de votre troupe :
               </p>
-              
+
               {/* CODE EN GRAND */}
               <div className="bg-primary-600/20 border-2 border-primary-500 rounded-xl p-6 mb-6">
                 <p className="text-4xl font-mono font-bold text-primary-300 tracking-widest">
                   {createdTroupeCode}
                 </p>
               </div>
-              
+
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(createdTroupeCode);
@@ -589,11 +778,11 @@ function Shared() {
               >
                 📋 Copier le code
               </button>
-              
+
               {success && (
                 <p className="text-green-400 text-sm mb-4">{success}</p>
               )}
-              
+
               <button
                 onClick={closeCreateModal}
                 className="btn-secondary w-full"
@@ -607,11 +796,12 @@ function Shared() {
               <h3 className="text-lg font-semibold text-white mb-4">
                 ➕ Créer une troupe
               </h3>
-              
+
               <p className="text-gray-400 text-sm mb-4">
-                Donnez un nom à votre troupe. Un code unique sera généré automatiquement.
+                Donnez un nom à votre troupe. Un code unique sera généré
+                automatiquement.
               </p>
-              
+
               <input
                 type="text"
                 value={newTroupeName}
@@ -622,9 +812,7 @@ function Shared() {
                 autoFocus
               />
 
-              {error && (
-                <p className="text-red-400 text-sm mb-4">{error}</p>
-              )}
+              {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
               <div className="flex gap-3">
                 <button
@@ -652,11 +840,9 @@ function Shared() {
           <h3 className="text-lg font-semibold text-white mb-4">
             📤 Partager "{selectedScript.title}"
           </h3>
-          
-          <p className="text-gray-400 text-sm mb-4">
-            Choisissez une troupe :
-          </p>
-          
+
+          <p className="text-gray-400 text-sm mb-4">Choisissez une troupe :</p>
+
           <div className="space-y-2 mb-4">
             {troupes.map((troupe) => (
               <button
@@ -672,9 +858,7 @@ function Shared() {
             ))}
           </div>
 
-          {error && (
-            <p className="text-red-400 text-sm mb-4">{error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
           <button
             onClick={() => setShowShareModal(false)}
@@ -692,19 +876,19 @@ function Shared() {
             <div className="w-16 h-16 mx-auto mb-4 bg-red-500/20 rounded-full flex items-center justify-center">
               <span className="text-4xl">🗑️</span>
             </div>
-            
+
             <h3 className="text-xl font-semibold text-white mb-2">
               Supprimer la troupe ?
             </h3>
-            
+
             <p className="text-gray-400 mb-2">
               <strong className="text-white">{deleteTroupeConfirm.name}</strong>
             </p>
-            
+
             <p className="text-red-400 text-sm mb-6">
               ⚠️ Cette action est irréversible. Tous les membres seront retirés.
             </p>
-            
+
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteTroupeConfirm(null)}
@@ -737,13 +921,14 @@ function EmptySharedState({ onJoin }) {
       <div className="w-24 h-24 mx-auto mb-6 bg-gray-800 rounded-full flex items-center justify-center">
         <span className="text-5xl">📭</span>
       </div>
-      
+
       <h2 className="text-xl font-semibold text-white mb-2">
         Aucun texte partagé
       </h2>
-      
+
       <p className="text-gray-400 mb-6 max-w-sm mx-auto">
-        Rejoignez une troupe pour recevoir des textes partagés par vos camarades.
+        Rejoignez une troupe pour recevoir des textes partagés par vos
+        camarades.
       </p>
 
       <button onClick={onJoin} className="btn-gold">

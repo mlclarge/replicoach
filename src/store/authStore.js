@@ -49,14 +49,23 @@ export const useAuthStore = create((set, get) => ({
           if (error) {
             console.error("Session refresh error:", error);
           } else if (data.session) {
-            set({ user: data.session.user });
+            // Ne mettre à jour que si l'utilisateur a changé
+            const currentUser = get().user;
+            if (!currentUser || currentUser.id !== data.session.user.id) {
+              set({ user: data.session.user });
+            }
           }
         }
       }, 5 * 60 * 1000); // 5 minutes
 
-      // Rafraîchir la session quand l'onglet redevient visible
+      // Rafraîchir la session quand l'onglet redevient visible (mais pas trop souvent)
+      let lastVisibilityCheck = Date.now();
       const handleVisibilityChange = async () => {
         if (document.visibilityState === "visible") {
+          // Éviter de rafraîchir trop souvent (max 1 fois par minute)
+          if (Date.now() - lastVisibilityCheck < 60000) return;
+          lastVisibilityCheck = Date.now();
+
           const {
             data: { session },
           } = await supabase.auth.getSession();
@@ -90,7 +99,10 @@ export const useAuthStore = create((set, get) => ({
       return () => {
         subscription?.unsubscribe();
         clearInterval(sessionCheckInterval);
-        document.removeEventListener("visibilitychange", handleVisibilityChange);
+        document.removeEventListener(
+          "visibilitychange",
+          handleVisibilityChange
+        );
         window.removeEventListener("online", handleOnline);
       };
     } catch (error) {

@@ -617,6 +617,8 @@ export const fetchScriptsWithTags = async (userId) => {
 
 // CrÃ©er une copie personnelle d'un script partagÃ©
 export const copySharedScript = async (originalScriptId, troupeId, userId) => {
+  console.log("🔄 Début copie script:", { originalScriptId, troupeId, userId });
+
   // 1. RÃ©cupÃ©rer le script original avec ses personnages et rÃ©pliques
   const { data: original, error: fetchError } = await supabase
     .from("scripts")
@@ -630,47 +632,61 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     .eq("id", originalScriptId)
     .single();
 
-  if (fetchError) throw fetchError;
+  if (fetchError) {
+    console.error("❌ Erreur fetch script original:", fetchError);
+    throw fetchError;
+  }
+  console.log("✅ Script original récupéré:", original.title);
 
-  // 2. CrÃ©er la copie du script
+  // 2. Créer la copie du script (uniquement les colonnes qui existent vraiment)
+  const scriptData = {
+    user_id: userId,
+    title: `${original.title} (copie)`,
+  };
+
+  // Ajouter les colonnes optionnelles si elles existent dans l'original
+  if (original.full_text) scriptData.full_text = original.full_text;
+  if (original.original_filename)
+    scriptData.original_filename = original.original_filename;
+  if (original.pdf_url) scriptData.pdf_url = original.pdf_url;
+
+  console.log("📝 Données script à insérer:", scriptData);
+
   const { data: newScript, error: scriptError } = await supabase
     .from("scripts")
-    .insert([
-      {
-        user_id: userId,
-        title: `${original.title} (copie)`,
-        full_text: original.full_text,
-        original_filename: original.original_filename,
-        pdf_url: original.pdf_url,
-        stage_directions: original.stage_directions,
-        copied_from_script_id: originalScriptId,
-        copied_from_troupe_id: troupeId,
-      },
-    ])
+    .insert([scriptData])
     .select()
     .single();
 
-  if (scriptError) throw scriptError;
+  if (scriptError) {
+    console.error("❌ Erreur création script:", scriptError);
+    throw scriptError;
+  }
+  console.log("✅ Nouveau script créé:", newScript.id);
 
   // 3. Copier les personnages et crÃ©er un mapping ancien_id -> nouveau_id
   const characterMap = {};
+  console.log(`📋 Copie de ${original.characters?.length || 0} personnages...`);
   for (const char of original.characters || []) {
+    const charData = {
+      script_id: newScript.id,
+      name: char.name,
+      color: char.color,
+    };
+
     const { data: newChar, error: charError } = await supabase
       .from("characters")
-      .insert([
-        {
-          script_id: newScript.id,
-          name: char.name,
-          color: char.color,
-          gender: char.gender,
-        },
-      ])
+      .insert([charData])
       .select()
       .single();
 
-    if (charError) throw charError;
+    if (charError) {
+      console.error("❌ Erreur création personnage:", charError);
+      throw charError;
+    }
     characterMap[char.id] = newChar.id;
   }
+  console.log("✅ Personnages copiés");
 
   // 4. Copier les rÃ©pliques avec les nouveaux character_id
   const replicasToInsert = (original.replicas || []).map((rep) => ({
@@ -682,13 +698,19 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     cue_words: rep.cue_words,
   }));
 
+  console.log(`📋 Copie de ${replicasToInsert.length} répliques...`);
   if (replicasToInsert.length > 0) {
     const { error: repError } = await supabase
       .from("replicas")
       .insert(replicasToInsert);
 
-    if (repError) throw repError;
+    if (repError) {
+      console.error("❌ Erreur création répliques:", repError);
+      throw repError;
+    }
   }
+  console.log("✅ Répliques copiées");
+  console.log("🎉 Copie terminée avec succès!");
 
   return newScript;
 };

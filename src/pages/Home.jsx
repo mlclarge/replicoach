@@ -506,7 +506,8 @@ function Home() {
       loadNotesCounts();
       loadUserTags();
     }
-  }, [user, fetchScripts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Charger les tags de l'utilisateur
   const loadUserTags = async () => {
@@ -536,12 +537,13 @@ function Home() {
     }
   };
 
-  // Charger les tags quand les scripts changent
+  // Charger les tags quand les scripts changent (utiliser length pour éviter re-renders inutiles)
   useEffect(() => {
     if (scripts.length > 0) {
       loadScriptsTags();
     }
-  }, [scripts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scripts.length]);
 
   // Charger le nombre de notes par script
   const loadNotesCounts = async () => {
@@ -694,10 +696,9 @@ function Home() {
 
         await uploadDirectorNote(file, user.id, troupeId);
       }
-      
+
       // Recharger toutes les notes depuis la base après l'upload
       await loadDirectorNotes();
-      
     } catch (error) {
       console.error("Erreur upload:", error);
       setUploadError(`Erreur lors de l'upload: ${error.message}`);
@@ -1140,56 +1141,62 @@ function Home() {
               <>
                 <div className="p-4 space-y-2">
                   {uploadTroupes.map((troupe) => (
-                <button
-                  key={troupe.id}
-                  onClick={() => doUploadDirectorNotes(pendingFiles, troupe.id)}
-                  className="w-full p-4 bg-gray-800 hover:bg-yellow-600/30 rounded-xl 
+                    <button
+                      key={troupe.id}
+                      onClick={() =>
+                        doUploadDirectorNotes(pendingFiles, troupe.id)
+                      }
+                      className="w-full p-4 bg-gray-800 hover:bg-yellow-600/30 rounded-xl 
                              text-left transition flex items-center justify-between
                              border border-gray-700 hover:border-yellow-500"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">🎭</span>
-                    <div>
-                      <p className="text-white font-medium">{troupe.name}</p>
-                      <p className="text-gray-500 text-xs">
-                        Visible par tous les membres
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-yellow-400 text-xl">→</span>
-                </button>
-              ))}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl">🎭</span>
+                        <div>
+                          <p className="text-white font-medium">
+                            {troupe.name}
+                          </p>
+                          <p className="text-gray-500 text-xs">
+                            Visible par tous les membres
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-yellow-400 text-xl">→</span>
+                    </button>
+                  ))}
 
-              <button
-                onClick={() => doUploadDirectorNotes(pendingFiles, null)}
-                className="w-full p-4 bg-gray-800/50 hover:bg-gray-700 rounded-xl 
+                  <button
+                    onClick={() => doUploadDirectorNotes(pendingFiles, null)}
+                    className="w-full p-4 bg-gray-800/50 hover:bg-gray-700 rounded-xl 
                            text-left transition flex items-center justify-between
                            border border-gray-700"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-2xl">🔒</span>
-                  <div>
-                    <p className="text-gray-400 font-medium">Garder privé</p>
-                    <p className="text-gray-600 text-xs">
-                      Visible par moi uniquement
-                    </p>
-                  </div>
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🔒</span>
+                      <div>
+                        <p className="text-gray-400 font-medium">
+                          Garder privé
+                        </p>
+                        <p className="text-gray-600 text-xs">
+                          Visible par moi uniquement
+                        </p>
+                      </div>
+                    </div>
+                  </button>
                 </div>
-              </button>
-            </div>
 
-            <div className="p-4 border-t border-gray-700">
-              <button
-                onClick={() => {
-                  setShowTroupeSelector(false);
-                  setPendingFiles(null);
-                }}
-                className="btn-secondary w-full"
-              >
-                Annuler
-              </button>
-            </div>
-            </>
+                <div className="p-4 border-t border-gray-700">
+                  <button
+                    onClick={() => {
+                      setShowTroupeSelector(false);
+                      setPendingFiles(null);
+                    }}
+                    className="btn-secondary w-full"
+                  >
+                    Annuler
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
