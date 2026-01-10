@@ -521,23 +521,26 @@ function Home() {
       setUserTags(tags || []);
     } catch (err) {
       console.error("Erreur chargement tags:", err);
-    
+    }
+  };
 
   // Charger le dernier texte fréquemment consulté
   const loadRecentScript = () => {
     try {
-      const recentData = localStorage.getItem('replicoach-recent-script');
+      const recentData = localStorage.getItem("replicoach-recent-script");
       if (recentData) {
         const parsed = JSON.parse(recentData);
         // Vérifier que le script a été ouvert au moins 2 fois dans les dernières 24h
-        if (parsed.count >= 2 && Date.now() - parsed.lastAccess < 24 * 60 * 60 * 1000) {
+        if (
+          parsed.count >= 2 &&
+          Date.now() - parsed.lastAccess < 24 * 60 * 60 * 1000
+        ) {
           setRecentScript(parsed);
         }
       }
     } catch (err) {
       console.error("Erreur chargement script récent:", err);
     }
-  };}
   };
 
   // Charger les tags de chaque script
@@ -642,7 +645,7 @@ function Home() {
   // Fonction pour suivre les accès aux scripts
   const trackScriptAccess = (scriptId) => {
     try {
-      const recentData = localStorage.getItem('replicoach-recent-script');
+      const recentData = localStorage.getItem("replicoach-recent-script");
       let data = recentData ? JSON.parse(recentData) : null;
 
       if (data && data.scriptId === scriptId) {
@@ -651,17 +654,17 @@ function Home() {
         data.lastAccess = Date.now();
       } else {
         // Nouveau script
-        const script = scripts.find(s => s.id === scriptId);
+        const script = scripts.find((s) => s.id === scriptId);
         data = {
           scriptId,
-          title: script?.title || 'Sans titre',
+          title: script?.title || "Sans titre",
           count: 1,
           lastAccess: Date.now(),
         };
       }
 
-      localStorage.setItem('replicoach-recent-script', JSON.stringify(data));
-      
+      localStorage.setItem("replicoach-recent-script", JSON.stringify(data));
+
       // Mettre à jour l'état si le script a été ouvert au moins 2 fois
       if (data.count >= 2) {
         setRecentScript(data);
@@ -896,7 +899,7 @@ function Home() {
       )}
 
       {/* Raccourci vers le texte fréquemment consulté */}
-      {recentScript && scripts.find(s => s.id === recentScript.scriptId) && (
+      {recentScript && scripts.find((s) => s.id === recentScript.scriptId) && (
         <div className="mb-6">
           <button
             onClick={() => handleOpenScript(recentScript.scriptId)}
@@ -906,11 +909,13 @@ function Home() {
                        rounded-xl transition-all duration-200 
                        flex items-center gap-4 group shadow-lg hover:shadow-amber-500/20"
           >
-            <div className="w-14 h-14 bg-amber-500 rounded-xl flex items-center justify-center 
-                            shadow-lg group-hover:scale-110 transition-transform">
+            <div
+              className="w-14 h-14 bg-amber-500 rounded-xl flex items-center justify-center 
+                            shadow-lg group-hover:scale-110 transition-transform"
+            >
               <span className="text-3xl">⚡</span>
             </div>
-            
+
             <div className="flex-1 text-left">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-amber-400 text-xs font-bold uppercase tracking-wide">
@@ -924,10 +929,11 @@ function Home() {
                 {recentScript.title}
               </h3>
               <p className="text-gray-400 text-xs">
-                Dernier accès : {new Date(recentScript.lastAccess).toLocaleDateString('fr-FR')}
+                Dernier accès :{" "}
+                {new Date(recentScript.lastAccess).toLocaleDateString("fr-FR")}
               </p>
             </div>
-            
+
             <div className="text-amber-400 text-2xl group-hover:translate-x-1 transition-transform">
               →
             </div>
