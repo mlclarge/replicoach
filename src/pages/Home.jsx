@@ -462,6 +462,9 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
 
+  // État pour le dernier texte fréquemment consulté
+  const [recentScript, setRecentScript] = useState(null);
+
   // États pour les consignes metteur en scène
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
   const [directorNotes, setDirectorNotes] = useState([]);
@@ -505,6 +508,7 @@ function Home() {
       loadUploadTroupes();
       loadNotesCounts();
       loadUserTags();
+      loadRecentScript();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
@@ -517,7 +521,23 @@ function Home() {
       setUserTags(tags || []);
     } catch (err) {
       console.error("Erreur chargement tags:", err);
+    
+
+  // Charger le dernier texte fréquemment consulté
+  const loadRecentScript = () => {
+    try {
+      const recentData = localStorage.getItem('replicoach-recent-script');
+      if (recentData) {
+        const parsed = JSON.parse(recentData);
+        // Vérifier que le script a été ouvert au moins 2 fois dans les dernières 24h
+        if (parsed.count >= 2 && Date.now() - parsed.lastAccess < 24 * 60 * 60 * 1000) {
+          setRecentScript(parsed);
+        }
+      }
+    } catch (err) {
+      console.error("Erreur chargement script récent:", err);
     }
+  };}
   };
 
   // Charger les tags de chaque script
@@ -597,7 +617,41 @@ function Home() {
       );
     }
 
-    switch (sortBy) {
+    // Suivre l'accès au script pour les raccourcis
+    trackScriptAccess(scriptId);
+    navigate(`/script/${scriptId}`);
+  };
+
+  // Fonction pour suivre les accès aux scripts
+  const trackScriptAccess = (scriptId) => {
+    try {
+      const recentData = localStorage.getItem('replicoach-recent-script');
+      let data = recentData ? JSON.parse(recentData) : null;
+
+      if (data && data.scriptId === scriptId) {
+        // Même script, incrémenter le compteur
+        data.count += 1;
+        data.lastAccess = Date.now();
+      } else {
+        // Nouveau script
+        const script = scripts.find(s => s.id === scriptId);
+        data = {
+          scriptId,
+          title: script?.title || 'Sans titre',
+          count: 1,
+          lastAccess: Date.now(),
+        };
+      }
+
+      localStorage.setItem('replicoach-recent-script', JSON.stringify(data));
+      
+      // Mettre à jour l'état si le script a été ouvert au moins 2 fois
+      if (data.count >= 2) {
+        setRecentScript(data);
+      }
+    } catch (err) {
+      console.error("Erreur tracking script:", err);
+    }
       case "alpha":
         sorted.sort((a, b) => a.title.localeCompare(b.title));
         break;
@@ -837,6 +891,46 @@ function Home() {
               pour "{searchQuery}"
             </p>
           )}
+        </div>
+      )}
+
+      {/* Raccourci vers le texte fréquemment consulté */}
+      {recentScript && scripts.find(s => s.id === recentScript.scriptId) && (
+        <div className="mb-6">
+          <button
+            onClick={() => handleOpenScript(recentScript.scriptId)}
+            className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 
+                       hover:from-amber-500/30 hover:to-gold-500/30
+                       border-2 border-amber-500/50 hover:border-amber-400
+                       rounded-xl transition-all duration-200 
+                       flex items-center gap-4 group shadow-lg hover:shadow-amber-500/20"
+          >
+            <div className="w-14 h-14 bg-amber-500 rounded-xl flex items-center justify-center 
+                            shadow-lg group-hover:scale-110 transition-transform">
+              <span className="text-3xl">⚡</span>
+            </div>
+            
+            <div className="flex-1 text-left">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-amber-400 text-xs font-bold uppercase tracking-wide">
+                  Accès rapide
+                </span>
+                <span className="text-amber-500/50 text-xs">
+                  • {recentScript.count} fois
+                </span>
+              </div>
+              <h3 className="text-white font-bold text-lg group-hover:text-amber-300 transition">
+                {recentScript.title}
+              </h3>
+              <p className="text-gray-400 text-xs">
+                Dernier accès : {new Date(recentScript.lastAccess).toLocaleDateString('fr-FR')}
+              </p>
+            </div>
+            
+            <div className="text-amber-400 text-2xl group-hover:translate-x-1 transition-transform">
+              →
+            </div>
+          </button>
         </div>
       )}
 
