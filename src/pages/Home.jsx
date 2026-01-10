@@ -617,6 +617,23 @@ function Home() {
       );
     }
 
+    // Tri selon l'option choisie
+    switch (sortBy) {
+      case "alpha":
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "date":
+        sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        break;
+      case "order":
+      default:
+        sorted.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
+    }
+
+    setLocalScripts(sorted);
+  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap, searchQuery]);
+
+  const handleOpenScript = (scriptId) => {
     // Suivre l'accès au script pour les raccourcis
     trackScriptAccess(scriptId);
     navigate(`/script/${scriptId}`);
@@ -652,22 +669,6 @@ function Home() {
     } catch (err) {
       console.error("Erreur tracking script:", err);
     }
-      case "alpha":
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case "date":
-        sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        break;
-      case "order":
-      default:
-        sorted.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-    }
-
-    setLocalScripts(sorted);
-  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap, searchQuery]);
-
-  const handleOpenScript = (scriptId) => {
-    navigate(`/script/${scriptId}`);
   };
 
   const handleDelete = (scriptId) => {
