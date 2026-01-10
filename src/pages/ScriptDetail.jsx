@@ -1137,7 +1137,7 @@ function FloatingActionMenu({
   const actions = [
     {
       icon: "🎙️",
-      label: "Voix personnage",
+      label: "Écouter / s'enregistrer",
       color: "bg-gold-500",
       onClick: () => setShowVoiceHelp(true), // Affiche popup d'abord
     },
@@ -1230,17 +1230,21 @@ function FloatingActionMenu({
             className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-5xl block mb-4">🎙️</span>
             <h3 className="text-lg font-bold text-white mb-3">
-              Enregistrer vos répliques
+              Écouter / s'enregistrer
             </h3>
+            <span className="text-5xl block mb-4">🎙️</span>
             <p className="text-gray-300 mb-4">
-              Enregistrez votre voix sur <strong>chaque réplique</strong>{" "}
-              individuellement.
+              Écoutez ou enregistrez votre voix sur{" "}
+              <strong>chaque réplique</strong> individuellement.
             </p>
             <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 mb-4">
               <p className="text-orange-300 text-sm">
                 👉 Appuyez sur le bouton{" "}
+                <span className="bg-orange-500 text-white px-2 py-1 rounded text-xs">
+                  ▶️ Écouter
+                </span>{" "}
+                ou{" "}
                 <span className="bg-orange-500 text-white px-2 py-1 rounded text-xs">
                   🎤 Enregistrer
                 </span>{" "}
