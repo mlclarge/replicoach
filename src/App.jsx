@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { inject } from "@vercel/analytics";
 import { useAuthStore } from "./store/authStore";
 
 // Pages
@@ -23,6 +24,7 @@ function App() {
 
   useEffect(() => {
     initialize();
+    inject();
   }, [initialize]);
 
   if (loading) {
