@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 
 /**
  * Composant d'onboarding pour les nouveaux utilisateurs
@@ -7,100 +7,116 @@ import { useState, useEffect } from 'react';
 
 const ONBOARDING_SLIDES = [
   {
-    icon: '🎭',
-    title: 'Bienvenue sur RépliCoach !',
-    description: 'L\'application qui vous aide à mémoriser vos répliques de théâtre.',
-    tip: 'Parcourez ce tutoriel pour découvrir les fonctionnalités',
+    icon: "🎭",
+    title: "Bienvenue sur RépliCoach !",
+    description:
+      "L'application qui vous aide à mémoriser vos répliques de théâtre.",
+    tip: "Parcourez ce tutoriel pour découvrir les fonctionnalités",
   },
   {
-    icon: '📄',
-    title: 'Importez vos textes',
-    description: 'Uploadez vos scripts en PDF, Word ou TXT. L\'application détecte automatiquement les personnages et répliques.',
-    tip: '💡 Les fichiers .txt et .docx donnent les meilleurs résultats',
+    icon: "📄",
+    title: "Importez vos textes",
+    description:
+      "Uploadez vos scripts en PDF, Word ou TXT. L'application détecte automatiquement les personnages et répliques.",
+    tip: "💡 Les fichiers .txt et .docx donnent les meilleurs résultats",
   },
   {
-    icon: '✏️',
-    title: 'Corrigez si nécessaire',
-    description: 'Après l\'import, vous pouvez modifier, ajouter ou supprimer des répliques. Cliquez sur une réplique pour l\'éditer, ou utilisez le bouton + pour en ajouter.',
-    tip: '💡 Utilisez ✂️ pour diviser une réplique mal scannée en deux',
+    icon: "✏️",
+    title: "Corrigez si nécessaire",
+    description:
+      "Après l'import, vous pouvez modifier, ajouter ou supprimer des répliques. Cliquez sur une réplique pour l'éditer, ou utilisez le bouton + pour en ajouter.",
+    tip: "💡 Utilisez ✂️ pour diviser une réplique mal scannée en deux",
   },
   {
-    icon: '📝',
-    title: 'Vos notes personnelles',
-    description: 'Ajoutez vos propres notes de jeu : déplacements, intentions, accessoires, repères... Elles s\'affichent entre les répliques.',
-    tip: '💡 Cliquez sur 📝 après une réplique pour y ajouter votre note',
+    icon: "📝",
+    title: "Vos notes personnelles",
+    description:
+      "Ajoutez vos propres notes de jeu : déplacements, intentions, accessoires, repères... Elles s'affichent entre les répliques.",
+    tip: "💡 Cliquez sur 📝 après une réplique pour y ajouter votre note",
   },
   {
-    icon: '🎙️',
-    title: 'Notes vocales',
-    description: 'Enregistrez des notes audio pour mémoriser une intonation, une indication de jeu ou un rappel personnel.',
-    tip: '💡 Parfait pour capturer le ton exact voulu par le metteur en scène',
+    icon: "🎙️",
+    title: "Notes vocales",
+    description:
+      "Enregistrez des notes audio pour mémoriser une intonation, une indication de jeu ou un rappel personnel.",
+    tip: "💡 Parfait pour capturer le ton exact voulu par le metteur en scène",
   },
   {
-    icon: '🏷️',
-    title: 'Organisez avec des tags',
-    description: 'Créez des tags pour catégoriser vos textes : "Comédie", "À réviser", "Maîtrisé"... Retrouvez-les facilement en filtrant par tag.',
-    tip: '💡 Parfait quand vous avez beaucoup de textes à gérer',
+    icon: "🏷️",
+    title: "Organisez avec des tags",
+    description:
+      'Créez des tags pour catégoriser vos textes : "Comédie", "À réviser", "Maîtrisé"... Retrouvez-les facilement en filtrant par tag.',
+    tip: "💡 Parfait quand vous avez beaucoup de textes à gérer",
   },
   {
-    icon: '📚',
-    title: 'Sous-ensembles de répliques',
-    description: 'Créez des groupes de répliques pour réviser par acte, scène ou passage difficile. Cliquez sur "📚 Groupes" dans un texte.',
-    tip: '💡 Concentrez-vous sur les passages que vous devez travailler',
+    icon: "📚",
+    title: "Sous-ensembles de répliques",
+    description:
+      'Créez des groupes de répliques pour réviser par acte, scène ou passage difficile. Cliquez sur "📚 Groupes" dans un texte.',
+    tip: "💡 Concentrez-vous sur les passages que vous devez travailler",
   },
   {
-    icon: '🎨',
-    title: 'Chaque personnage a sa couleur',
-    description: 'Les répliques sont affichées comme des bulles de conversation, avec une couleur unique par personnage.',
-    tip: '💡 Filtrez par personnage pour vous concentrer sur votre rôle',
+    icon: "🎨",
+    title: "Chaque personnage a sa couleur",
+    description:
+      "Les répliques sont affichées comme des bulles de conversation, avec une couleur unique par personnage.",
+    tip: "💡 Filtrez par personnage pour vous concentrer sur votre rôle",
   },
   {
-    icon: '🔖',
-    title: '4 modes d\'apprentissage',
-    description: 'Progressez étape par étape : 📖 Complet → 🔤 Trous (premières lettres) → 3️⃣ 3 mots → 🎭 Répliques (indices seulement).',
+    icon: "🔖",
+    title: "4 modes d'apprentissage",
+    description:
+      "Progressez étape par étape : 📖 Complet → 🔤 Trous (premières lettres) → 3️⃣ 3 mots → 🎭 Répliques (indices seulement).",
     tip: '💡 Le mode "3 mots" affiche juste le début, touchez pour révéler !',
   },
   {
-    icon: '🔊',
-    title: 'Mode Audio & Italienne',
-    description: 'Écoutez vos répliques avec des voix distinctes (♀ aiguë, ♂ grave). Chaque bulle a son bouton ▶️ pour l\'écouter individuellement.',
-    tip: '💡 Les didascalies (texte entre parenthèses) ne sont pas lues',
+    icon: "🔊",
+    title: "Mode Audio & Italienne",
+    description:
+      "Écoutez vos répliques avec des voix distinctes (♀ aiguë, ♂ grave). Chaque bulle a son bouton ▶️ pour l'écouter individuellement.",
+    tip: "💡 Les didascalies (texte entre parenthèses) ne sont pas lues",
   },
   {
-    icon: '🎙️',
-    title: 'Enregistrez les voix',
-    description: 'Remplacez la synthèse vocale par VOS enregistrements ! Enregistrez la voix de chaque personnage pour une lecture plus naturelle et personnalisée.',
-    tip: '💡 Cliquez sur 🎙️ en mode audio puis enregistrez chaque personnage',
+    icon: "🎙️",
+    title: "Enregistrez les voix",
+    description:
+      "Remplacez la synthèse vocale par VOS enregistrements ! Enregistrez la voix de chaque personnage pour une lecture plus naturelle et personnalisée.",
+    tip: "💡 Cliquez sur 🎙️ en mode audio puis enregistrez chaque personnage",
   },
   {
-    icon: '🎭',
-    title: 'Mode Italienne',
-    description: 'Masquez VOS répliques, écoutez les autres, puis cliquez sur votre bulle quand c\'est à vous de parler !',
-    tip: '💡 Cliquez sur un personnage pour masquer ses répliques',
+    icon: "🎭",
+    title: "Mode Italienne",
+    description:
+      "Masquez VOS répliques, écoutez les autres, puis cliquez sur votre bulle quand c'est à vous de parler !",
+    tip: "💡 Cliquez sur un personnage pour masquer ses répliques",
   },
   {
-    icon: '👥',
-    title: 'Partagez avec votre troupe',
-    description: 'Rejoignez une troupe avec un code, recevez les textes partagés et créez votre copie personnelle à annoter.',
-    tip: '💡 Cliquez sur "📋 Copier" pour avoir votre version modifiable',
+    icon: "👥",
+    title: "Partagez avec votre troupe",
+    description:
+      "Rejoignez une troupe avec un code, recevez les textes partagés et créez votre copie personnelle à annoter.",
+    tip: '💡 Cliquez sur "☑️ Sélectionner" pour copier plusieurs textes en une fois',
   },
   {
-    icon: '📹',
-    title: 'Vidéos du metteur en scène',
-    description: 'Le metteur en scène peut partager des vidéos YouTube (mises en scène, conseils) avec toute la troupe.',
+    icon: "📹",
+    title: "Vidéos du metteur en scène",
+    description:
+      "Le metteur en scène peut partager des vidéos YouTube (mises en scène, conseils) avec toute la troupe.",
     tip: '💡 Uploadez sur YouTube en mode "Non répertorié" pour la confidentialité',
   },
   {
-    icon: '📲',
-    title: 'Installez l\'application',
-    description: 'Ajoutez RépliCoach à votre écran d\'accueil pour un accès rapide, même hors connexion !',
+    icon: "📲",
+    title: "Installez l'application",
+    description:
+      "Ajoutez RépliCoach à votre écran d'accueil pour un accès rapide, même hors connexion !",
     tip: '💡 Sur Android : Menu ⋮ → "Installer l\'application"',
   },
   {
-    icon: '🚀',
-    title: 'C\'est parti !',
-    description: 'Vous êtes prêt à mémoriser vos répliques comme un pro. Bonne répétition !',
-    tip: '🎭 Merde ! (comme on dit au théâtre)',
+    icon: "🚀",
+    title: "C'est parti !",
+    description:
+      "Vous êtes prêt à mémoriser vos répliques comme un pro. Bonne répétition !",
+    tip: "🎭 Merde ! (comme on dit au théâtre)",
   },
 ];
 
@@ -111,7 +127,9 @@ function Onboarding() {
 
   useEffect(() => {
     // Vérifier si l'utilisateur a déjà vu l'onboarding
-    const hasSeenOnboarding = localStorage.getItem('replicoach-onboarding-seen');
+    const hasSeenOnboarding = localStorage.getItem(
+      "replicoach-onboarding-seen"
+    );
     if (!hasSeenOnboarding) {
       // Petit délai pour laisser l'app se charger
       setTimeout(() => setShowOnboarding(true), 500);
@@ -135,7 +153,7 @@ function Onboarding() {
   const handleClose = () => {
     setIsExiting(true);
     setTimeout(() => {
-      localStorage.setItem('replicoach-onboarding-seen', 'true');
+      localStorage.setItem("replicoach-onboarding-seen", "true");
       setShowOnboarding(false);
     }, 300);
   };
@@ -155,22 +173,24 @@ function Onboarding() {
   const isFirstSlide = currentSlide === 0;
 
   return (
-    <div 
+    <div
       className={`fixed inset-0 z-[100] flex items-center justify-center p-4 transition-opacity duration-300
-        ${isExiting ? 'opacity-0' : 'opacity-100'}`}
+        ${isExiting ? "opacity-0" : "opacity-100"}`}
     >
       {/* Backdrop */}
-      <div 
+      <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm"
         onClick={handleSkip}
       />
-      
+
       {/* Modal */}
-      <div 
+      <div
         className={`relative bg-gradient-to-b from-gray-900 to-darker rounded-2xl 
                     max-w-md w-full overflow-hidden shadow-2xl border border-gray-700
                     transform transition-all duration-300
-                    ${isExiting ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}`}
+                    ${
+                      isExiting ? "scale-95 opacity-0" : "scale-100 opacity-100"
+                    }`}
       >
         {/* Bouton fermer */}
         <button
@@ -183,9 +203,7 @@ function Onboarding() {
         {/* Contenu du slide */}
         <div className="p-8 pt-12 text-center">
           {/* Icône animée */}
-          <div className="text-6xl mb-6 animate-bounce">
-            {slide.icon}
-          </div>
+          <div className="text-6xl mb-6 animate-bounce">{slide.icon}</div>
 
           {/* Titre */}
           <h2 className="text-2xl font-display text-gold-500 mb-4">
@@ -198,12 +216,18 @@ function Onboarding() {
           </p>
 
           {/* Astuce */}
-          <div className={`rounded-lg p-3 mb-6 ${
-            slide.isFuture 
-              ? 'bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/50' 
-              : 'bg-primary-900/30 border border-primary-700/50'
-          }`}>
-            <p className={`text-sm ${slide.isFuture ? 'text-purple-200' : 'text-primary-300'}`}>
+          <div
+            className={`rounded-lg p-3 mb-6 ${
+              slide.isFuture
+                ? "bg-gradient-to-r from-purple-900/50 to-pink-900/50 border border-purple-500/50"
+                : "bg-primary-900/30 border border-primary-700/50"
+            }`}
+          >
+            <p
+              className={`text-sm ${
+                slide.isFuture ? "text-purple-200" : "text-primary-300"
+              }`}
+            >
               {slide.tip}
             </p>
           </div>
@@ -215,9 +239,11 @@ function Onboarding() {
                 key={index}
                 onClick={() => goToSlide(index)}
                 className={`w-2 h-2 rounded-full transition-all
-                  ${index === currentSlide 
-                    ? 'bg-gold-500 w-6' 
-                    : 'bg-gray-600 hover:bg-gray-500'}`}
+                  ${
+                    index === currentSlide
+                      ? "bg-gold-500 w-6"
+                      : "bg-gray-600 hover:bg-gray-500"
+                  }`}
               />
             ))}
           </div>
@@ -232,7 +258,7 @@ function Onboarding() {
                 ← Précédent
               </button>
             )}
-            
+
             {isFirstSlide && (
               <button
                 onClick={handleSkip}
@@ -248,16 +274,20 @@ function Onboarding() {
                          hover:from-gold-500 hover:to-gold-400 
                          text-dark font-semibold rounded-full transition shadow-lg"
             >
-              {isLastSlide ? 'Commencer 🎭' : 'Suivant →'}
+              {isLastSlide ? "Commencer 🎭" : "Suivant →"}
             </button>
           </div>
         </div>
 
         {/* Barre de progression */}
         <div className="h-1 bg-gray-800">
-          <div 
+          <div
             className="h-full bg-gradient-to-r from-primary-600 to-gold-500 transition-all duration-300"
-            style={{ width: `${((currentSlide + 1) / ONBOARDING_SLIDES.length) * 100}%` }}
+            style={{
+              width: `${
+                ((currentSlide + 1) / ONBOARDING_SLIDES.length) * 100
+              }%`,
+            }}
           />
         </div>
       </div>
