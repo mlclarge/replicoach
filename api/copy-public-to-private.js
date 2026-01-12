@@ -7,7 +7,11 @@ export default async function handler(req, res) {
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !supabaseServiceKey) {
-      return res.status(500).json({ error: "Configuration serveur manquante (variables Supabase)" });
+      return res
+        .status(500)
+        .json({
+          error: "Configuration serveur manquante (variables Supabase)",
+        });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
@@ -18,7 +22,12 @@ export default async function handler(req, res) {
 
     const { sourcePath, fileName, userId } = req.body || {};
     if (!sourcePath || !fileName || !userId) {
-      return res.status(400).json({ error: "Paramètres manquants", received: { sourcePath, fileName, userId } });
+      return res
+        .status(400)
+        .json({
+          error: "Paramètres manquants",
+          received: { sourcePath, fileName, userId },
+        });
     }
 
     // 1. Télécharger le fichier source
@@ -27,12 +36,10 @@ export default async function handler(req, res) {
       .download(sourcePath);
 
     if (downloadError || !fileData) {
-      return res
-        .status(500)
-        .json({
-          error: "Erreur téléchargement source",
-          details: downloadError,
-        });
+      return res.status(500).json({
+        error: "Erreur téléchargement source",
+        details: downloadError,
+      });
     }
 
     // 2. Réuploader dans scripts-pdfs
@@ -61,11 +68,9 @@ export default async function handler(req, res) {
     return res.status(200).json({ newPath: uploadData.path });
   } catch (err) {
     // Attraper toute erreur inattendue et garantir une réponse JSON
-    return res
-      .status(500)
-      .json({
-        error: "Erreur serveur inattendue",
-        details: err?.message || err?.toString(),
-      });
+    return res.status(500).json({
+      error: "Erreur serveur inattendue",
+      details: err?.message || err?.toString(),
+    });
   }
 }
