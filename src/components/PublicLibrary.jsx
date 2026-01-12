@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { savePublicDocumentAsScript, getFileUrl, hasUserCopiedPublicDoc } from "../lib/supabase";
+import {
+  savePublicDocumentAsScript,
+  getFileUrl,
+  hasUserCopiedPublicDoc,
+} from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import {
@@ -116,7 +120,10 @@ function PublicLibrary() {
             <div className="mb-4 p-3 bg-primary-900/30 border border-primary-700/50 rounded-lg flex items-center gap-2">
               <span className="text-xl">💡</span>
               <p className="text-primary-300 text-xs">
-                Les documents de type <span className="font-bold">📜 Script</span> peuvent être copiés dans votre espace « Mes textes » pour les travailler en répliques.
+                Les documents de type{" "}
+                <span className="font-bold">📜 Script</span> peuvent être copiés
+                dans votre espace « Mes textes » pour les travailler en
+                répliques.
               </p>
             </div>
           )}
@@ -516,7 +523,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       const newPath = data.newPath;
 
       // 2. Créer le script personnel dans Supabase (table scripts)
-      const script = await savePublicDocumentAsScript({ ...doc, file_path: newPath }, userId);
+      const script = await savePublicDocumentAsScript(
+        { ...doc, file_path: newPath },
+        userId
+      );
 
       // 3. Si c'est un PDF, le parser pour extraire personnages et répliques
       if (doc.file_type === "pdf" && script?.id) {
@@ -526,7 +536,11 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           if (pdfUrl) {
             const pdfResponse = await fetch(pdfUrl);
             const pdfBlob = await pdfResponse.blob();
-            const pdfFile = new File([pdfBlob], doc.file_name || "document.pdf", { type: "application/pdf" });
+            const pdfFile = new File(
+              [pdfBlob],
+              doc.file_name || "document.pdf",
+              { type: "application/pdf" }
+            );
 
             // Extraire le texte du PDF
             const extraction = await extractTextFromPDF(pdfFile, () => {});
@@ -534,7 +548,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
 
             if (text && text.trim().length > 50) {
               // Parser le script
-              const { characters, replicas } = parseScript(text, doc.file_name || "");
+              const { characters, replicas } = parseScript(
+                text,
+                doc.file_name || ""
+              );
 
               // Créer les personnages
               const characterMap = {};
@@ -580,7 +597,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   };
 
   // Vérifier si le document est récent (moins de 48h)
-  const isNew = doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 48 * 60 * 60 * 1000;
+  const isNew =
+    doc.created_at &&
+    Date.now() - new Date(doc.created_at).getTime() < 48 * 60 * 60 * 1000;
 
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition group">
@@ -591,7 +610,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         <span className="text-xl">{getFileIcon(doc.file_type)}</span>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-white text-sm font-medium truncate">{doc.title}</p>
+            <p className="text-white text-sm font-medium truncate">
+              {doc.title}
+            </p>
             {/* Badge "Nouveau" pour les documents récents */}
             {isNew && (
               <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[10px] font-bold rounded animate-pulse">
@@ -619,31 +640,41 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           👁️
         </button>
         {/* Bouton Ajouter à Mes textes - uniquement pour les scripts non encore copiés */}
-        {!isOwner && userId && !saveSuccess && !alreadyCopied && doc.category === "script" && (
-          <button
-            onClick={handleSaveToMyTexts}
-            className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow"
-            title="Copier ce texte dans votre espace Mes textes"
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                <span className="text-xs font-semibold">Import en cours...</span>
-              </>
-            ) : (
-              <>
-                <span className="text-lg">📜</span>
-                <span className="text-xs font-semibold">Ajouter à Mes textes</span>
-              </>
-            )}
-          </button>
-        )}
+        {!isOwner &&
+          userId &&
+          !saveSuccess &&
+          !alreadyCopied &&
+          doc.category === "script" && (
+            <button
+              onClick={handleSaveToMyTexts}
+              className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow"
+              title="Copier ce texte dans votre espace Mes textes"
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <span className="animate-spin">⏳</span>
+                  <span className="text-xs font-semibold">
+                    Import en cours...
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-lg">📜</span>
+                  <span className="text-xs font-semibold">
+                    Ajouter à Mes textes
+                  </span>
+                </>
+              )}
+            </button>
+          )}
         {saveSuccess && doc.category === "script" && (
           <div className="flex items-center gap-2 px-3 py-2 bg-green-900/50 border border-green-500/50 rounded-lg animate-pulse">
             <span className="text-lg">✅</span>
             <div className="text-xs">
-              <p className="text-green-400 font-bold">Texte importé avec succès !</p>
+              <p className="text-green-400 font-bold">
+                Texte importé avec succès !
+              </p>
               <p className="text-green-300">Disponible dans « Mes Textes »</p>
             </div>
           </div>

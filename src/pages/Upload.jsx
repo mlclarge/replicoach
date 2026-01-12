@@ -34,6 +34,9 @@ function Upload() {
   // Vérifier si l'utilisateur est admin
   const isAdmin = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
 
+  // Onglet actif : 'file' ou 'paste'
+  const [activeTab, setActiveTab] = useState('file');
+  
   const [files, setFiles] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
@@ -42,6 +45,10 @@ function Upload() {
   const [error, setError] = useState(null);
   const [results, setResults] = useState([]);
   const [showResults, setShowResults] = useState(false);
+
+  // État pour le texte collé
+  const [pastedText, setPastedText] = useState("");
+  const [pastedTitle, setPastedTitle] = useState("");
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
@@ -234,6 +241,9 @@ function Upload() {
     setResults([]);
     setShowResults(false);
     setError(null);
+    setPastedText("");
+    setPastedTitle("");
+    setActiveTab('file');
   };
 
   const successCount = results.filter((r) => r.success).length;
@@ -275,14 +285,133 @@ function Upload() {
     );
   }
 
+  // Traitement du texte collé
+  const handleProcessPastedText = async () => {
+    if (!pastedText.trim()) {
+      setError("Veuillez coller du texte à analyser");
+      return;
+    }
+    if (!pastedTitle.trim()) {
+      setError("Veuillez donner un titre au texte");
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      setProgress({ step: "Analyse du texte collé...", percent: 10 });
+
+      // Parser le texte collé comme on le ferait pour un PDF
+      const { parseScript } = await import("../lib/scriptParser.js");
+      const parsed = parseScript(pastedText);
+
+      setProgress({ step: "Extraction des personnages...", percent: 40 });
+
+      if (parsed.characters.length === 0) {
+        setResults([{
+          success: false,
+          title: pastedTitle.trim(),
+          error: "Aucun personnage trouvé dans le texte. Vérifiez le format (NOM: réplique ou NOM - réplique)"
+        }]);
+        setShowResults(true);
+        setProcessing(false);
+        return;
+      }
+
+      setProgress({ step: "Création du script...", percent: 60 });
+
+      // Créer le script dans Supabase (sans fichier PDF)
+      const { data: scriptData, error: scriptError } = await supabase
+        .from("scripts")
+        .insert({
+          user_id: user.id,
+          title: pastedTitle.trim(),
+          original_text: pastedText,
+          file_type: "text",
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (scriptError) throw scriptError;
+
+      setProgress({ step: "Ajout des personnages...", percent: 70 });
+
+      // Ajouter les personnages
+      for (const char of parsed.characters) {
+        await addCharacter(scriptData.id, char);
+      }
+
+      setProgress({ step: "Ajout des répliques...", percent: 85 });
+
+      // Ajouter les répliques
+      if (parsed.replicas && parsed.replicas.length > 0) {
+        await addReplicas(scriptData.id, parsed.replicas);
+      }
+
+      setProgress({ step: "Terminé !", percent: 100 });
+
+      setResults([{
+        success: true,
+        title: pastedTitle.trim(),
+        characters: parsed.characters,
+        replicas: parsed.replicas?.length || 0
+      }]);
+      setShowResults(true);
+      setPastedText("");
+      setPastedTitle("");
+      
+      // Rafraîchir la liste des scripts
+      fetchScripts(user.id);
+
+    } catch (err) {
+      console.error("Erreur traitement texte collé:", err);
+      setResults([{
+        success: false,
+        title: pastedTitle.trim(),
+        error: err.message
+      }]);
+      setShowResults(true);
+    }
+
+    setProcessing(false);
+  };
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
       <h1 className="text-2xl font-display text-gold-500 mb-6">
         📄 Importer des textes
       </h1>
 
-      {/* Zone de drop */}
+      {/* Onglets */}
       {!processing && !showResults && (
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('file')}
+            className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+              activeTab === 'file'
+                ? 'bg-gold-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            📁 Importer un fichier
+          </button>
+          <button
+            onClick={() => setActiveTab('paste')}
+            className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
+              activeTab === 'paste'
+                ? 'bg-gold-500 text-black'
+                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+            }`}
+          >
+            📋 Coller un texte
+          </button>
+        </div>
+      )}
+
+      {/* Zone de drop (onglet fichier) */}
+      {!processing && !showResults && activeTab === 'file' && (
         <>
           <div
             {...getRootProps()}
@@ -358,6 +487,79 @@ function Upload() {
             </div>
           )}
         </>
+      )}
+
+      {/* Zone de texte collé (onglet paste) */}
+      {!processing && !showResults && activeTab === 'paste' && (
+        <div className="space-y-4">
+          {/* Titre du texte */}
+          <div>
+            <label className="block text-gray-300 text-sm mb-2">
+              Titre du texte *
+            </label>
+            <input
+              type="text"
+              value={pastedTitle}
+              onChange={(e) => setPastedTitle(e.target.value)}
+              placeholder="Ex: Scène du balcon - Roméo et Juliette"
+              className="w-full p-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors"
+            />
+          </div>
+
+          {/* Zone de texte */}
+          <div>
+            <label className="block text-gray-300 text-sm mb-2">
+              Collez votre texte ici *
+            </label>
+            <textarea
+              value={pastedText}
+              onChange={(e) => setPastedText(e.target.value)}
+              placeholder={`Collez le texte de votre scène ici...
+
+Format attendu (exemples):
+ROMEO: Ô Juliette, tu es le soleil !
+JULIETTE - Roméo, Roméo ! Pourquoi es-tu Roméo ?
+
+Le parser détecte automatiquement les personnages par leur nom en majuscules suivi de : ou -`}
+              rows={12}
+              className="w-full p-4 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors font-mono text-sm resize-none"
+            />
+          </div>
+
+          {/* Info format */}
+          <div className="bg-gray-800/50 rounded-xl p-4">
+            <p className="text-gray-400 text-sm mb-2">💡 Format attendu :</p>
+            <ul className="text-gray-500 text-sm space-y-1">
+              <li>• <code className="text-gold-400">NOM:</code> réplique</li>
+              <li>• <code className="text-gold-400">NOM -</code> réplique</li>
+              <li>• Les noms doivent être en MAJUSCULES</li>
+            </ul>
+          </div>
+
+          {error && (
+            <div className="p-4 bg-red-500/10 border border-red-500 rounded-lg">
+              <p className="text-red-400">{error}</p>
+            </div>
+          )}
+
+          {/* Boutons */}
+          <div className="flex gap-3">
+            <button 
+              onClick={() => { setPastedText(""); setPastedTitle(""); setError(null); }} 
+              className="btn-secondary flex-1"
+              disabled={!pastedText && !pastedTitle}
+            >
+              ✕ Effacer
+            </button>
+            <button 
+              onClick={handleProcessPastedText} 
+              className="btn-gold flex-1"
+              disabled={!pastedText.trim() || !pastedTitle.trim()}
+            >
+              🚀 Analyser le texte
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Progression */}
