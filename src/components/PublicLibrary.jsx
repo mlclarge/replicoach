@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { savePublicDocumentAsScript, getFileUrl } from "../lib/supabase";
+import { savePublicDocumentAsScript, getFileUrl, hasUserCopiedPublicDoc } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import {
@@ -470,9 +470,21 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [alreadyCopied, setAlreadyCopied] = useState(false);
 
   // Accès au store pour créer personnages, répliques et rafraîchir la liste
   const { addCharacter, addReplicas, fetchScripts } = useScriptStore();
+
+  // Vérifier si le document a déjà été copié par cet utilisateur
+  useEffect(() => {
+    const checkIfCopied = async () => {
+      if (userId && doc.id && doc.category === "script") {
+        const copied = await hasUserCopiedPublicDoc(doc.id, userId);
+        setAlreadyCopied(copied);
+      }
+    };
+    checkIfCopied();
+  }, [userId, doc.id, doc.category, saveSuccess]);
 
   // Fonction pour copier le document et parser le PDF en répliques
   const handleSaveToMyTexts = async () => {
@@ -579,6 +591,12 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           {doc.description && (
             <p className="text-gray-500 text-xs truncate">{doc.description}</p>
           )}
+          {/* Badge "Déjà dans Mes textes" */}
+          {alreadyCopied && doc.category === "script" && (
+            <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full">
+              ✓ Dans Mes textes
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-2">
@@ -589,8 +607,8 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         >
           👁️
         </button>
-        {/* Bouton Ajouter à Mes textes - uniquement pour les scripts */}
-        {!isOwner && userId && !saveSuccess && doc.category === "script" && (
+        {/* Bouton Ajouter à Mes textes - uniquement pour les scripts non encore copiés */}
+        {!isOwner && userId && !saveSuccess && !alreadyCopied && doc.category === "script" && (
           <button
             onClick={handleSaveToMyTexts}
             className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow"

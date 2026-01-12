@@ -8,6 +8,7 @@ export const savePublicDocumentAsScript = async (publicDoc, userId) => {
     original_filename: publicDoc.file_name,
     pdf_url: publicDoc.file_path, // Chemin déjà copié par l'API
     full_text: "", // Optionnel, à remplir si besoin
+    source_public_doc_id: publicDoc.id, // ID du document source pour traçabilité
   };
   // Récupérer le display_order max
   const { data: existingScripts } = await supabase
@@ -27,6 +28,22 @@ export const savePublicDocumentAsScript = async (publicDoc, userId) => {
   if (error) throw error;
   return data;
 };
+
+// Vérifier si un utilisateur a déjà copié un document public
+export const hasUserCopiedPublicDoc = async (publicDocId, userId) => {
+  const { data, error } = await supabase
+    .from("scripts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("source_public_doc_id", publicDocId)
+    .limit(1);
+  if (error) {
+    console.warn("Erreur vérification copie:", error);
+    return false;
+  }
+  return data && data.length > 0;
+};
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
