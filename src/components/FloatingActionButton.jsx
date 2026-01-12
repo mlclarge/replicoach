@@ -35,6 +35,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
 
   const handleAudioInput = (e) => {
     const file = e.target.files[0];
+    console.log('FloatingActionButton: fichier audio sélectionné', file);
     if (file && onAddAudio) {
       onAddAudio(file);
     }
