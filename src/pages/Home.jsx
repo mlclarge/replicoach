@@ -16,6 +16,7 @@ import {
   deletePersonalAudio,
   getAudioUrl,
   updatePersonalAudioOrder,
+  getPublicDocumentUrl,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
@@ -56,6 +57,18 @@ const CARD_BACKGROUNDS = [
   { bg: "bg-yellow-50", border: "border-yellow-200", text: "text-yellow-900" },
 ];
 
+// Fonction pour détecter si un script est un audio et obtenir son URL
+const getScriptAudioUrl = (pdfUrl) => {
+  if (!pdfUrl || !pdfUrl.startsWith('audio:')) return null;
+  // Format: audio:public:<path>
+  const path = pdfUrl.replace('audio:', '');
+  if (path.startsWith('public:')) {
+    const publicPath = path.replace('public:', '');
+    return getPublicDocumentUrl(publicPath);
+  }
+  return null;
+};
+
 function SortableScriptCard({
   script,
   onDelete,
@@ -84,6 +97,10 @@ function SortableScriptCard({
 
   // Couleur de fond alternée selon l'index
   const colorScheme = CARD_BACKGROUNDS[index % CARD_BACKGROUNDS.length];
+
+  // Vérifier si c'est un script audio
+  const isAudioScript = script.pdf_url && script.pdf_url.startsWith('audio:');
+  const audioUrl = isAudioScript ? getScriptAudioUrl(script.pdf_url) : null;
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
@@ -193,6 +210,21 @@ function SortableScriptCard({
                       +{script.characters.length - 4}
                     </span>
                   )}
+                </div>
+              )}
+
+              {/* PLAYER AUDIO si c'est un script audio */}
+              {isAudioScript && audioUrl && (
+                <div className="mt-3" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-lg">🎵</span>
+                    <span className="text-sm font-semibold text-blue-700">Fichier audio</span>
+                  </div>
+                  <audio
+                    controls
+                    src={audioUrl}
+                    className="w-full h-10 rounded-lg"
+                  />
                 </div>
               )}
             </div>
