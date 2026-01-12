@@ -773,8 +773,8 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             className="w-full h-10"
           />
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Bouton Ajouter à Mes audios */}
-            {!isOwner && userId && !saveSuccess && !alreadyCopied && (
+            {/* Bouton Ajouter à Mes audios - visible même pour le propriétaire */}
+            {userId && !saveSuccess && !alreadyCopied && (
               <button
                 onClick={handleSaveAudioToPersonal}
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition flex items-center gap-2 shadow whitespace-nowrap"
@@ -798,8 +798,8 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
               </div>
             )}
             
-            {/* Bouton Ajouter à Mes textes */}
-            {!isOwner && userId && !saveSuccessTexts && !alreadyInTexts && (
+            {/* Bouton Ajouter à Mes textes - visible même pour le propriétaire */}
+            {userId && !saveSuccessTexts && !alreadyInTexts && (
               <button
                 onClick={handleSaveAudioToTexts}
                 className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow whitespace-nowrap"
