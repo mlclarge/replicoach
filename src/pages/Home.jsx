@@ -14,7 +14,7 @@ import {
   uploadPersonalAudio,
   fetchPersonalAudios,
   deletePersonalAudio,
-  getPersonalAudioUrl,
+  getAudioUrl,
   updatePersonalAudioOrder,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
@@ -1281,7 +1281,7 @@ function Home() {
                     <SortableAudioCard
                       key={item.id}
                       audio={item}
-                      audioUrl={getPersonalAudioUrl(item.audio_path)}
+                      audioUrl={getAudioUrl(item.audio_path)}
                       onDelete={handleDeleteAudio}
                       orderLocked={orderLocked}
                     />

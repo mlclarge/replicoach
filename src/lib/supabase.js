@@ -435,13 +435,14 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
 
   if (uploadError) throw uploadError;
 
-  // DÃ©terminer le type de fichier
+  // Déterminer le type de fichier
   let fileType = "other";
   if (file.type === "application/pdf") fileType = "pdf";
   else if (file.type.startsWith("image/")) fileType = "image";
   else if (file.type === "text/plain") fileType = "txt";
+  else if (file.type.startsWith("audio/")) fileType = "audio";
 
-  // Enregistrer les mÃ©tadonnÃ©es
+  // Enregistrer les métadonnées
   const { data, error } = await supabase
     .from("public_documents")
     .insert([
@@ -454,7 +455,7 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
         file_type: fileType,
         category: metadata.category || "script",
         uploaded_by: userId,
-        is_approved: true, // En attente de modÃ©ration
+        is_approved: true,
       },
     ])
     .select()
@@ -1524,4 +1525,70 @@ export const updatePersonalAudioOrder = async (updates) => {
       .eq("id", update.id);
     if (error) throw error;
   }
+};
+
+// Copier un audio public vers les audios personnels
+export const copyPublicAudioToPersonal = async (publicDoc, userId) => {
+  // Récupérer le display_order max
+  const { data: existingAudios } = await supabase
+    .from("personal_audios")
+    .select("display_order")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (existingAudios?.[0]?.display_order || 0) + 1;
+
+  // Créer l'entrée en base avec le chemin du fichier public
+  // Note: on utilise le même fichier, pas de copie physique nécessaire
+  const { data, error } = await supabase
+    .from("personal_audios")
+    .insert([
+      {
+        user_id: userId,
+        name: publicDoc.title || publicDoc.file_name,
+        audio_path: `public:${publicDoc.file_path}`, // Préfixe pour indiquer que c'est un fichier public
+        display_order: nextOrder,
+        source_public_doc_id: publicDoc.id,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Vérifier si un utilisateur a déjà copié un audio public
+export const hasUserCopiedPublicAudio = async (publicDocId, userId) => {
+  const { data, error } = await supabase
+    .from("personal_audios")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("source_public_doc_id", publicDocId)
+    .limit(1);
+  if (error) {
+    console.warn("Erreur vérification copie audio:", error);
+    return false;
+  }
+  return data && data.length > 0;
+};
+
+// URL d'un audio (personnel ou public)
+export const getAudioUrl = (audioPath) => {
+  if (!audioPath) return null;
+  
+  // Si c'est un audio provenant de la bibliothèque publique
+  if (audioPath.startsWith('public:')) {
+    const publicPath = audioPath.replace('public:', '');
+    const { data } = supabase.storage
+      .from("public-documents")
+      .getPublicUrl(publicPath);
+    return data.publicUrl;
+  }
+  
+  // Sinon c'est un audio personnel
+  const { data } = supabase.storage
+    .from("audio-recordings")
+    .getPublicUrl(audioPath);
+  return data.publicUrl;
 };

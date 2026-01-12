@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS personal_audios (
   name TEXT NOT NULL,
   audio_path TEXT NOT NULL,
   display_order INTEGER DEFAULT 0,
+  source_public_doc_id UUID DEFAULT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
