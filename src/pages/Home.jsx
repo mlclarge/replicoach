@@ -903,6 +903,14 @@ function Home() {
   };
 
   // Fonction d'import audio locale
+  // Suppression d'un audio local
+  const handleDeleteAudio = (audioId) => {
+    const updated = localAudios.filter((a) => a.id !== audioId);
+    localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+    setLocalAudios(updated);
+    setAudioImportMsg({ type: 'success', text: 'Audio supprimé.' });
+  };
+
   const handleAddAudio = (file) => {
     console.log('Import audio déclenché', file);
     if (!file || !file.type.startsWith('audio/')) {
@@ -914,6 +922,7 @@ function Home() {
       const audioUrl = ev.target.result;
       const newAudio = {
         id: 'audio-' + Date.now(),
+        type: 'audio',
         name: file.name,
         url: audioUrl,
         display_order: localScripts.length + localAudios.length + 1,
@@ -1164,7 +1173,7 @@ function Home() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={localScripts.map((s) => s.id)}
+            items={[...localScripts.map((s) => s.id), ...localAudios.map((a) => a.id)]}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
@@ -1172,15 +1181,15 @@ function Home() {
               {[...localScripts, ...localAudios]
                 .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
                 .map((item, index) =>
-                  item.url ? (
+                  item.type === 'audio' ? (
                     <div
                       key={item.id}
-                      className="block transition rounded-xl border-2 shadow-md bg-blue-50 border-blue-200"
+                      className="block transition rounded-xl border-2 shadow-md bg-blue-900 border-blue-700"
                     >
                       <div className="p-4 flex items-center gap-3">
-                        <span className="text-2xl text-blue-500">🎵</span>
+                        <span className="text-2xl text-blue-400">🎵</span>
                         <div className="flex-1">
-                          <h3 className="font-bold text-lg text-blue-900">
+                          <h3 className="font-bold text-lg text-white">
                             {item.name}
                           </h3>
                           <audio
@@ -1189,6 +1198,13 @@ function Home() {
                             className="w-full mt-2"
                           />
                         </div>
+                        <button
+                          onClick={() => handleDeleteAudio(item.id)}
+                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition"
+                          title="Supprimer cet audio"
+                        >
+                          🗑️
+                        </button>
                       </div>
                     </div>
                   ) : (
