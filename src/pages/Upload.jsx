@@ -331,9 +331,12 @@ function Upload() {
 
       setProgress({ step: "Ajout des personnages...", percent: 70 });
 
-      // Ajouter les personnages
+      // Ajouter les personnages (seulement name et color)
       for (const char of parsed.characters) {
-        await addCharacter(scriptData.id, char);
+        await addCharacter(scriptData.id, {
+          name: char.name,
+          color: char.color,
+        });
       }
 
       setProgress({ step: "Ajout des répliques...", percent: 85 });
