@@ -530,6 +530,9 @@ function Home() {
     }
   });
 
+  // État pour la notification d'import audio
+  const [audioImportMsg, setAudioImportMsg] = useState(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -889,31 +892,40 @@ function Home() {
           "replicoach-local-audios",
           JSON.stringify(updated)
         );
+        setAudioImportMsg({ type: "success", text: `Audio importé : ${file.name}` });
         return updated;
       });
+    };
+    reader.onerror = () => {
+      setAudioImportMsg({ type: "error", text: "Erreur lors de l'import du fichier audio." });
     };
     reader.readAsDataURL(file);
   };
 
   // Fonction d'import audio locale
   const handleAddAudio = (file) => {
+    if (!file || !file.type.startsWith('audio/')) {
+      setAudioImportMsg({ type: 'error', text: "Format non supporté. Veuillez choisir un fichier audio." });
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const audioUrl = ev.target.result;
       const newAudio = {
-        id: "audio-" + Date.now(),
+        id: 'audio-' + Date.now(),
         name: file.name,
         url: audioUrl,
         display_order: localScripts.length + localAudios.length + 1,
       };
       setLocalAudios((prev) => {
         const updated = [...prev, newAudio];
-        localStorage.setItem(
-          "replicoach-local-audios",
-          JSON.stringify(updated)
-        );
+        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
         return updated;
       });
+    };
+    reader.onerror = () => {
+      setAudioImportMsg({ type: 'error', text: "Erreur lors de l'import du fichier audio." });
     };
     reader.readAsDataURL(file);
   };
@@ -1438,6 +1450,14 @@ function Home() {
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Notification import audio */}
+      {audioImportMsg && (
+        <div className={`my-3 px-4 py-2 rounded-lg font-semibold text-sm ${audioImportMsg.type === 'success' ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'}`}>
+          {audioImportMsg.text}
+          <button className="ml-3 text-xs text-gray-500" onClick={() => setAudioImportMsg(null)}>✕</button>
         </div>
       )}
 
