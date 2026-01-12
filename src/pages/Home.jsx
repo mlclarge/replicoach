@@ -102,7 +102,11 @@ function SortableScriptCard({
                            touch-none select-none"
                 style={{ touchAction: "none" }}
               >
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <svg
+                  className="w-5 h-5"
+                  fill="currentColor"
+                  viewBox="0 0 20 20"
+                >
                   <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
                 </svg>
               </div>
@@ -472,7 +476,7 @@ function Home() {
   // État pour verrouiller l'ordre (empêcher drag & drop accidentel)
   const [orderLocked, setOrderLocked] = useState(() => {
     try {
-      return localStorage.getItem('replicoach-order-locked') === 'true';
+      return localStorage.getItem("replicoach-order-locked") === "true";
     } catch {
       return false;
     }
@@ -483,7 +487,7 @@ function Home() {
     const newValue = !orderLocked;
     setOrderLocked(newValue);
     try {
-      localStorage.setItem('replicoach-order-locked', String(newValue));
+      localStorage.setItem("replicoach-order-locked", String(newValue));
     } catch {}
   };
 
@@ -514,6 +518,16 @@ function Home() {
   const [selectedTagFilter, setSelectedTagFilter] = useState(null);
   const [scriptTagsMap, setScriptTagsMap] = useState({}); // { scriptId: [tags] }
   const [managingTagsFor, setManagingTagsFor] = useState(null); // script en cours d'édition tags
+
+  // État pour les blocs audio locaux
+  const [localAudios, setLocalAudios] = useState(() => {
+    try {
+      const data = localStorage.getItem('replicoach-local-audios');
+      return data ? JSON.parse(data) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -855,6 +869,28 @@ function Home() {
     }
   };
 
+  // Fonction d'import audio
+  const handleImportAudio = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const audioUrl = ev.target.result;
+      const newAudio = {
+        id: 'audio-' + Date.now(),
+        name: file.name,
+        url: audioUrl,
+        display_order: localScripts.length + localAudios.length + 1,
+      };
+      setLocalAudios((prev) => {
+        const updated = [...prev, newAudio];
+        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const activeScript = activeId
     ? localScripts.find((s) => s.id === activeId)
     : null;
@@ -1040,21 +1076,27 @@ function Home() {
         <div className="flex items-center justify-between mb-3">
           <p className="text-gray-500 text-xs flex items-center gap-1">
             {orderLocked ? (
-              <><span>🔒</span> Ordre verrouillé</>
+              <>
+                <span>🔒</span> Ordre verrouillé
+              </>
             ) : (
-              <><span>💡</span> Maintenez appuyé sur ⋮⋮ pour réorganiser</>
+              <>
+                <span>💡</span> Maintenez appuyé sur ⋮⋮ pour réorganiser
+              </>
             )}
           </p>
           <button
             onClick={toggleOrderLock}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
               orderLocked
-                ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30'
-                : 'bg-gray-700 text-gray-400 border border-gray-600 hover:bg-gray-600 hover:text-white'
+                ? "bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30"
+                : "bg-gray-700 text-gray-400 border border-gray-600 hover:bg-gray-600 hover:text-white"
             }`}
-            title={orderLocked ? 'Déverrouiller l\'ordre' : 'Verrouiller l\'ordre'}
+            title={
+              orderLocked ? "Déverrouiller l'ordre" : "Verrouiller l'ordre"
+            }
           >
-            {orderLocked ? '🔓 Déverrouiller' : '🔒 Verrouiller'}
+            {orderLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller"}
           </button>
         </div>
       )}
@@ -1083,22 +1125,37 @@ function Home() {
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
-              {localScripts.map((script, index) => (
-                <SortableScriptCard
-                  key={script.id}
-                  script={{
-                    ...script,
-                    tags: scriptTagsMap[script.id] || [],
-                  }}
-                  index={index}
-                  onDelete={handleDelete}
-                  onOpen={handleOpenScript}
-                  onShare={handleOpenShare}
-                  onManageTags={(s) => setManagingTagsFor(s)}
-                  notesCount={notesCounts[script.id] || 0}
-                  orderLocked={orderLocked}
-                />
-              ))}
+              {/* Liste des scripts */}
+              {[...localScripts, ...localAudios]
+                .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                .map((item, index) =>
+                  item.url ? (
+                    <div key={item.id} className="block transition rounded-xl border-2 shadow-md bg-blue-50 border-blue-200">
+                      <div className="p-4 flex items-center gap-3">
+                        <span className="text-2xl text-blue-500">🎵</span>
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg text-blue-900">{item.name}</h3>
+                          <audio controls src={item.url} className="w-full mt-2" />
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <SortableScriptCard
+                      key={item.id}
+                      script={{
+                        ...item,
+                        tags: scriptTagsMap[item.id] || [],
+                      }}
+                      index={index}
+                      onDelete={handleDelete}
+                      onOpen={handleOpenScript}
+                      onShare={handleOpenShare}
+                      onManageTags={(s) => setManagingTagsFor(s)}
+                      notesCount={notesCounts[item.id] || 0}
+                      orderLocked={orderLocked}
+                    />
+                  )
+                )}
             </div>
           </SortableContext>
 

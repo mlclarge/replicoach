@@ -5,7 +5,12 @@ import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { uploadFile, supabase } from "../lib/supabase";
 import { extractTextFromPDF } from "../lib/pdfProcessor";
-import { extractTextFromWord, isWordDocument, isTextFile, extractTextFromTxt } from "../lib/docProcessor";
+import {
+  extractTextFromWord,
+  isWordDocument,
+  isTextFile,
+  extractTextFromTxt,
+} from "../lib/docProcessor";
 import { parseScript } from "../lib/scriptParser";
 import Loader from "../components/ui/Loader";
 
@@ -13,7 +18,9 @@ import Loader from "../components/ui/Loader";
 const ACCEPTED_FILE_TYPES = {
   "application/pdf": [".pdf"],
   "application/msword": [".doc"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [
+    ".docx",
+  ],
   "text/plain": [".txt"],
 };
 
@@ -22,21 +29,22 @@ const SUPPORTED_EXTENSIONS = "PDF, Word (.doc, .docx), TXT";
 
 // Liste des emails autorisés à uploader (metteur en scène / développeur)
 const ADMIN_EMAILS = [
-  'moz2611@gmail.com',
+  "moz2611@gmail.com",
   // Ajouter d'autres emails d'admins ici
 ];
 
 function Upload() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { createScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
+  const { createScript, addCharacter, addReplicas, fetchScripts } =
+    useScriptStore();
 
   // Vérifier si l'utilisateur est admin
   const isAdmin = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
 
   // Onglet actif : 'file' ou 'paste'
-  const [activeTab, setActiveTab] = useState('file');
-  
+  const [activeTab, setActiveTab] = useState("file");
+
   const [files, setFiles] = useState([]);
   const [processing, setProcessing] = useState(false);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
@@ -71,19 +79,31 @@ function Upload() {
    * Retourne { text, confidence, usedOCR, quality, warning }
    */
   const extractText = async (file, onProgress) => {
-    const extension = file.name.toLowerCase().split('.').pop();
-    
-    if (extension === 'pdf') {
+    const extension = file.name.toLowerCase().split(".").pop();
+
+    if (extension === "pdf") {
       // extractTextFromPDF retourne maintenant un objet avec métadonnées
       return await extractTextFromPDF(file, onProgress);
-    } else if (extension === 'docx' || extension === 'doc') {
+    } else if (extension === "docx" || extension === "doc") {
       const text = await extractTextFromWord(file, onProgress);
-      return { text, confidence: 100, usedOCR: false, quality: 'good', warning: null };
-    } else if (extension === 'txt') {
+      return {
+        text,
+        confidence: 100,
+        usedOCR: false,
+        quality: "good",
+        warning: null,
+      };
+    } else if (extension === "txt") {
       onProgress(0.5);
       const text = await extractTextFromTxt(file);
       onProgress(1);
-      return { text, confidence: 100, usedOCR: false, quality: 'good', warning: null };
+      return {
+        text,
+        confidence: 100,
+        usedOCR: false,
+        quality: "good",
+        warning: null,
+      };
     } else {
       throw new Error(`Format non supporté: .${extension}`);
     }
@@ -93,13 +113,17 @@ function Upload() {
    * Retourne l'icône selon le type de fichier
    */
   const getFileIcon = (filename) => {
-    const ext = filename.toLowerCase().split('.').pop();
+    const ext = filename.toLowerCase().split(".").pop();
     switch (ext) {
-      case 'pdf': return '📕';
-      case 'doc':
-      case 'docx': return '📘';
-      case 'txt': return '📄';
-      default: return '📁';
+      case "pdf":
+        return "📕";
+      case "doc":
+      case "docx":
+        return "📘";
+      case "txt":
+        return "📄";
+      default:
+        return "📁";
     }
   };
 
@@ -117,7 +141,7 @@ function Upload() {
 
     try {
       setCurrentFileName(file.name);
-      const extension = file.name.toLowerCase().split('.').pop();
+      const extension = file.name.toLowerCase().split(".").pop();
 
       // Étape 1: Extraction du texte
       const basePercent = (fileIndex / totalFiles) * 100;
@@ -130,8 +154,12 @@ function Upload() {
 
       const extraction = await extractText(file, (extractProgress) => {
         setProgress({
-          step: extension === 'pdf' ? `OCR en cours...` : `Lecture du fichier...`,
-          percent: basePercent + filePercent * 0.2 + extractProgress * filePercent * 0.3,
+          step:
+            extension === "pdf" ? `OCR en cours...` : `Lecture du fichier...`,
+          percent:
+            basePercent +
+            filePercent * 0.2 +
+            extractProgress * filePercent * 0.3,
         });
       });
 
@@ -243,7 +271,7 @@ function Upload() {
     setError(null);
     setPastedText("");
     setPastedTitle("");
-    setActiveTab('file');
+    setActiveTab("file");
   };
 
   const successCount = results.filter((r) => r.success).length;
@@ -266,7 +294,7 @@ function Upload() {
             Demandez à votre metteur en scène d'importer les textes, <br />
             puis de les partager avec vous via une troupe.
           </p>
-          
+
           <div className="bg-gray-800/50 rounded-xl p-4 mb-6 max-w-sm mx-auto">
             <p className="text-gray-400 text-sm mb-2">💡 Comment ça marche ?</p>
             <ol className="text-left text-gray-500 text-sm space-y-2">
@@ -276,7 +304,7 @@ function Upload() {
               <li>4. Vous recevez les textes dans "Partagés"</li>
             </ol>
           </div>
-          
+
           <Link to="/shared" className="btn-gold inline-block">
             👥 Voir les textes partagés
           </Link>
@@ -309,11 +337,14 @@ function Upload() {
       setProgress({ step: "Extraction des personnages...", percent: 40 });
 
       if (parsed.characters.length === 0) {
-        setResults([{
-          success: false,
-          title: pastedTitle.trim(),
-          error: "Aucun personnage trouvé dans le texte. Vérifiez le format (NOM: réplique ou NOM - réplique)"
-        }]);
+        setResults([
+          {
+            success: false,
+            title: pastedTitle.trim(),
+            error:
+              "Aucun personnage trouvé dans le texte. Vérifiez le format (NOM: réplique ou NOM - réplique)",
+          },
+        ]);
         setShowResults(true);
         setProcessing(false);
         return;
@@ -358,26 +389,29 @@ function Upload() {
 
       setProgress({ step: "Terminé !", percent: 100 });
 
-      setResults([{
-        success: true,
-        title: pastedTitle.trim(),
-        charactersCount: parsed.characters.length,
-        replicasCount: parsed.replicas?.length || 0
-      }]);
+      setResults([
+        {
+          success: true,
+          title: pastedTitle.trim(),
+          charactersCount: parsed.characters.length,
+          replicasCount: parsed.replicas?.length || 0,
+        },
+      ]);
       setShowResults(true);
       setPastedText("");
       setPastedTitle("");
-      
+
       // Rafraîchir la liste des scripts
       fetchScripts(user.id);
-
     } catch (err) {
       console.error("Erreur traitement texte collé:", err);
-      setResults([{
-        success: false,
-        title: pastedTitle.trim(),
-        error: err.message
-      }]);
+      setResults([
+        {
+          success: false,
+          title: pastedTitle.trim(),
+          error: err.message,
+        },
+      ]);
       setShowResults(true);
     }
 
@@ -394,21 +428,21 @@ function Upload() {
       {!processing && !showResults && (
         <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setActiveTab('file')}
+            onClick={() => setActiveTab("file")}
             className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-              activeTab === 'file'
-                ? 'bg-gold-500 text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              activeTab === "file"
+                ? "bg-gold-500 text-black"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
             }`}
           >
             📁 Importer un fichier
           </button>
           <button
-            onClick={() => setActiveTab('paste')}
+            onClick={() => setActiveTab("paste")}
             className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all ${
-              activeTab === 'paste'
-                ? 'bg-gold-500 text-black'
-                : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              activeTab === "paste"
+                ? "bg-gold-500 text-black"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700"
             }`}
           >
             📋 Coller un texte
@@ -417,7 +451,7 @@ function Upload() {
       )}
 
       {/* Zone de drop (onglet fichier) */}
-      {!processing && !showResults && activeTab === 'file' && (
+      {!processing && !showResults && activeTab === "file" && (
         <>
           <div
             {...getRootProps()}
@@ -442,7 +476,10 @@ function Upload() {
                 </p>
                 <div className="mt-3 max-h-40 overflow-y-auto">
                   {files.map((file, index) => (
-                    <p key={index} className="text-gray-400 text-sm flex items-center justify-center gap-2">
+                    <p
+                      key={index}
+                      className="text-gray-400 text-sm flex items-center justify-center gap-2"
+                    >
                       <span>{getFileIcon(file.name)}</span>
                       {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
                     </p>
@@ -465,9 +502,15 @@ function Upload() {
                 </p>
                 {/* Formats supportés */}
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">📕 PDF</span>
-                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">📘 Word</span>
-                  <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs">📄 TXT</span>
+                  <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">
+                    📕 PDF
+                  </span>
+                  <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">
+                    📘 Word
+                  </span>
+                  <span className="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs">
+                    📄 TXT
+                  </span>
                 </div>
                 <p className="text-gold-500 text-sm mt-3">
                   📚 Jusqu'à 50 fichiers en une fois !
@@ -496,7 +539,7 @@ function Upload() {
       )}
 
       {/* Zone de texte collé (onglet paste) */}
-      {!processing && !showResults && activeTab === 'paste' && (
+      {!processing && !showResults && activeTab === "paste" && (
         <div className="space-y-4">
           {/* Titre du texte */}
           <div>
@@ -536,8 +579,12 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
           <div className="bg-gray-800/50 rounded-xl p-4">
             <p className="text-gray-400 text-sm mb-2">💡 Format attendu :</p>
             <ul className="text-gray-500 text-sm space-y-1">
-              <li>• <code className="text-gold-400">NOM:</code> réplique</li>
-              <li>• <code className="text-gold-400">NOM -</code> réplique</li>
+              <li>
+                • <code className="text-gold-400">NOM:</code> réplique
+              </li>
+              <li>
+                • <code className="text-gold-400">NOM -</code> réplique
+              </li>
               <li>• Les noms doivent être en MAJUSCULES</li>
             </ul>
           </div>
@@ -550,15 +597,19 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
 
           {/* Boutons */}
           <div className="flex gap-3">
-            <button 
-              onClick={() => { setPastedText(""); setPastedTitle(""); setError(null); }} 
+            <button
+              onClick={() => {
+                setPastedText("");
+                setPastedTitle("");
+                setError(null);
+              }}
               className="btn-secondary flex-1"
               disabled={!pastedText && !pastedTitle}
             >
               ✕ Effacer
             </button>
-            <button 
-              onClick={handleProcessPastedText} 
+            <button
+              onClick={handleProcessPastedText}
               className="btn-gold flex-1"
               disabled={!pastedText.trim() || !pastedTitle.trim()}
             >
@@ -606,7 +657,7 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                   {successCount - warningCount}
                 </p>
                 <p className="text-green-400 text-sm">
-                  ✅ Parfait{(successCount - warningCount) > 1 ? "s" : ""}
+                  ✅ Parfait{successCount - warningCount > 1 ? "s" : ""}
                 </p>
               </div>
               {warningCount > 0 && (
@@ -614,9 +665,7 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                   <p className="text-3xl font-bold text-yellow-500">
                     {warningCount}
                   </p>
-                  <p className="text-yellow-400 text-sm">
-                    ⚠️ À vérifier
-                  </p>
+                  <p className="text-yellow-400 text-sm">⚠️ À vérifier</p>
                 </div>
               )}
               {errorCount > 0 && (
@@ -638,11 +687,11 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
               <div
                 key={index}
                 className={`p-3 rounded-lg ${
-                  !result.success 
-                    ? "bg-red-500/10" 
-                    : result.warning 
-                      ? "bg-yellow-500/10" 
-                      : "bg-green-500/10"
+                  !result.success
+                    ? "bg-red-500/10"
+                    : result.warning
+                    ? "bg-yellow-500/10"
+                    : "bg-green-500/10"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -652,14 +701,16 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                   <div className="flex-1">
                     <p
                       className={`font-medium flex items-center gap-2 ${
-                        !result.success 
-                          ? "text-red-400" 
-                          : result.warning 
-                            ? "text-yellow-400" 
-                            : "text-green-400"
+                        !result.success
+                          ? "text-red-400"
+                          : result.warning
+                          ? "text-yellow-400"
+                          : "text-green-400"
                       }`}
                     >
-                      <span>{result.filename ? getFileIcon(result.filename) : "📋"}</span>
+                      <span>
+                        {result.filename ? getFileIcon(result.filename) : "📋"}
+                      </span>
                       {result.title || result.filename}
                       {result.usedOCR && (
                         <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
@@ -674,10 +725,15 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                         {result.replicasCount} réplique
                         {result.replicasCount > 1 ? "s" : ""}
                         {result.confidence !== null && result.usedOCR && (
-                          <span className={`ml-2 ${
-                            result.confidence >= 70 ? 'text-green-500' :
-                            result.confidence >= 50 ? 'text-yellow-500' : 'text-red-500'
-                          }`}>
+                          <span
+                            className={`ml-2 ${
+                              result.confidence >= 70
+                                ? "text-green-500"
+                                : result.confidence >= 50
+                                ? "text-yellow-500"
+                                : "text-red-500"
+                            }`}
+                          >
                             • Confiance: {result.confidence}%
                           </span>
                         )}
