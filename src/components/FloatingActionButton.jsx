@@ -36,8 +36,12 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const handleAudioInput = (e) => {
     const file = e.target.files[0];
     console.log('FloatingActionButton: fichier audio sélectionné', file);
+    console.log('FloatingActionButton: onAddAudio disponible?', !!onAddAudio);
     if (file && onAddAudio) {
+      console.log('FloatingActionButton: appel de onAddAudio...');
       onAddAudio(file);
+    } else if (file && !onAddAudio) {
+      console.error('FloatingActionButton: onAddAudio non défini!');
     }
     setShowAudioInput(false);
   };

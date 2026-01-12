@@ -912,11 +912,13 @@ function Home() {
   };
 
   const handleAddAudio = (file) => {
-    console.log('Import audio déclenché', file);
+    console.log('Home.jsx: handleAddAudio appelé avec', file);
     if (!file || !file.type.startsWith('audio/')) {
+      console.log('Home.jsx: fichier invalide');
       setAudioImportMsg({ type: 'error', text: "Format non supporté. Veuillez choisir un fichier audio." });
       return;
     }
+    console.log('Home.jsx: lecture du fichier...');
     const reader = new FileReader();
     reader.onload = (ev) => {
       const audioUrl = ev.target.result;
