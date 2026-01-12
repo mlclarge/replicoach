@@ -1,4 +1,54 @@
-﻿import { createClient } from "@supabase/supabase-js";
+﻿// Copier un document public dans Mes textes (scripts)
+export const savePublicDocumentAsScript = async (publicDoc, userId) => {
+  // Télécharger le fichier depuis le bucket public-documents
+  const { data: fileData, error: downloadError } = await supabase.storage
+    .from("public-documents")
+    .download(publicDoc.file_path);
+  if (downloadError || !fileData) {
+    throw new Error("Impossible de copier le fichier PDF. Cette action nécessite un accès serveur ou des droits spéciaux. Contactez l'administrateur si besoin.");
+  }
+
+  // Réuploader dans scripts-pdfs
+  const timestamp = Date.now();
+  const safeName = publicDoc.file_name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const newFileName = `${userId}/${timestamp}_${safeName}`;
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("scripts-pdfs")
+    .upload(newFileName, fileData, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+  if (uploadError || !uploadData?.path) {
+    throw new Error("Impossible de copier le fichier PDF dans votre espace. Veuillez réessayer plus tard ou contacter l'administrateur.");
+  }
+
+  // Créer le script personnel
+  const scriptData = {
+    user_id: userId,
+    title: publicDoc.title,
+    original_filename: publicDoc.file_name,
+    pdf_url: uploadData.path,
+    full_text: "", // Optionnel, à remplir si besoin
+  };
+  // Récupérer le display_order max
+  const { data: existingScripts } = await supabase
+    .from("scripts")
+    .select("display_order")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (existingScripts?.[0]?.display_order || 0) + 1;
+  scriptData.display_order = nextOrder;
+
+  const { data, error } = await supabase
+    .from("scripts")
+    .insert([scriptData])
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

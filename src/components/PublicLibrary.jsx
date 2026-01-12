@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { savePublicDocumentAsScript } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import {
   fetchPublicDocuments,
@@ -15,7 +16,7 @@ import Loader from "./ui/Loader";
  */
 function PublicLibrary() {
   const { user } = useAuthStore();
-  
+
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -66,10 +67,14 @@ function PublicLibrary() {
 
   const getFileIcon = (fileType) => {
     switch (fileType) {
-      case 'pdf': return '📕';
-      case 'image': return '🖼️';
-      case 'txt': return '📝';
-      default: return '📄';
+      case "pdf":
+        return "📕";
+      case "image":
+        return "🖼️";
+      case "txt":
+        return "📝";
+      default:
+        return "📄";
     }
   };
 
@@ -86,11 +91,16 @@ function PublicLibrary() {
           <div className="text-left">
             <h2 className="font-semibold text-white">Bibliothèque publique</h2>
             <p className="text-gray-400 text-xs">
-              {documents.length} document{documents.length > 1 ? 's' : ''} disponible{documents.length > 1 ? 's' : ''}
+              {documents.length} document{documents.length > 1 ? "s" : ""}{" "}
+              disponible{documents.length > 1 ? "s" : ""}
             </p>
           </div>
         </div>
-        <span className={`text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>
+        <span
+          className={`text-gray-400 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
+        >
           ▼
         </span>
       </button>
@@ -102,12 +112,13 @@ function PublicLibrary() {
           <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
             {categories.map((cat) => (
               <button
-                key={cat.id || 'all'}
+                key={cat.id || "all"}
                 onClick={() => setSelectedCategory(cat.id)}
                 className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap transition font-medium flex items-center gap-1
-                  ${selectedCategory === cat.id
-                    ? "bg-primary-600 text-white"
-                    : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                  ${
+                    selectedCategory === cat.id
+                      ? "bg-primary-600 text-white"
+                      : "bg-gray-700 text-gray-400 hover:bg-gray-600"
                   }`}
               >
                 <span>{cat.icon}</span>
@@ -124,7 +135,9 @@ function PublicLibrary() {
           ) : documents.length === 0 ? (
             <div className="text-center py-6">
               <span className="text-4xl mb-2 block">🔭</span>
-              <p className="text-gray-500 text-sm">Aucun document pour le moment</p>
+              <p className="text-gray-500 text-sm">
+                Aucun document pour le moment
+              </p>
               {selectedCategory && (
                 <button
                   onClick={() => setSelectedCategory(null)}
@@ -137,14 +150,14 @@ function PublicLibrary() {
           ) : (
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {documents.map((doc) => (
-                <PublicDocItem 
+                <PublicDocItem
                   key={doc.id}
                   doc={doc}
                   userId={user?.id}
                   onView={() => {
                     const url = getPublicDocumentUrl(doc.file_path);
                     if (url) {
-                      window.open(url, '_blank');
+                      window.open(url, "_blank");
                     } else {
                       alert("Impossible d'ouvrir ce document");
                     }
@@ -219,10 +232,10 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const handleFileChange = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     const selectedFile = e.target.files?.[0];
     console.log("Fichier sélectionné:", selectedFile);
-    
+
     if (selectedFile) {
       setFile(selectedFile);
       setError(null);
@@ -236,7 +249,7 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   const handleUpload = async (e) => {
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     console.log("=== Début upload ===");
     console.log("File:", file);
     console.log("Title:", title);
@@ -258,7 +271,11 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
     setError(null);
 
     try {
-      const result = await uploadPublicDocument(file, { title, description, category }, userId);
+      const result = await uploadPublicDocument(
+        file,
+        { title, description, category },
+        userId
+      );
       console.log("Upload réussi:", result);
       setSuccess(true);
       setTimeout(() => {
@@ -278,7 +295,9 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
       <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
         <div className="bg-dark rounded-xl max-w-md w-full border border-green-500 p-8 text-center">
           <span className="text-6xl block mb-4">✅</span>
-          <h3 className="text-xl font-bold text-green-400 mb-2">Document ajouté !</h3>
+          <h3 className="text-xl font-bold text-green-400 mb-2">
+            Document ajouté !
+          </h3>
           <p className="text-gray-400">Il est maintenant visible par tous.</p>
         </div>
       </div>
@@ -286,19 +305,26 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
   }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div 
+      <div
         className="bg-dark rounded-xl max-w-md w-full border border-gray-700 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">📤 Proposer un document</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">✕</button>
+          <h3 className="text-lg font-semibold text-white">
+            📤 Proposer un document
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-2"
+          >
+            ✕
+          </button>
         </div>
 
         <form onSubmit={handleUpload} className="p-4 space-y-4">
@@ -312,9 +338,11 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
                 fileInputRef.current?.click();
               }}
               className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition
-                ${file 
-                  ? 'border-green-500 bg-green-500/10' 
-                  : 'border-gray-600 hover:border-primary-500 bg-gray-800/50'}`}
+                ${
+                  file
+                    ? "border-green-500 bg-green-500/10"
+                    : "border-gray-600 hover:border-primary-500 bg-gray-800/50"
+                }`}
             >
               {file ? (
                 <div>
@@ -323,7 +351,9 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
                   <p className="text-gray-500 text-xs mt-1">
                     {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
-                  <p className="text-primary-400 text-sm mt-2">Toucher pour changer</p>
+                  <p className="text-primary-400 text-sm mt-2">
+                    Toucher pour changer
+                  </p>
                 </div>
               ) : (
                 <div>
@@ -356,7 +386,9 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
 
           {/* Description */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Description</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Description
+            </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -367,7 +399,9 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
 
           {/* Catégorie */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Catégorie</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Catégorie
+            </label>
             <div className="flex gap-2">
               {[
                 { id: "script", label: "Script", icon: "📜" },
@@ -390,15 +424,13 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
             </div>
           </div>
 
-          {error && (
-            <p className="text-red-400 text-sm">{error}</p>
-          )}
+          {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex gap-3 pt-2">
-            <button 
+            <button
               type="button"
-              onClick={onClose} 
-              className="btn-secondary flex-1" 
+              onClick={onClose}
+              className="btn-secondary flex-1"
               disabled={uploading}
             >
               Annuler
@@ -422,11 +454,45 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
  */
 function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const isOwner = userId && doc.uploaded_by === userId;
-  
+  const [saving, setSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+
+  // Nouvelle fonction pour appeler l'API serveur puis créer le script
+  const handleSaveToMyTexts = async () => {
+    if (!userId) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      // 1. Appel API serveur pour copier le fichier
+      const res = await fetch('/api/copy-public-to-private', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sourcePath: doc.file_path,
+          fileName: doc.file_name,
+          userId: userId
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erreur API');
+      const newPath = data.newPath;
+
+      // 2. Créer le script personnel dans Supabase (table scripts)
+      await savePublicDocumentAsScript({ ...doc, file_path: newPath }, userId);
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (err) {
+      setSaveError(err.message || "Erreur lors de l'enregistrement");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 
-                    rounded-lg transition group">
-      <div 
+    <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition group">
+      <div
         className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
         onClick={onView}
       >
@@ -438,32 +504,43 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           )}
         </div>
       </div>
-      
       <div className="flex items-center gap-2">
         <span className="text-gray-500 text-xs">
           {doc.download_count || 0} 📥
         </span>
-        
         <button
           onClick={onView}
-          className="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-700 
-                     rounded-lg transition"
+          className="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-700 rounded-lg transition"
           title="Ouvrir"
         >
           👁️
         </button>
-        
+        {!isOwner && userId && (
+          <button
+            onClick={handleSaveToMyTexts}
+            className="p-2 text-gold-400 hover:text-white hover:bg-gold-500/20 rounded-lg transition flex items-center gap-1"
+            title="Ajouter à Mes textes"
+            disabled={saving || saveSuccess}
+          >
+            <span className="text-lg">➕</span>
+            <span className="hidden sm:inline text-xs font-semibold">
+              Mes textes
+            </span>
+          </button>
+        )}
         {isOwner && (
           <button
             onClick={onDelete}
-            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 
-                       rounded-lg transition"
+            className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
             title="Supprimer"
           >
             🗑️
           </button>
         )}
       </div>
+      {saveError && (
+        <div className="text-xs text-red-400 ml-2">{saveError}</div>
+      )}
     </div>
   );
 }
