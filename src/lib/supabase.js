@@ -1513,3 +1513,15 @@ export const getPersonalAudioUrl = (audioPath) => {
     .getPublicUrl(audioPath);
   return data.publicUrl;
 };
+
+// Mettre à jour l'ordre des audios personnels
+export const updatePersonalAudioOrder = async (updates) => {
+  // updates = [{ id: 'uuid', display_order: 1 }, ...]
+  for (const update of updates) {
+    const { error } = await supabase
+      .from("personal_audios")
+      .update({ display_order: update.display_order })
+      .eq("id", update.id);
+    if (error) throw error;
+  }
+};

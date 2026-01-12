@@ -15,6 +15,7 @@ import {
   fetchPersonalAudios,
   deletePersonalAudio,
   getPersonalAudioUrl,
+  updatePersonalAudioOrder,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
@@ -241,6 +242,85 @@ function SortableScriptCard({
               </button>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Carte audio draggable
+ */
+function SortableAudioCard({ audio, onDelete, audioUrl, orderLocked = false }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: audio.id, disabled: orderLocked });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      <div
+        className={`block transition rounded-xl border-2 shadow-md
+          ${
+            isDragging
+              ? "shadow-lg ring-2 ring-blue-500 bg-blue-800 border-blue-500"
+              : "bg-blue-900 border-blue-700 hover:border-blue-500 hover:shadow-lg"
+          }`}
+      >
+        <div className="p-4 flex items-center gap-3">
+          {/* Poignée de drag */}
+          {!orderLocked ? (
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-blue-400 
+                         hover:text-blue-300 hover:bg-blue-800 rounded-lg transition
+                         touch-none select-none"
+              style={{ touchAction: "none" }}
+            >
+              <svg
+                className="w-5 h-5"
+                fill="currentColor"
+                viewBox="0 0 20 20"
+              >
+                <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+              </svg>
+            </div>
+          ) : (
+            <div className="p-2 -m-2 text-green-500" title="Ordre verrouillé">
+              <span className="text-lg">🔒</span>
+            </div>
+          )}
+
+          <span className="text-2xl text-blue-400">🎵</span>
+          <div className="flex-1">
+            <h3 className="font-bold text-lg text-white">
+              {audio.name}
+            </h3>
+            <audio
+              controls
+              src={audioUrl}
+              className="w-full mt-2"
+            />
+          </div>
+          <button
+            onClick={() => onDelete(audio.id, audio.audio_path)}
+            className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition"
+            title="Supprimer cet audio"
+          >
+            🗑️
+          </button>
         </div>
       </div>
     </div>
@@ -748,19 +828,52 @@ function Home() {
     const { active, over } = event;
     setActiveId(null);
 
-    if (active.id !== over?.id) {
-      const oldIndex = localScripts.findIndex((s) => s.id === active.id);
-      const newIndex = localScripts.findIndex((s) => s.id === over.id);
+    if (!over || active.id === over.id) return;
 
-      const newOrder = arrayMove(localScripts, oldIndex, newIndex);
-      setLocalScripts(newOrder);
+    // Fusionner scripts et audios avec leur type
+    const allItems = [
+      ...localScripts.map(s => ({ ...s, type: 'script' })),
+      ...personalAudios.map(a => ({ ...a, type: 'audio' }))
+    ].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
-      const updates = newOrder.map((script, index) => ({
-        id: script.id,
-        display_order: index + 1,
-      }));
+    const oldIndex = allItems.findIndex((item) => item.id === active.id);
+    const newIndex = allItems.findIndex((item) => item.id === over.id);
 
-      await updateScriptOrder(updates);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(allItems, oldIndex, newIndex);
+
+    // Séparer les scripts et audios et mettre à jour l'ordre
+    const newScripts = [];
+    const newAudios = [];
+    const scriptUpdates = [];
+    const audioUpdates = [];
+
+    newOrder.forEach((item, index) => {
+      const newDisplayOrder = index + 1;
+      if (item.type === 'script') {
+        newScripts.push({ ...item, display_order: newDisplayOrder });
+        scriptUpdates.push({ id: item.id, display_order: newDisplayOrder });
+      } else {
+        newAudios.push({ ...item, display_order: newDisplayOrder });
+        audioUpdates.push({ id: item.id, display_order: newDisplayOrder });
+      }
+    });
+
+    // Mettre à jour l'état local immédiatement
+    setLocalScripts(newScripts);
+    setPersonalAudios(newAudios);
+
+    // Sauvegarder en base
+    try {
+      if (scriptUpdates.length > 0) {
+        await updateScriptOrder(scriptUpdates);
+      }
+      if (audioUpdates.length > 0) {
+        await updatePersonalAudioOrder(audioUpdates);
+      }
+    } catch (err) {
+      console.error('Erreur sauvegarde ordre:', err);
     }
   };
 
@@ -1165,31 +1278,13 @@ function Home() {
                 .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
                 .map((item, index) =>
                   item.type === 'audio' ? (
-                    <div
+                    <SortableAudioCard
                       key={item.id}
-                      className="block transition rounded-xl border-2 shadow-md bg-blue-900 border-blue-700"
-                    >
-                      <div className="p-4 flex items-center gap-3">
-                        <span className="text-2xl text-blue-400">🎵</span>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg text-white">
-                            {item.name}
-                          </h3>
-                          <audio
-                            controls
-                            src={getPersonalAudioUrl(item.audio_path)}
-                            className="w-full mt-2"
-                          />
-                        </div>
-                        <button
-                          onClick={() => handleDeleteAudio(item.id, item.audio_path)}
-                          className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition"
-                          title="Supprimer cet audio"
-                        >
-                          🗑️
-                        </button>
-                      </div>
-                    </div>
+                      audio={item}
+                      audioUrl={getPersonalAudioUrl(item.audio_path)}
+                      onDelete={handleDeleteAudio}
+                      orderLocked={orderLocked}
+                    />
                   ) : (
                     <SortableScriptCard
                       key={item.id}
