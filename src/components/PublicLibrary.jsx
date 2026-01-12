@@ -460,9 +460,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
-  
-  // Accès au store pour créer personnages et répliques
-  const { addCharacter, addReplicas } = useScriptStore();
+
+  // Accès au store pour créer personnages, répliques et rafraîchir la liste
+  const { addCharacter, addReplicas, fetchScripts } = useScriptStore();
 
   // Fonction pour copier le document et parser le PDF en répliques
   const handleSaveToMyTexts = async () => {
@@ -494,7 +494,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       const newPath = data.newPath;
 
       // 2. Créer le script personnel dans Supabase (table scripts)
-      const script = await savePublicDocumentAsScript({ ...doc, file_path: newPath }, userId);
+      const script = await savePublicDocumentAsScript(
+        { ...doc, file_path: newPath },
+        userId
+      );
 
       // 3. Si c'est un PDF, le parser pour extraire personnages et répliques
       if (doc.file_type === "pdf" && script?.id) {
@@ -504,7 +507,11 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           if (pdfUrl) {
             const pdfResponse = await fetch(pdfUrl);
             const pdfBlob = await pdfResponse.blob();
-            const pdfFile = new File([pdfBlob], doc.file_name || "document.pdf", { type: "application/pdf" });
+            const pdfFile = new File(
+              [pdfBlob],
+              doc.file_name || "document.pdf",
+              { type: "application/pdf" }
+            );
 
             // Extraire le texte du PDF
             const extraction = await extractTextFromPDF(pdfFile, () => {});
@@ -512,7 +519,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
 
             if (text && text.trim().length > 50) {
               // Parser le script
-              const { characters, replicas } = parseScript(text, doc.file_name || "");
+              const { characters, replicas } = parseScript(
+                text,
+                doc.file_name || ""
+              );
 
               // Créer les personnages
               const characterMap = {};
@@ -544,6 +554,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           // Ne pas bloquer l'import si le parsing échoue
         }
       }
+
+      // Rafraîchir la liste des scripts pour afficher le nouveau texte
+      await fetchScripts(userId);
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -591,7 +604,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             ) : (
               <>
                 <span className="text-lg">📜</span>
-                <span className="text-xs font-semibold">Ajouter à Mes textes</span>
+                <span className="text-xs font-semibold">
+                  Ajouter à Mes textes
+                </span>
               </>
             )}
           </button>
