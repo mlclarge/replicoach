@@ -384,7 +384,9 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
                 <div>
                   <span className="text-3xl block mb-2">📄</span>
                   <p className="text-gray-300">Toucher pour sélectionner</p>
-                  <p className="text-gray-500 text-xs mt-1">PDF, TXT, Images, Audio (MP3, WAV...)</p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    PDF, TXT, Images, Audio (MP3, WAV...)
+                  </p>
                 </div>
               )}
             </div>
@@ -658,9 +660,15 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const audioUrl = isAudio ? getPublicDocumentUrl(doc.file_path) : null;
 
   return (
-    <div className={`p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition group ${isAudio ? 'flex flex-col gap-2' : 'flex items-center gap-3'}`}>
+    <div
+      className={`p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition group ${
+        isAudio ? "flex flex-col gap-2" : "flex items-center gap-3"
+      }`}
+    >
       <div
-        className={`flex items-center gap-3 ${isAudio ? '' : 'flex-1 min-w-0 cursor-pointer'}`}
+        className={`flex items-center gap-3 ${
+          isAudio ? "" : "flex-1 min-w-0 cursor-pointer"
+        }`}
         onClick={isAudio ? undefined : onView}
       >
         <span className="text-xl">{getFileIcon(doc.file_type)}</span>
@@ -700,7 +708,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             </div>
           )}
         </div>
-        
+
         {/* Boutons d'action (pour non-audio) */}
         {!isAudio && (
           <div className="flex items-center gap-2">
@@ -747,7 +755,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
                   <p className="text-green-400 font-bold">
                     Texte importé avec succès !
                   </p>
-                  <p className="text-green-300">Disponible dans « Mes Textes »</p>
+                  <p className="text-green-300">
+                    Disponible dans « Mes Textes »
+                  </p>
                 </div>
               </div>
             )}
@@ -763,15 +773,11 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           </div>
         )}
       </div>
-      
+
       {/* Player audio et boutons d'import pour les audios */}
       {isAudio && (
         <div className="flex flex-col gap-2 mt-1">
-          <audio
-            controls
-            src={audioUrl}
-            className="w-full h-10"
-          />
+          <audio controls src={audioUrl} className="w-full h-10" />
           <div className="flex items-center gap-2 flex-wrap">
             {/* Bouton Ajouter à Mes audios - visible même pour le propriétaire */}
             {userId && !saveSuccess && !alreadyCopied && (
@@ -794,10 +800,12 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             {saveSuccess && (
               <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
                 <span>✅</span>
-                <span className="text-green-400 text-xs font-bold">Ajouté aux audios !</span>
+                <span className="text-green-400 text-xs font-bold">
+                  Ajouté aux audios !
+                </span>
               </div>
             )}
-            
+
             {/* Bouton Ajouter à Mes textes - visible même pour le propriétaire */}
             {userId && !saveSuccessTexts && !alreadyInTexts && (
               <button
@@ -819,10 +827,12 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             {saveSuccessTexts && (
               <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
                 <span>✅</span>
-                <span className="text-green-400 text-xs font-bold">Ajouté aux textes !</span>
+                <span className="text-green-400 text-xs font-bold">
+                  Ajouté aux textes !
+                </span>
               </div>
             )}
-            
+
             {isOwner && (
               <button
                 onClick={onDelete}
@@ -835,10 +845,8 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           </div>
         </div>
       )}
-      
-      {saveError && (
-        <div className="text-xs text-red-400">{saveError}</div>
-      )}
+
+      {saveError && <div className="text-xs text-red-400">{saveError}</div>}
     </div>
   );
 }

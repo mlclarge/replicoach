@@ -59,11 +59,11 @@ const CARD_BACKGROUNDS = [
 
 // Fonction pour détecter si un script est un audio et obtenir son URL
 const getScriptAudioUrl = (pdfUrl) => {
-  if (!pdfUrl || !pdfUrl.startsWith('audio:')) return null;
+  if (!pdfUrl || !pdfUrl.startsWith("audio:")) return null;
   // Format: audio:public:<path>
-  const path = pdfUrl.replace('audio:', '');
-  if (path.startsWith('public:')) {
-    const publicPath = path.replace('public:', '');
+  const path = pdfUrl.replace("audio:", "");
+  if (path.startsWith("public:")) {
+    const publicPath = path.replace("public:", "");
     return getPublicDocumentUrl(publicPath);
   }
   return null;
@@ -79,6 +79,7 @@ function SortableScriptCard({
   notesCount = 0,
   orderLocked = false,
 }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const {
     attributes,
     listeners,
@@ -99,9 +100,119 @@ function SortableScriptCard({
   const colorScheme = CARD_BACKGROUNDS[index % CARD_BACKGROUNDS.length];
 
   // Vérifier si c'est un script audio
-  const isAudioScript = script.pdf_url && script.pdf_url.startsWith('audio:');
+  const isAudioScript = script.pdf_url && script.pdf_url.startsWith("audio:");
   const audioUrl = isAudioScript ? getScriptAudioUrl(script.pdf_url) : null;
 
+  // ===== RENDU SPÉCIAL POUR LES SCRIPTS AUDIO =====
+  if (isAudioScript) {
+    return (
+      <div ref={setNodeRef} style={style} className="relative">
+        {/* Carte audio avec fond violet/bleu distinct */}
+        <div
+          className={`block transition rounded-xl border-2 shadow-md
+            ${
+              isDragging
+                ? "shadow-lg ring-2 ring-blue-400 bg-indigo-800 border-blue-400"
+                : "bg-gradient-to-r from-indigo-900 to-purple-900 border-indigo-600 hover:border-indigo-400 hover:shadow-lg"
+            }`}
+        >
+          <div className="p-3">
+            <div className="flex items-center gap-3">
+              {/* Poignée de drag */}
+              {!orderLocked ? (
+                <div
+                  {...attributes}
+                  {...listeners}
+                  className="cursor-grab active:cursor-grabbing p-1.5 text-indigo-300 
+                             hover:text-white hover:bg-indigo-700 rounded-lg transition
+                             touch-none select-none"
+                  style={{ touchAction: "none" }}
+                >
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+                  </svg>
+                </div>
+              ) : (
+                <div className="p-1.5 text-green-400" title="Ordre verrouillé">
+                  <span className="text-sm">🔒</span>
+                </div>
+              )}
+
+              {/* Icône audio + titre */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <span className="text-2xl">🎵</span>
+                <h3 className="font-semibold text-white truncate">
+                  {script.title}
+                </h3>
+              </div>
+
+              {/* Bouton supprimer uniquement */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
+                className="p-2 text-lg text-indigo-300 hover:text-red-400 
+                           hover:bg-red-500/20 rounded-lg transition"
+                title="Supprimer"
+              >
+                🗑️
+              </button>
+            </div>
+
+            {/* Player audio */}
+            {audioUrl && (
+              <div className="mt-2">
+                <audio
+                  controls
+                  src={audioUrl}
+                  className="w-full h-9 rounded-lg"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Modal de confirmation suppression */}
+        {showDeleteConfirm && (
+          <div 
+            className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+            onClick={() => setShowDeleteConfirm(false)}
+          >
+            <div 
+              className="bg-gray-800 rounded-xl p-6 max-w-sm w-full border border-gray-600"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-4">
+                <span className="text-4xl">🎵</span>
+                <h3 className="text-lg font-bold text-white mt-2">Supprimer cet audio ?</h3>
+                <p className="text-gray-400 text-sm mt-1">« {script.title} »</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="flex-1 py-2.5 bg-gray-700 text-white rounded-lg font-medium"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    setShowDeleteConfirm(false);
+                    onDelete(script.id);
+                  }}
+                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white rounded-lg font-medium"
+                >
+                  🗑️ Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ===== RENDU NORMAL POUR LES SCRIPTS TEXTE =====
   return (
     <div ref={setNodeRef} style={style} className="relative">
       {/* ===== CARTE AVEC FOND BEIGE/CRÈME ===== */}
@@ -212,21 +323,6 @@ function SortableScriptCard({
                   )}
                 </div>
               )}
-
-              {/* PLAYER AUDIO si c'est un script audio */}
-              {isAudioScript && audioUrl && (
-                <div className="mt-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-lg">🎵</span>
-                    <span className="text-sm font-semibold text-blue-700">Fichier audio</span>
-                  </div>
-                  <audio
-                    controls
-                    src={audioUrl}
-                    className="w-full h-10 rounded-lg"
-                  />
-                </div>
-              )}
             </div>
 
             {/* ===== BOUTONS D'ACTION - TRÈS VISIBLES ===== */}
@@ -321,11 +417,7 @@ function SortableAudioCard({ audio, onDelete, audioUrl, orderLocked = false }) {
                          touch-none select-none"
               style={{ touchAction: "none" }}
             >
-              <svg
-                className="w-5 h-5"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
               </svg>
             </div>
@@ -337,14 +429,8 @@ function SortableAudioCard({ audio, onDelete, audioUrl, orderLocked = false }) {
 
           <span className="text-2xl text-blue-400">🎵</span>
           <div className="flex-1">
-            <h3 className="font-bold text-lg text-white">
-              {audio.name}
-            </h3>
-            <audio
-              controls
-              src={audioUrl}
-              className="w-full mt-2"
-            />
+            <h3 className="font-bold text-lg text-white">{audio.name}</h3>
+            <audio controls src={audioUrl} className="w-full mt-2" />
           </div>
           <button
             onClick={() => onDelete(audio.id, audio.audio_path)}
@@ -864,8 +950,8 @@ function Home() {
 
     // Fusionner scripts et audios avec leur type
     const allItems = [
-      ...localScripts.map(s => ({ ...s, type: 'script' })),
-      ...personalAudios.map(a => ({ ...a, type: 'audio' }))
+      ...localScripts.map((s) => ({ ...s, type: "script" })),
+      ...personalAudios.map((a) => ({ ...a, type: "audio" })),
     ].sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
     const oldIndex = allItems.findIndex((item) => item.id === active.id);
@@ -883,7 +969,7 @@ function Home() {
 
     newOrder.forEach((item, index) => {
       const newDisplayOrder = index + 1;
-      if (item.type === 'script') {
+      if (item.type === "script") {
         newScripts.push({ ...item, display_order: newDisplayOrder });
         scriptUpdates.push({ id: item.id, display_order: newDisplayOrder });
       } else {
@@ -905,7 +991,7 @@ function Home() {
         await updatePersonalAudioOrder(audioUpdates);
       }
     } catch (err) {
-      console.error('Erreur sauvegarde ordre:', err);
+      console.error("Erreur sauvegarde ordre:", err);
     }
   };
 
@@ -1033,39 +1119,56 @@ function Home() {
     try {
       await deletePersonalAudio(audioId, audioPath);
       setPersonalAudios((prev) => prev.filter((a) => a.id !== audioId));
-      setAudioImportMsg({ type: 'success', text: 'Audio supprimé.' });
+      setAudioImportMsg({ type: "success", text: "Audio supprimé." });
     } catch (err) {
-      console.error('Erreur suppression audio:', err);
-      setAudioImportMsg({ type: 'error', text: 'Erreur lors de la suppression.' });
+      console.error("Erreur suppression audio:", err);
+      setAudioImportMsg({
+        type: "error",
+        text: "Erreur lors de la suppression.",
+      });
     }
   };
 
   // Import d'un audio personnel (Supabase)
   const handleAddAudio = async (file) => {
-    console.log('Home.jsx: handleAddAudio appelé avec', file);
-    if (!file || !file.type.startsWith('audio/')) {
-      console.log('Home.jsx: fichier invalide');
-      setAudioImportMsg({ type: 'error', text: "Format non supporté. Veuillez choisir un fichier audio." });
+    console.log("Home.jsx: handleAddAudio appelé avec", file);
+    if (!file || !file.type.startsWith("audio/")) {
+      console.log("Home.jsx: fichier invalide");
+      setAudioImportMsg({
+        type: "error",
+        text: "Format non supporté. Veuillez choisir un fichier audio.",
+      });
       return;
     }
-    
+
     // Vérifier la taille du fichier (max 10 MB)
     const maxSize = 10 * 1024 * 1024; // 10 MB
     if (file.size > maxSize) {
-      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo). Maximum : 10 Mo.` });
+      setAudioImportMsg({
+        type: "error",
+        text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(
+          1
+        )} Mo). Maximum : 10 Mo.`,
+      });
       return;
     }
-    
+
     setAudioLoading(true);
-    setAudioImportMsg({ type: 'info', text: 'Upload en cours...' });
-    
+    setAudioImportMsg({ type: "info", text: "Upload en cours..." });
+
     try {
       const newAudio = await uploadPersonalAudio(file, user.id);
       setPersonalAudios((prev) => [...prev, newAudio]);
-      setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
+      setAudioImportMsg({
+        type: "success",
+        text: `Audio importé : ${file.name}`,
+      });
     } catch (err) {
-      console.error('Erreur upload audio:', err);
-      setAudioImportMsg({ type: 'error', text: `Erreur lors de l'upload : ${err.message}` });
+      console.error("Erreur upload audio:", err);
+      setAudioImportMsg({
+        type: "error",
+        text: `Erreur lors de l'upload : ${err.message}`,
+      });
     } finally {
       setAudioLoading(false);
     }
@@ -1301,15 +1404,21 @@ function Home() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={[...localScripts.map((s) => s.id), ...personalAudios.map((a) => a.id)]}
+            items={[
+              ...localScripts.map((s) => s.id),
+              ...personalAudios.map((a) => a.id),
+            ]}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
               {/* Liste des scripts et audios personnels */}
-              {[...localScripts, ...personalAudios.map(a => ({ ...a, type: 'audio' }))]
+              {[
+                ...localScripts,
+                ...personalAudios.map((a) => ({ ...a, type: "audio" })),
+              ]
                 .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
                 .map((item, index) =>
-                  item.type === 'audio' ? (
+                  item.type === "audio" ? (
                     <SortableAudioCard
                       key={item.id}
                       audio={item}
@@ -1585,15 +1694,26 @@ function Home() {
 
       {/* Notification import audio */}
       {audioImportMsg && (
-        <div className={`fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-lg font-semibold text-sm shadow-lg ${
-          audioImportMsg.type === 'success' ? 'bg-green-600 text-white' : 
-          audioImportMsg.type === 'info' ? 'bg-blue-600 text-white' : 
-          'bg-red-600 text-white'
-        }`}>
-          {audioImportMsg.type === 'info' && <span className="animate-pulse mr-2">⏳</span>}
+        <div
+          className={`fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-lg font-semibold text-sm shadow-lg ${
+            audioImportMsg.type === "success"
+              ? "bg-green-600 text-white"
+              : audioImportMsg.type === "info"
+              ? "bg-blue-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {audioImportMsg.type === "info" && (
+            <span className="animate-pulse mr-2">⏳</span>
+          )}
           {audioImportMsg.text}
-          {audioImportMsg.type !== 'info' && (
-            <button className="ml-3 text-xs opacity-70 hover:opacity-100" onClick={() => setAudioImportMsg(null)}>✕</button>
+          {audioImportMsg.type !== "info" && (
+            <button
+              className="ml-3 text-xs opacity-70 hover:opacity-100"
+              onClick={() => setAudioImportMsg(null)}
+            >
+              ✕
+            </button>
           )}
         </div>
       )}

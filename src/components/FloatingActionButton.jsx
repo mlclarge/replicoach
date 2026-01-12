@@ -36,13 +36,13 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
 
   const handleAudioInput = (e) => {
     const file = e.target.files[0];
-    console.log('FloatingActionButton: fichier audio sélectionné', file);
-    console.log('FloatingActionButton: onAddAudio disponible?', !!onAddAudio);
+    console.log("FloatingActionButton: fichier audio sélectionné", file);
+    console.log("FloatingActionButton: onAddAudio disponible?", !!onAddAudio);
     if (file && onAddAudio) {
-      console.log('FloatingActionButton: appel de onAddAudio...');
+      console.log("FloatingActionButton: appel de onAddAudio...");
       onAddAudio(file);
     } else if (file && !onAddAudio) {
-      console.error('FloatingActionButton: onAddAudio non défini!');
+      console.error("FloatingActionButton: onAddAudio non défini!");
     }
     setShowAudioInput(false);
   };
@@ -289,7 +289,8 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
               </p>
             </div>
             <p className="text-gray-400 text-xs mb-4">
-              Les fichiers plus volumineux peuvent être compressés avec un outil en ligne.
+              Les fichiers plus volumineux peuvent être compressés avec un outil
+              en ligne.
             </p>
             <div className="flex gap-3">
               <button

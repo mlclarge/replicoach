@@ -1608,16 +1608,16 @@ export const hasUserCopiedPublicAudio = async (publicDocId, userId) => {
 // URL d'un audio (personnel ou public)
 export const getAudioUrl = (audioPath) => {
   if (!audioPath) return null;
-  
+
   // Si c'est un audio provenant de la bibliothèque publique
-  if (audioPath.startsWith('public:')) {
-    const publicPath = audioPath.replace('public:', '');
+  if (audioPath.startsWith("public:")) {
+    const publicPath = audioPath.replace("public:", "");
     const { data } = supabase.storage
       .from("public-documents")
       .getPublicUrl(publicPath);
     return data.publicUrl;
   }
-  
+
   // Sinon c'est un audio personnel
   const { data } = supabase.storage
     .from("audio-recordings")
