@@ -331,19 +331,29 @@ function Upload() {
 
       setProgress({ step: "Ajout des personnages...", percent: 70 });
 
-      // Ajouter les personnages (seulement name et color)
+      // Ajouter les personnages et créer un mapping nom -> id
+      const characterMap = {};
       for (const char of parsed.characters) {
-        await addCharacter(scriptData.id, {
+        const created = await addCharacter(scriptData.id, {
           name: char.name,
           color: char.color,
         });
+        characterMap[char.name] = created.id;
       }
 
       setProgress({ step: "Ajout des répliques...", percent: 85 });
 
-      // Ajouter les répliques
+      // Formater et ajouter les répliques
       if (parsed.replicas && parsed.replicas.length > 0) {
-        await addReplicas(scriptData.id, parsed.replicas);
+        const replicasToInsert = parsed.replicas.map((rep, index) => ({
+          script_id: scriptData.id,
+          character_id: characterMap[rep.character],
+          order_index: index,
+          text: rep.text,
+          text_gaps: rep.textGaps,
+          cue_words: rep.cueWords,
+        }));
+        await addReplicas(replicasToInsert);
       }
 
       setProgress({ step: "Terminé !", percent: 100 });
