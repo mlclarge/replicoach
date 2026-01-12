@@ -474,8 +474,17 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           userId: userId
         })
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erreur API');
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        // Réponse non-JSON (ex: erreur serveur)
+        throw new Error("Erreur serveur: réponse invalide");
+      }
+      if (!res.ok) {
+        // Afficher le message d'erreur retourné ou le body brut
+        throw new Error(data?.error || data?.message || JSON.stringify(data) || 'Erreur API');
+      }
       const newPath = data.newPath;
 
       // 2. Créer le script personnel dans Supabase (table scripts)
