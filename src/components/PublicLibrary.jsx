@@ -465,14 +465,14 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     setSaveError(null);
     try {
       // 1. Appel API serveur pour copier le fichier
-      const res = await fetch('/api/copy-public-to-private', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/copy-public-to-private", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sourcePath: doc.file_path,
           fileName: doc.file_name,
-          userId: userId
-        })
+          userId: userId,
+        }),
       });
       let data;
       try {
@@ -483,7 +483,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       }
       if (!res.ok) {
         // Afficher le message d'erreur retourné ou le body brut
-        throw new Error(data?.error || data?.message || JSON.stringify(data) || 'Erreur API');
+        throw new Error(
+          data?.error || data?.message || JSON.stringify(data) || "Erreur API"
+        );
       }
       const newPath = data.newPath;
 
@@ -524,18 +526,23 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         >
           👁️
         </button>
-        {!isOwner && userId && (
+        {!isOwner && userId && !saveSuccess && (
           <button
             onClick={handleSaveToMyTexts}
-            className="p-2 text-gold-400 hover:text-white hover:bg-gold-500/20 rounded-lg transition flex items-center gap-1"
-            title="Ajouter à Mes textes"
-            disabled={saving || saveSuccess}
+            className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-1 shadow"
+            title="Copier dans Mes textes"
+            disabled={saving}
           >
-            <span className="text-lg">➕</span>
+            <span className="text-lg">📥</span>
             <span className="hidden sm:inline text-xs font-semibold">
               Mes textes
             </span>
           </button>
+        )}
+        {saveSuccess && (
+          <span className="text-xs text-green-400 font-medium px-2 py-1 bg-green-900/40 rounded-lg animate-pulse">
+            ✅ Retrouvez votre texte dans « Mes Textes »
+          </span>
         )}
         {isOwner && (
           <button
