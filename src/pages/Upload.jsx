@@ -3,7 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
-import { uploadFile } from "../lib/supabase";
+import { uploadFile, supabase } from "../lib/supabase";
 import { extractTextFromPDF } from "../lib/pdfProcessor";
 import { extractTextFromWord, isWordDocument, isTextFile, extractTextFromTxt } from "../lib/docProcessor";
 import { parseScript } from "../lib/scriptParser";
@@ -355,8 +355,8 @@ function Upload() {
       setResults([{
         success: true,
         title: pastedTitle.trim(),
-        characters: parsed.characters,
-        replicas: parsed.replicas?.length || 0
+        charactersCount: parsed.characters.length,
+        replicasCount: parsed.replicas?.length || 0
       }]);
       setShowResults(true);
       setPastedText("");
@@ -653,7 +653,7 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                             : "text-green-400"
                       }`}
                     >
-                      <span>{getFileIcon(result.filename)}</span>
+                      <span>{result.filename ? getFileIcon(result.filename) : "📋"}</span>
                       {result.title || result.filename}
                       {result.usedOCR && (
                         <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
