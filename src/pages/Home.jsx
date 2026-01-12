@@ -37,6 +37,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import FloatingActionButton from "../components/FloatingActionButton";
 
 /**
  * Carte de script draggable - FOND BEIGE/CRÈME + CONTRASTE FORT
@@ -891,6 +892,26 @@ function Home() {
     reader.readAsDataURL(file);
   };
 
+  // Fonction d'import audio locale
+  const handleAddAudio = (file) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const audioUrl = ev.target.result;
+      const newAudio = {
+        id: 'audio-' + Date.now(),
+        name: file.name,
+        url: audioUrl,
+        display_order: localScripts.length + localAudios.length + 1,
+      };
+      setLocalAudios((prev) => {
+        const updated = [...prev, newAudio];
+        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        return updated;
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
   const activeScript = activeId
     ? localScripts.find((s) => s.id === activeId)
     : null;
@@ -1404,6 +1425,9 @@ function Home() {
           </div>
         </div>
       )}
+
+      {/* Bouton flottant pour import audio */}
+      <FloatingActionButton onAddAudio={handleAddAudio} />
     </div>
   );
 }

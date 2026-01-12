@@ -14,6 +14,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const [videoTitle, setVideoTitle] = useState("");
   const [videoSaving, setVideoSaving] = useState(false);
   const [userRole, setUserRole] = useState("member");
+  const [showAudioInput, setShowAudioInput] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -30,6 +31,14 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   }
 
   const canPostVideoAnywhere = userRole === "dev" || userRole === "director";
+
+  const handleAudioInput = (e) => {
+    const file = e.target.files[0];
+    if (file && onAddAudio) {
+      onAddAudio(file);
+    }
+    setShowAudioInput(false);
+  };
 
   const actions = [
     {
@@ -66,6 +75,15 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
         } else {
           setShowVideoInfo(true);
         }
+        setIsOpen(false);
+      },
+    },
+    {
+      icon: "🎵",
+      label: "Ajouter un fichier son",
+      color: "bg-blue-500",
+      onClick: () => {
+        setShowAudioInput(true);
         setIsOpen(false);
       },
     },
@@ -237,6 +255,16 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
           </div>
         </div>
       )}
+
+      {/* Input fichier audio */}
+      <input
+        type="file"
+        accept="audio/*"
+        style={{ display: showAudioInput ? "block" : "none" }}
+        onChange={handleAudioInput}
+        onClick={(e) => e.stopPropagation()}
+        className="fixed left-0 bottom-0 z-50"
+      />
 
       <style>{`
         @keyframes fade-in-up {
