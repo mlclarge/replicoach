@@ -1,20 +1,24 @@
 // /api/copy-public-to-private.js
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // Jamais côté client !
-);
-
 export default async function handler(req, res) {
   try {
+    // Vérification des variables d'environnement
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+      return res.status(500).json({ error: "Configuration serveur manquante (variables Supabase)" });
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Méthode non autorisée" });
     }
 
-    const { sourcePath, fileName, userId } = req.body;
+    const { sourcePath, fileName, userId } = req.body || {};
     if (!sourcePath || !fileName || !userId) {
-      return res.status(400).json({ error: "Paramètres manquants" });
+      return res.status(400).json({ error: "Paramètres manquants", received: { sourcePath, fileName, userId } });
     }
 
     // 1. Télécharger le fichier source
@@ -25,7 +29,10 @@ export default async function handler(req, res) {
     if (downloadError || !fileData) {
       return res
         .status(500)
-        .json({ error: "Erreur téléchargement source", details: downloadError });
+        .json({
+          error: "Erreur téléchargement source",
+          details: downloadError,
+        });
     }
 
     // 2. Réuploader dans scripts-pdfs
@@ -54,6 +61,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ newPath: uploadData.path });
   } catch (err) {
     // Attraper toute erreur inattendue et garantir une réponse JSON
-    return res.status(500).json({ error: "Erreur serveur inattendue", details: err?.message || err?.toString() });
+    return res
+      .status(500)
+      .json({
+        error: "Erreur serveur inattendue",
+        details: err?.message || err?.toString(),
+      });
   }
 }
