@@ -58,6 +58,7 @@ function SortableScriptCard({
   onManageTags,
   index = 0,
   notesCount = 0,
+  orderLocked = false,
 }) {
   const {
     attributes,
@@ -66,7 +67,7 @@ function SortableScriptCard({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: script.id });
+  } = useSortable({ id: script.id, disabled: orderLocked });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -91,19 +92,25 @@ function SortableScriptCard({
       >
         <div className="p-4">
           <div className="flex items-start gap-3">
-            {/* Poignée de drag - VISIBLE SUR FOND CLAIR */}
-            <div
-              {...attributes}
-              {...listeners}
-              className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
-                         hover:text-primary-600 hover:bg-primary-100 rounded-lg transition
-                         touch-none select-none"
-              style={{ touchAction: "none" }}
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
-              </svg>
-            </div>
+            {/* Poignée de drag - Cachée ou désactivée si verrouillé */}
+            {!orderLocked ? (
+              <div
+                {...attributes}
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing p-2 -m-2 text-gray-500 
+                           hover:text-primary-600 hover:bg-primary-100 rounded-lg transition
+                           touch-none select-none"
+                style={{ touchAction: "none" }}
+              >
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+                </svg>
+              </div>
+            ) : (
+              <div className="p-2 -m-2 text-green-500" title="Ordre verrouillé">
+                <span className="text-lg">🔒</span>
+              </div>
+            )}
 
             {/* Contenu cliquable */}
             <div
@@ -462,6 +469,24 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
 
+  // État pour verrouiller l'ordre (empêcher drag & drop accidentel)
+  const [orderLocked, setOrderLocked] = useState(() => {
+    try {
+      return localStorage.getItem('replicoach-order-locked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // Toggle verrouillage avec persistance
+  const toggleOrderLock = () => {
+    const newValue = !orderLocked;
+    setOrderLocked(newValue);
+    try {
+      localStorage.setItem('replicoach-order-locked', String(newValue));
+    } catch {}
+  };
+
   // État pour le dernier texte fréquemment consulté
   const [recentScript, setRecentScript] = useState(null);
 
@@ -686,10 +711,12 @@ function Home() {
   };
 
   const handleDragStart = (event) => {
+    if (orderLocked) return; // Ne pas démarrer si verrouillé
     setActiveId(event.active.id);
   };
 
   const handleDragEnd = async (event) => {
+    if (orderLocked) return; // Ne pas réordonner si verrouillé
     const { active, over } = event;
     setActiveId(null);
 
@@ -1008,11 +1035,28 @@ function Home() {
         </div>
       )}
 
-      {/* Indication drag & drop */}
+      {/* Toggle verrouillage d'ordre + indication */}
       {sortBy === "order" && localScripts.length > 1 && !selectedTagFilter && (
-        <p className="text-gray-500 text-xs mb-3 flex items-center gap-1">
-          <span>💡</span> Maintenez appuyé sur ⋮⋮ pour réorganiser
-        </p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-gray-500 text-xs flex items-center gap-1">
+            {orderLocked ? (
+              <><span>🔒</span> Ordre verrouillé</>
+            ) : (
+              <><span>💡</span> Maintenez appuyé sur ⋮⋮ pour réorganiser</>
+            )}
+          </p>
+          <button
+            onClick={toggleOrderLock}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1.5 ${
+              orderLocked
+                ? 'bg-green-500/20 text-green-400 border border-green-500/50 hover:bg-green-500/30'
+                : 'bg-gray-700 text-gray-400 border border-gray-600 hover:bg-gray-600 hover:text-white'
+            }`}
+            title={orderLocked ? 'Déverrouiller l\'ordre' : 'Verrouiller l\'ordre'}
+          >
+            {orderLocked ? '🔓 Déverrouiller' : '🔒 Verrouiller'}
+          </button>
+        </div>
       )}
 
       {/* Liste des scripts */}
@@ -1052,6 +1096,7 @@ function Home() {
                   onShare={handleOpenShare}
                   onManageTags={(s) => setManagingTagsFor(s)}
                   notesCount={notesCounts[script.id] || 0}
+                  orderLocked={orderLocked}
                 />
               ))}
             </div>
