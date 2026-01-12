@@ -328,7 +328,6 @@ function Upload() {
           user_id: user.id,
           title: pastedTitle.trim(),
           original_text: pastedText,
-          file_type: "text",
           created_at: new Date().toISOString()
         })
         .select()
