@@ -36,7 +36,7 @@ import {
   verticalListSortingStrategy,
   useSortable,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { CSS } from "@dnd-kit/utilities;
 
 /**
  * Carte de script draggable - FOND BEIGE/CRÈME + CONTRASTE FORT
