@@ -918,6 +918,14 @@ function Home() {
       setAudioImportMsg({ type: 'error', text: "Format non supporté. Veuillez choisir un fichier audio." });
       return;
     }
+    
+    // Vérifier la taille du fichier (max 2 MB pour le localStorage)
+    const maxSize = 2 * 1024 * 1024; // 2 MB
+    if (file.size > maxSize) {
+      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum : 2 MB.` });
+      return;
+    }
+    
     console.log('Home.jsx: lecture du fichier...');
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -930,14 +938,18 @@ function Home() {
         display_order: localScripts.length + localAudios.length + 1,
       };
       const updated = [...localAudios, newAudio];
-      localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
-      setLocalAudios(updated);
-      setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
-      // Forcer reload depuis localStorage pour debug
-      setTimeout(() => {
-        const reload = localStorage.getItem('replicoach-local-audios');
-        if (reload) setLocalAudios(JSON.parse(reload));
-      }, 300);
+      try {
+        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        setLocalAudios(updated);
+        setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
+      } catch (e) {
+        console.error('Erreur localStorage:', e);
+        if (e.name === 'QuotaExceededError') {
+          setAudioImportMsg({ type: 'error', text: "Espace de stockage plein. Supprimez des audios existants ou utilisez un fichier plus petit." });
+        } else {
+          setAudioImportMsg({ type: 'error', text: "Erreur lors de la sauvegarde de l'audio." });
+        }
+      }
     };
     reader.onerror = () => {
       setAudioImportMsg({ type: 'error', text: "Erreur lors de l'import du fichier audio." });
