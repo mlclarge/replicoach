@@ -29,7 +29,7 @@ const ADMIN_EMAILS = [
 function Upload() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { createScript, addCharacter, addReplicas } = useScriptStore();
+  const { createScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
 
   // Vérifier si l'utilisateur est admin
   const isAdmin = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
