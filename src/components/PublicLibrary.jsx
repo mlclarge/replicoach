@@ -579,6 +579,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     }
   };
 
+  // Vérifier si le document est récent (moins de 48h)
+  const isNew = doc.created_at && (Date.now() - new Date(doc.created_at).getTime()) < 48 * 60 * 60 * 1000;
+
   return (
     <div className="flex items-center gap-3 p-3 bg-gray-800/50 hover:bg-gray-700/50 rounded-lg transition group">
       <div
@@ -587,7 +590,15 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       >
         <span className="text-xl">{getFileIcon(doc.file_type)}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-white text-sm font-medium truncate">{doc.title}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-white text-sm font-medium truncate">{doc.title}</p>
+            {/* Badge "Nouveau" pour les documents récents */}
+            {isNew && (
+              <span className="px-1.5 py-0.5 bg-amber-500 text-black text-[10px] font-bold rounded animate-pulse">
+                NEW
+              </span>
+            )}
+          </div>
           {doc.description && (
             <p className="text-gray-500 text-xs truncate">{doc.description}</p>
           )}
