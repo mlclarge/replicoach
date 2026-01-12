@@ -111,6 +111,16 @@ function PublicLibrary() {
       {/* Contenu déplié */}
       {expanded && (
         <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
+          {/* Message d'aide permanent */}
+          {user?.id && (
+            <div className="mb-4 p-3 bg-primary-900/30 border border-primary-700/50 rounded-lg flex items-center gap-2">
+              <span className="text-xl">💡</span>
+              <p className="text-primary-300 text-xs">
+                Cliquez sur <span className="font-bold">📜 Ajouter à Mes textes</span> pour copier un document dans votre espace personnel et le travailler en répliques.
+              </p>
+            </div>
+          )}
+
           {/* Filtres par catégorie */}
           <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
             {categories.map((cat) => (
@@ -572,33 +582,41 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <span className="text-gray-500 text-xs">
-          {doc.download_count || 0} 📥
-        </span>
         <button
           onClick={onView}
           className="p-2 text-gray-400 hover:text-primary-400 hover:bg-gray-700 rounded-lg transition"
-          title="Ouvrir"
+          title="Ouvrir le document"
         >
           👁️
         </button>
         {!isOwner && userId && !saveSuccess && (
           <button
             onClick={handleSaveToMyTexts}
-            className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-1 shadow"
-            title="Copier dans Mes textes"
+            className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow"
+            title="Copier ce texte dans votre espace Mes textes"
             disabled={saving}
           >
-            <span className="text-lg">📥</span>
-            <span className="hidden sm:inline text-xs font-semibold">
-              Mes textes
-            </span>
+            {saving ? (
+              <>
+                <span className="animate-spin">⏳</span>
+                <span className="text-xs font-semibold">Import en cours...</span>
+              </>
+            ) : (
+              <>
+                <span className="text-lg">📜</span>
+                <span className="text-xs font-semibold">Ajouter à Mes textes</span>
+              </>
+            )}
           </button>
         )}
         {saveSuccess && (
-          <span className="text-xs text-green-400 font-medium px-2 py-1 bg-green-900/40 rounded-lg animate-pulse">
-            ✅ Retrouvez votre texte dans « Mes Textes »
-          </span>
+          <div className="flex items-center gap-2 px-3 py-2 bg-green-900/50 border border-green-500/50 rounded-lg animate-pulse">
+            <span className="text-lg">✅</span>
+            <div className="text-xs">
+              <p className="text-green-400 font-bold">Texte importé avec succès !</p>
+              <p className="text-green-300">Disponible dans « Mes Textes »</p>
+            </div>
+          </div>
         )}
         {isOwner && (
           <button
