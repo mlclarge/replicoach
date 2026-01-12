@@ -111,12 +111,12 @@ function PublicLibrary() {
       {/* Contenu déplié */}
       {expanded && (
         <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
-          {/* Message d'aide permanent */}
+          {/* Message d'aide permanent - uniquement si l'utilisateur est connecté */}
           {user?.id && (
             <div className="mb-4 p-3 bg-primary-900/30 border border-primary-700/50 rounded-lg flex items-center gap-2">
               <span className="text-xl">💡</span>
               <p className="text-primary-300 text-xs">
-                Cliquez sur <span className="font-bold">📜 Ajouter à Mes textes</span> pour copier un document dans votre espace personnel et le travailler en répliques.
+                Les documents de type <span className="font-bold">📜 Script</span> peuvent être copiés dans votre espace « Mes textes » pour les travailler en répliques.
               </p>
             </div>
           )}
@@ -589,7 +589,8 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         >
           👁️
         </button>
-        {!isOwner && userId && !saveSuccess && (
+        {/* Bouton Ajouter à Mes textes - uniquement pour les scripts */}
+        {!isOwner && userId && !saveSuccess && doc.category === "script" && (
           <button
             onClick={handleSaveToMyTexts}
             className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow"
@@ -609,7 +610,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             )}
           </button>
         )}
-        {saveSuccess && (
+        {saveSuccess && doc.category === "script" && (
           <div className="flex items-center gap-2 px-3 py-2 bg-green-900/50 border border-green-500/50 rounded-lg animate-pulse">
             <span className="text-lg">✅</span>
             <div className="text-xs">
