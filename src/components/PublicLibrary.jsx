@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { savePublicDocumentAsScript } from "../lib/supabase";
+import { savePublicDocumentAsScript, getFileUrl } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
+import { useScriptStore } from "../store/scriptStore";
 import {
   fetchPublicDocuments,
   uploadPublicDocument,
@@ -8,6 +9,8 @@ import {
   deletePublicDocument,
   fetchUserTroupes,
 } from "../lib/supabase";
+import { extractTextFromPDF } from "../lib/pdfProcessor";
+import { parseScript } from "../lib/scriptParser";
 import Loader from "./ui/Loader";
 
 /**
@@ -458,7 +461,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  // Nouvelle fonction pour appeler l'API serveur puis créer le script
+  // Accès au store pour créer personnages, répliques et rafraîchir la liste
+  const { addCharacter, addReplicas, fetchScripts } = useScriptStore();
+
+  // Fonction pour copier le document et parser le PDF en répliques
   const handleSaveToMyTexts = async () => {
     if (!userId) return;
     setSaving(true);
@@ -478,11 +484,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       try {
         data = await res.json();
       } catch (jsonErr) {
-        // Réponse non-JSON (ex: erreur serveur)
         throw new Error("Erreur serveur: réponse invalide");
       }
       if (!res.ok) {
-        // Afficher le message d'erreur retourné ou le body brut
         throw new Error(
           data?.error || data?.message || JSON.stringify(data) || "Erreur API"
         );
@@ -490,10 +494,62 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       const newPath = data.newPath;
 
       // 2. Créer le script personnel dans Supabase (table scripts)
-      await savePublicDocumentAsScript({ ...doc, file_path: newPath }, userId);
+      const script = await savePublicDocumentAsScript({ ...doc, file_path: newPath }, userId);
+
+      // 3. Si c'est un PDF, le parser pour extraire personnages et répliques
+      if (doc.file_type === "pdf" && script?.id) {
+        try {
+          // Télécharger le PDF copié
+          const pdfUrl = getFileUrl(newPath);
+          if (pdfUrl) {
+            const pdfResponse = await fetch(pdfUrl);
+            const pdfBlob = await pdfResponse.blob();
+            const pdfFile = new File([pdfBlob], doc.file_name || "document.pdf", { type: "application/pdf" });
+
+            // Extraire le texte du PDF
+            const extraction = await extractTextFromPDF(pdfFile, () => {});
+            const text = extraction?.text || "";
+
+            if (text && text.trim().length > 50) {
+              // Parser le script
+              const { characters, replicas } = parseScript(text, doc.file_name || "");
+
+              // Créer les personnages
+              const characterMap = {};
+              for (const char of characters) {
+                const created = await addCharacter(script.id, {
+                  name: char.name,
+                  color: char.color,
+                });
+                characterMap[char.name] = created.id;
+              }
+
+              // Créer les répliques
+              const replicasToInsert = replicas.map((rep, index) => ({
+                script_id: script.id,
+                character_id: characterMap[rep.character],
+                order_index: index,
+                text: rep.text,
+                text_gaps: rep.textGaps,
+                cue_words: rep.cueWords,
+              }));
+
+              if (replicasToInsert.length > 0) {
+                await addReplicas(replicasToInsert);
+              }
+            }
+          }
+        } catch (parseErr) {
+          console.warn("Parsing PDF optionnel échoué:", parseErr);
+          // Ne pas bloquer l'import si le parsing échoue
+        }
+      }
+
+      // 4. Rafraîchir la liste des scripts pour afficher le nouveau texte
+      await fetchScripts(userId);
 
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
       setSaveError(err.message || "Erreur lors de l'enregistrement");
     } finally {
