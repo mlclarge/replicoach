@@ -4,7 +4,6 @@ import BottomNav from './BottomNav'
 import InstallPrompt from '../InstallPrompt'
 import Onboarding from '../Onboarding'
 import OfflineIndicator from '../OfflineIndicator'
-import FloatingActionButton from '../FloatingActionButton'
 import { useSessionTracker } from '../Monitoring'
 
 function Layout() {
@@ -21,9 +20,6 @@ function Layout() {
         <Outlet />
       </main>
       <BottomNav />
-      
-      {/* Bouton flottant + */}
-      <FloatingActionButton />
       
       {/* Prompt d'installation PWA */}
       <InstallPrompt />
