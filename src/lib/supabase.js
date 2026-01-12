@@ -1539,6 +1539,7 @@ export const savePublicAudioAsScript = async (publicDoc, userId) => {
   const nextOrder = (existingScripts?.[0]?.display_order || 0) + 1;
 
   // Créer le script avec le chemin audio public
+  // Note: on utilise pdf_url pour stocker le chemin audio avec préfixe "audio:"
   const { data, error } = await supabase
     .from("scripts")
     .insert([
@@ -1546,11 +1547,9 @@ export const savePublicAudioAsScript = async (publicDoc, userId) => {
         user_id: userId,
         title: publicDoc.title || publicDoc.file_name,
         original_filename: publicDoc.file_name,
-        pdf_url: null, // Pas de PDF
-        audio_url: `public:${publicDoc.file_path}`, // Audio public
+        pdf_url: `audio:public:${publicDoc.file_path}`, // Audio public stocké dans pdf_url avec préfixe
         full_text: "",
         display_order: nextOrder,
-        source_public_doc_id: publicDoc.id,
       },
     ])
     .select()
