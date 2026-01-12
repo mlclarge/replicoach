@@ -321,19 +321,13 @@ function Upload() {
 
       setProgress({ step: "Création du script...", percent: 60 });
 
-      // Créer le script dans Supabase (sans fichier PDF)
-      const { data: scriptData, error: scriptError } = await supabase
-        .from("scripts")
-        .insert({
-          user_id: user.id,
-          title: pastedTitle.trim(),
-          original_text: pastedText,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (scriptError) throw scriptError;
+      // Créer le script via le store (comme pour les fichiers)
+      const scriptData = await createScript({
+        user_id: user.id,
+        title: pastedTitle.trim(),
+        full_text: pastedText,
+        original_filename: "texte-colle.txt",
+      });
 
       setProgress({ step: "Ajout des personnages...", percent: 70 });
 
