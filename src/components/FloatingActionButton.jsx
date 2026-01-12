@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { getUserRole } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
@@ -18,6 +18,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
+  const audioInputRef = useRef();
 
   useEffect(() => {
     if (user?.id) {
@@ -83,7 +84,9 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
       label: "Ajouter un fichier son",
       color: "bg-blue-500",
       onClick: () => {
-        setShowAudioInput(true);
+        if (audioInputRef.current) {
+          audioInputRef.current.click();
+        }
         setIsOpen(false);
       },
     },
@@ -258,12 +261,11 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
 
       {/* Input fichier audio */}
       <input
+        ref={audioInputRef}
         type="file"
         accept="audio/*"
-        style={{ display: showAudioInput ? "block" : "none" }}
+        style={{ display: "none" }}
         onChange={handleAudioInput}
-        onClick={(e) => e.stopPropagation()}
-        className="fixed left-0 bottom-0 z-50"
       />
 
       <style>{`

@@ -523,7 +523,7 @@ function Home() {
   // État pour les blocs audio locaux
   const [localAudios, setLocalAudios] = useState(() => {
     try {
-      const data = localStorage.getItem('replicoach-local-audios');
+      const data = localStorage.getItem("replicoach-local-audios");
       return data ? JSON.parse(data) : [];
     } catch {
       return [];
@@ -878,14 +878,17 @@ function Home() {
     reader.onload = (ev) => {
       const audioUrl = ev.target.result;
       const newAudio = {
-        id: 'audio-' + Date.now(),
+        id: "audio-" + Date.now(),
         name: file.name,
         url: audioUrl,
         display_order: localScripts.length + localAudios.length + 1,
       };
       setLocalAudios((prev) => {
         const updated = [...prev, newAudio];
-        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        localStorage.setItem(
+          "replicoach-local-audios",
+          JSON.stringify(updated)
+        );
         return updated;
       });
     };
@@ -898,14 +901,17 @@ function Home() {
     reader.onload = (ev) => {
       const audioUrl = ev.target.result;
       const newAudio = {
-        id: 'audio-' + Date.now(),
+        id: "audio-" + Date.now(),
         name: file.name,
         url: audioUrl,
         display_order: localScripts.length + localAudios.length + 1,
       };
       setLocalAudios((prev) => {
         const updated = [...prev, newAudio];
-        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+        localStorage.setItem(
+          "replicoach-local-audios",
+          JSON.stringify(updated)
+        );
         return updated;
       });
     };
@@ -1151,12 +1157,21 @@ function Home() {
                 .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
                 .map((item, index) =>
                   item.url ? (
-                    <div key={item.id} className="block transition rounded-xl border-2 shadow-md bg-blue-50 border-blue-200">
+                    <div
+                      key={item.id}
+                      className="block transition rounded-xl border-2 shadow-md bg-blue-50 border-blue-200"
+                    >
                       <div className="p-4 flex items-center gap-3">
                         <span className="text-2xl text-blue-500">🎵</span>
                         <div className="flex-1">
-                          <h3 className="font-bold text-lg text-blue-900">{item.name}</h3>
-                          <audio controls src={item.url} className="w-full mt-2" />
+                          <h3 className="font-bold text-lg text-blue-900">
+                            {item.name}
+                          </h3>
+                          <audio
+                            controls
+                            src={item.url}
+                            className="w-full mt-2"
+                          />
                         </div>
                       </div>
                     </div>
