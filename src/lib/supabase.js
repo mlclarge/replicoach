@@ -1,33 +1,12 @@
-﻿// Copier un document public dans Mes textes (scripts)
+﻿// Créer un script personnel à partir d'un document public déjà copié
+// (la copie du fichier est faite par l'API serverless, ici on ne fait que créer l'entrée en base)
 export const savePublicDocumentAsScript = async (publicDoc, userId) => {
-  // Télécharger le fichier depuis le bucket public-documents
-  const { data: fileData, error: downloadError } = await supabase.storage
-    .from("public-documents")
-    .download(publicDoc.file_path);
-  if (downloadError || !fileData) {
-    throw new Error("Impossible de copier le fichier PDF. Cette action nécessite un accès serveur ou des droits spéciaux. Contactez l'administrateur si besoin.");
-  }
-
-  // Réuploader dans scripts-pdfs
-  const timestamp = Date.now();
-  const safeName = publicDoc.file_name.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const newFileName = `${userId}/${timestamp}_${safeName}`;
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from("scripts-pdfs")
-    .upload(newFileName, fileData, {
-      cacheControl: "3600",
-      upsert: false,
-    });
-  if (uploadError || !uploadData?.path) {
-    throw new Error("Impossible de copier le fichier PDF dans votre espace. Veuillez réessayer plus tard ou contacter l'administrateur.");
-  }
-
-  // Créer le script personnel
+  // publicDoc.file_path doit déjà pointer vers le fichier copié dans scripts-pdfs
   const scriptData = {
     user_id: userId,
     title: publicDoc.title,
     original_filename: publicDoc.file_name,
-    pdf_url: uploadData.path,
+    pdf_url: publicDoc.file_path, // Chemin déjà copié par l'API
     full_text: "", // Optionnel, à remplir si besoin
   };
   // Récupérer le display_order max
