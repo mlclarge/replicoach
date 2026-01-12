@@ -904,6 +904,7 @@ function Home() {
 
   // Fonction d'import audio locale
   const handleAddAudio = (file) => {
+    console.log('Import audio déclenché', file);
     if (!file || !file.type.startsWith('audio/')) {
       setAudioImportMsg({ type: 'error', text: "Format non supporté. Veuillez choisir un fichier audio." });
       return;
@@ -917,12 +918,15 @@ function Home() {
         url: audioUrl,
         display_order: localScripts.length + localAudios.length + 1,
       };
-      setLocalAudios((prev) => {
-        const updated = [...prev, newAudio];
-        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
-        setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
-        return updated;
-      });
+      const updated = [...localAudios, newAudio];
+      localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
+      setLocalAudios(updated);
+      setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
+      // Forcer reload depuis localStorage pour debug
+      setTimeout(() => {
+        const reload = localStorage.getItem('replicoach-local-audios');
+        if (reload) setLocalAudios(JSON.parse(reload));
+      }, 300);
     };
     reader.onerror = () => {
       setAudioImportMsg({ type: 'error', text: "Erreur lors de l'import du fichier audio." });
