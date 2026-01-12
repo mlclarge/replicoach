@@ -1,5 +1,5 @@
 Param(
-    [string]$Message = "feat: audio italienne, 3 mots, copie perso, groupes, consignes, monitoring"
+    [string]$Message = "update: $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
 )
 
 Write-Host "Staging changes..."
