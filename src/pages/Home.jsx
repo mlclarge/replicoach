@@ -1017,10 +1017,10 @@ function Home() {
       return;
     }
     
-    // Vérifier la taille du fichier (max 50 MB pour Supabase)
-    const maxSize = 50 * 1024 * 1024; // 50 MB
+    // Vérifier la taille du fichier (max 10 MB)
+    const maxSize = 10 * 1024 * 1024; // 10 MB
     if (file.size > maxSize) {
-      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum : 50 MB.` });
+      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} Mo). Maximum : 10 Mo.` });
       return;
     }
     

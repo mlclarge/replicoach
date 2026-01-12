@@ -1527,6 +1527,39 @@ export const updatePersonalAudioOrder = async (updates) => {
   }
 };
 
+// Sauvegarder un audio public comme script (dans Mes textes)
+export const savePublicAudioAsScript = async (publicDoc, userId) => {
+  // Récupérer le display_order max des scripts
+  const { data: existingScripts } = await supabase
+    .from("scripts")
+    .select("display_order")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (existingScripts?.[0]?.display_order || 0) + 1;
+
+  // Créer le script avec le chemin audio public
+  const { data, error } = await supabase
+    .from("scripts")
+    .insert([
+      {
+        user_id: userId,
+        title: publicDoc.title || publicDoc.file_name,
+        original_filename: publicDoc.file_name,
+        pdf_url: null, // Pas de PDF
+        audio_url: `public:${publicDoc.file_path}`, // Audio public
+        full_text: "",
+        display_order: nextOrder,
+        source_public_doc_id: publicDoc.id,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 // Copier un audio public vers les audios personnels
 export const copyPublicAudioToPersonal = async (publicDoc, userId) => {
   // Récupérer le display_order max

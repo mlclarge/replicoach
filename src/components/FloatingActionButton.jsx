@@ -285,7 +285,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
                 MP3, WAV, M4A, OGG, FLAC...
               </p>
               <p className="text-yellow-400 font-semibold">
-                ⚠️ Taille maximale : 50 Mo
+                ⚠️ Attention à la taille du fichier ! Maximum : 10 Mo
               </p>
             </div>
             <p className="text-gray-400 text-xs mb-4">

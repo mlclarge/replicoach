@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import {
   savePublicDocumentAsScript,
+  savePublicAudioAsScript,
   getFileUrl,
   hasUserCopiedPublicDoc,
-  copyPublicAudioToPersonal,
   hasUserCopiedPublicAudio,
+  copyPublicAudioToPersonal,
 } from "../lib/supabase";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
@@ -480,9 +481,12 @@ function UploadPublicDocModal({ userId, onClose, onSuccess }) {
 function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
   const isOwner = userId && doc.uploaded_by === userId;
   const [saving, setSaving] = useState(false);
+  const [savingToTexts, setSavingToTexts] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveSuccessTexts, setSaveSuccessTexts] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [alreadyCopied, setAlreadyCopied] = useState(false);
+  const [alreadyInTexts, setAlreadyInTexts] = useState(false);
 
   // Accès au store pour créer personnages, répliques et rafraîchir la liste
   const { addCharacter, addReplicas, fetchScripts } = useScriptStore();
@@ -497,13 +501,17 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
           const copied = await hasUserCopiedPublicDoc(doc.id, userId);
           setAlreadyCopied(copied);
         } else if (isAudio) {
-          const copied = await hasUserCopiedPublicAudio(doc.id, userId);
-          setAlreadyCopied(copied);
+          // Vérifier dans Mes audios
+          const copiedAudio = await hasUserCopiedPublicAudio(doc.id, userId);
+          setAlreadyCopied(copiedAudio);
+          // Vérifier aussi dans Mes textes
+          const copiedScript = await hasUserCopiedPublicDoc(doc.id, userId);
+          setAlreadyInTexts(copiedScript);
         }
       }
     };
     checkIfCopied();
-  }, [userId, doc.id, doc.category, saveSuccess, isAudio]);
+  }, [userId, doc.id, doc.category, saveSuccess, saveSuccessTexts, isAudio]);
 
   // Fonction pour copier un audio public vers les audios personnels
   const handleSaveAudioToPersonal = async () => {
@@ -518,6 +526,23 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       setSaveError(err.message || "Erreur lors de l'import");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // Fonction pour ajouter un audio dans Mes textes (comme script audio)
+  const handleSaveAudioToTexts = async () => {
+    if (!userId) return;
+    setSavingToTexts(true);
+    setSaveError(null);
+    try {
+      await savePublicAudioAsScript(doc, userId);
+      await fetchScripts(userId);
+      setSaveSuccessTexts(true);
+      setTimeout(() => setSaveSuccessTexts(false), 3000);
+    } catch (err) {
+      setSaveError(err.message || "Erreur lors de l'import dans Mes textes");
+    } finally {
+      setSavingToTexts(false);
     }
   };
 
@@ -655,10 +680,24 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
             <p className="text-gray-500 text-xs truncate">{doc.description}</p>
           )}
           {/* Badge "Déjà dans Mes textes/audios" */}
-          {alreadyCopied && (doc.category === "script" || isAudio) && (
+          {alreadyCopied && doc.category === "script" && (
             <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full">
-              ✓ {isAudio ? 'Dans Mes audios' : 'Dans Mes textes'}
+              ✓ Dans Mes textes
             </span>
+          )}
+          {isAudio && (alreadyCopied || alreadyInTexts) && (
+            <div className="flex flex-wrap gap-1 mt-1">
+              {alreadyCopied && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-900/50 text-green-400 text-xs rounded-full">
+                  ✓ Mes audios
+                </span>
+              )}
+              {alreadyInTexts && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-900/50 text-blue-400 text-xs rounded-full">
+                  ✓ Mes textes
+                </span>
+              )}
+            </div>
           )}
         </div>
         
@@ -725,47 +764,75 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
         )}
       </div>
       
-      {/* Player audio et bouton d'import pour les audios */}
+      {/* Player audio et boutons d'import pour les audios */}
       {isAudio && (
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex flex-col gap-2 mt-1">
           <audio
             controls
             src={audioUrl}
-            className="flex-1 h-10"
-            style={{ minWidth: 0 }}
+            className="w-full h-10"
           />
-          {!isOwner && userId && !saveSuccess && !alreadyCopied && (
-            <button
-              onClick={handleSaveAudioToPersonal}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition flex items-center gap-2 shadow whitespace-nowrap"
-              title="Ajouter à Mes audios"
-              disabled={saving}
-            >
-              {saving ? (
-                <span className="animate-spin">⏳</span>
-              ) : (
-                <>
-                  <span>🎵</span>
-                  <span className="text-xs font-semibold">Ajouter</span>
-                </>
-              )}
-            </button>
-          )}
-          {saveSuccess && isAudio && (
-            <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
-              <span>✅</span>
-              <span className="text-green-400 text-xs font-bold">Importé !</span>
-            </div>
-          )}
-          {isOwner && (
-            <button
-              onClick={onDelete}
-              className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-              title="Supprimer"
-            >
-              🗑️
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Bouton Ajouter à Mes audios */}
+            {!isOwner && userId && !saveSuccess && !alreadyCopied && (
+              <button
+                onClick={handleSaveAudioToPersonal}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition flex items-center gap-2 shadow whitespace-nowrap"
+                title="Ajouter à Mes audios"
+                disabled={saving}
+              >
+                {saving ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <>
+                    <span>🎵</span>
+                    <span className="text-xs font-semibold">Mes audios</span>
+                  </>
+                )}
+              </button>
+            )}
+            {saveSuccess && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
+                <span>✅</span>
+                <span className="text-green-400 text-xs font-bold">Ajouté aux audios !</span>
+              </div>
+            )}
+            
+            {/* Bouton Ajouter à Mes textes */}
+            {!isOwner && userId && !saveSuccessTexts && !alreadyInTexts && (
+              <button
+                onClick={handleSaveAudioToTexts}
+                className="px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition flex items-center gap-2 shadow whitespace-nowrap"
+                title="Ajouter à Mes textes (comme script audio)"
+                disabled={savingToTexts}
+              >
+                {savingToTexts ? (
+                  <span className="animate-spin">⏳</span>
+                ) : (
+                  <>
+                    <span>📜</span>
+                    <span className="text-xs font-semibold">Mes textes</span>
+                  </>
+                )}
+              </button>
+            )}
+            {saveSuccessTexts && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
+                <span>✅</span>
+                <span className="text-green-400 text-xs font-bold">Ajouté aux textes !</span>
+              </div>
+            )}
+            
+            {isOwner && (
+              <button
+                onClick={onDelete}
+                className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+                title="Supprimer"
+              >
+                🗑️
+              </button>
+            )}
+          </div>
         </div>
       )}
       

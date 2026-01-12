@@ -28,3 +28,9 @@ CREATE POLICY "Users can update own audios" ON personal_audios
 
 CREATE POLICY "Users can delete own audios" ON personal_audios
   FOR DELETE USING (auth.uid() = user_id);
+
+-- =============================================
+-- Ajout colonne audio_url à la table scripts
+-- Pour permettre d'associer un audio à un texte
+-- =============================================
+ALTER TABLE scripts ADD COLUMN IF NOT EXISTS audio_url TEXT DEFAULT NULL;
