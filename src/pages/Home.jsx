@@ -11,6 +11,10 @@ import {
   shareScript as shareScriptToTroupe,
   fetchUserTags,
   fetchScriptTags,
+  uploadPersonalAudio,
+  fetchPersonalAudios,
+  deletePersonalAudio,
+  getPersonalAudioUrl,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
@@ -520,15 +524,9 @@ function Home() {
   const [scriptTagsMap, setScriptTagsMap] = useState({}); // { scriptId: [tags] }
   const [managingTagsFor, setManagingTagsFor] = useState(null); // script en cours d'édition tags
 
-  // État pour les blocs audio locaux
-  const [localAudios, setLocalAudios] = useState(() => {
-    try {
-      const data = localStorage.getItem("replicoach-local-audios");
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  });
+  // État pour les audios personnels (Supabase)
+  const [personalAudios, setPersonalAudios] = useState([]);
+  const [audioLoading, setAudioLoading] = useState(false);
 
   // État pour la notification d'import audio
   const [audioImportMsg, setAudioImportMsg] = useState(null);
@@ -552,9 +550,21 @@ function Home() {
       loadNotesCounts();
       loadUserTags();
       loadRecentScript();
+      loadPersonalAudios();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // Charger les audios personnels depuis Supabase
+  const loadPersonalAudios = async () => {
+    if (!user) return;
+    try {
+      const audios = await fetchPersonalAudios(user.id);
+      setPersonalAudios(audios || []);
+    } catch (err) {
+      console.error("Erreur chargement audios personnels:", err);
+    }
+  };
 
   // Charger les tags de l'utilisateur
   const loadUserTags = async () => {
@@ -873,45 +883,20 @@ function Home() {
     }
   };
 
-  // Fonction d'import audio
-  const handleImportAudio = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const audioUrl = ev.target.result;
-      const newAudio = {
-        id: "audio-" + Date.now(),
-        name: file.name,
-        url: audioUrl,
-        display_order: localScripts.length + localAudios.length + 1,
-      };
-      setLocalAudios((prev) => {
-        const updated = [...prev, newAudio];
-        localStorage.setItem(
-          "replicoach-local-audios",
-          JSON.stringify(updated)
-        );
-        setAudioImportMsg({ type: "success", text: `Audio importé : ${file.name}` });
-        return updated;
-      });
-    };
-    reader.onerror = () => {
-      setAudioImportMsg({ type: "error", text: "Erreur lors de l'import du fichier audio." });
-    };
-    reader.readAsDataURL(file);
+  // Suppression d'un audio personnel (Supabase)
+  const handleDeleteAudio = async (audioId, audioPath) => {
+    try {
+      await deletePersonalAudio(audioId, audioPath);
+      setPersonalAudios((prev) => prev.filter((a) => a.id !== audioId));
+      setAudioImportMsg({ type: 'success', text: 'Audio supprimé.' });
+    } catch (err) {
+      console.error('Erreur suppression audio:', err);
+      setAudioImportMsg({ type: 'error', text: 'Erreur lors de la suppression.' });
+    }
   };
 
-  // Fonction d'import audio locale
-  // Suppression d'un audio local
-  const handleDeleteAudio = (audioId) => {
-    const updated = localAudios.filter((a) => a.id !== audioId);
-    localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
-    setLocalAudios(updated);
-    setAudioImportMsg({ type: 'success', text: 'Audio supprimé.' });
-  };
-
-  const handleAddAudio = (file) => {
+  // Import d'un audio personnel (Supabase)
+  const handleAddAudio = async (file) => {
     console.log('Home.jsx: handleAddAudio appelé avec', file);
     if (!file || !file.type.startsWith('audio/')) {
       console.log('Home.jsx: fichier invalide');
@@ -919,42 +904,26 @@ function Home() {
       return;
     }
     
-    // Vérifier la taille du fichier (max 2 MB pour le localStorage)
-    const maxSize = 2 * 1024 * 1024; // 2 MB
+    // Vérifier la taille du fichier (max 50 MB pour Supabase)
+    const maxSize = 50 * 1024 * 1024; // 50 MB
     if (file.size > maxSize) {
-      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum : 2 MB.` });
+      setAudioImportMsg({ type: 'error', text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum : 50 MB.` });
       return;
     }
     
-    console.log('Home.jsx: lecture du fichier...');
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const audioUrl = ev.target.result;
-      const newAudio = {
-        id: 'audio-' + Date.now(),
-        type: 'audio',
-        name: file.name,
-        url: audioUrl,
-        display_order: localScripts.length + localAudios.length + 1,
-      };
-      const updated = [...localAudios, newAudio];
-      try {
-        localStorage.setItem('replicoach-local-audios', JSON.stringify(updated));
-        setLocalAudios(updated);
-        setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
-      } catch (e) {
-        console.error('Erreur localStorage:', e);
-        if (e.name === 'QuotaExceededError') {
-          setAudioImportMsg({ type: 'error', text: "Espace de stockage plein. Supprimez des audios existants ou utilisez un fichier plus petit." });
-        } else {
-          setAudioImportMsg({ type: 'error', text: "Erreur lors de la sauvegarde de l'audio." });
-        }
-      }
-    };
-    reader.onerror = () => {
-      setAudioImportMsg({ type: 'error', text: "Erreur lors de l'import du fichier audio." });
-    };
-    reader.readAsDataURL(file);
+    setAudioLoading(true);
+    setAudioImportMsg({ type: 'info', text: 'Upload en cours...' });
+    
+    try {
+      const newAudio = await uploadPersonalAudio(file, user.id);
+      setPersonalAudios((prev) => [...prev, newAudio]);
+      setAudioImportMsg({ type: 'success', text: `Audio importé : ${file.name}` });
+    } catch (err) {
+      console.error('Erreur upload audio:', err);
+      setAudioImportMsg({ type: 'error', text: `Erreur lors de l'upload : ${err.message}` });
+    } finally {
+      setAudioLoading(false);
+    }
   };
 
   const activeScript = activeId
@@ -1187,12 +1156,12 @@ function Home() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={[...localScripts.map((s) => s.id), ...localAudios.map((a) => a.id)]}
+            items={[...localScripts.map((s) => s.id), ...personalAudios.map((a) => a.id)]}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-4">
-              {/* Liste des scripts */}
-              {[...localScripts, ...localAudios]
+              {/* Liste des scripts et audios personnels */}
+              {[...localScripts, ...personalAudios.map(a => ({ ...a, type: 'audio' }))]
                 .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
                 .map((item, index) =>
                   item.type === 'audio' ? (
@@ -1208,12 +1177,12 @@ function Home() {
                           </h3>
                           <audio
                             controls
-                            src={item.url}
+                            src={getPersonalAudioUrl(item.audio_path)}
                             className="w-full mt-2"
                           />
                         </div>
                         <button
-                          onClick={() => handleDeleteAudio(item.id)}
+                          onClick={() => handleDeleteAudio(item.id, item.audio_path)}
                           className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded-lg transition"
                           title="Supprimer cet audio"
                         >
@@ -1489,9 +1458,16 @@ function Home() {
 
       {/* Notification import audio */}
       {audioImportMsg && (
-        <div className={`my-3 px-4 py-2 rounded-lg font-semibold text-sm ${audioImportMsg.type === 'success' ? 'bg-green-500/20 text-green-700' : 'bg-red-500/20 text-red-700'}`}>
+        <div className={`fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-lg font-semibold text-sm shadow-lg ${
+          audioImportMsg.type === 'success' ? 'bg-green-600 text-white' : 
+          audioImportMsg.type === 'info' ? 'bg-blue-600 text-white' : 
+          'bg-red-600 text-white'
+        }`}>
+          {audioImportMsg.type === 'info' && <span className="animate-pulse mr-2">⏳</span>}
           {audioImportMsg.text}
-          <button className="ml-3 text-xs text-gray-500" onClick={() => setAudioImportMsg(null)}>✕</button>
+          {audioImportMsg.type !== 'info' && (
+            <button className="ml-3 text-xs opacity-70 hover:opacity-100" onClick={() => setAudioImportMsg(null)}>✕</button>
+          )}
         </div>
       )}
 

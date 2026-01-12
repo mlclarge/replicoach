@@ -1433,3 +1433,83 @@ export const deleteGlobalVideo = async (videoId) => {
 
   if (error) throw error;
 };
+
+// =====================================================
+// AUDIOS PERSONNELS (importés par l'utilisateur)
+// =====================================================
+
+// Upload un fichier audio personnel
+export const uploadPersonalAudio = async (file, userId) => {
+  const timestamp = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const fileName = `personal-audios/${userId}/${timestamp}_${safeName}`;
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("audio-recordings")
+    .upload(fileName, file, {
+      cacheControl: "3600",
+      contentType: file.type || "audio/mpeg",
+    });
+
+  if (uploadError) throw uploadError;
+
+  // Récupérer le display_order max
+  const { data: existingAudios } = await supabase
+    .from("personal_audios")
+    .select("display_order")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: false })
+    .limit(1);
+  const nextOrder = (existingAudios?.[0]?.display_order || 0) + 1;
+
+  // Créer l'entrée en base
+  const { data, error } = await supabase
+    .from("personal_audios")
+    .insert([
+      {
+        user_id: userId,
+        name: file.name,
+        audio_path: uploadData.path,
+        display_order: nextOrder,
+      },
+    ])
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+// Récupérer les audios personnels d'un utilisateur
+export const fetchPersonalAudios = async (userId) => {
+  const { data, error } = await supabase
+    .from("personal_audios")
+    .select("*")
+    .eq("user_id", userId)
+    .order("display_order", { ascending: true });
+
+  if (error) throw error;
+  return data || [];
+};
+
+// Supprimer un audio personnel
+export const deletePersonalAudio = async (audioId, audioPath) => {
+  // Supprimer le fichier du storage
+  await supabase.storage.from("audio-recordings").remove([audioPath]);
+
+  // Supprimer l'entrée en base
+  const { error } = await supabase
+    .from("personal_audios")
+    .delete()
+    .eq("id", audioId);
+
+  if (error) throw error;
+};
+
+// URL d'un audio personnel
+export const getPersonalAudioUrl = (audioPath) => {
+  const { data } = supabase.storage
+    .from("audio-recordings")
+    .getPublicUrl(audioPath);
+  return data.publicUrl;
+};

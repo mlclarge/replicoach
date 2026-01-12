@@ -15,6 +15,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
   const [videoSaving, setVideoSaving] = useState(false);
   const [userRole, setUserRole] = useState("member");
   const [showAudioInput, setShowAudioInput] = useState(false);
+  const [showAudioInfo, setShowAudioInfo] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuthStore();
@@ -89,9 +90,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
       label: "Ajouter un fichier son",
       color: "bg-blue-500",
       onClick: () => {
-        if (audioInputRef.current) {
-          audioInputRef.current.click();
-        }
+        setShowAudioInfo(true);
         setIsOpen(false);
       },
     },
@@ -258,6 +257,57 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
                 className="flex-1 py-3 bg-purple-600 text-white rounded-lg disabled:opacity-50"
               >
                 {videoSaving ? "..." : "📤 Ajouter"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal info audio - limite de taille */}
+      {showAudioInfo && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowAudioInfo(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="text-5xl block mb-4">🎵</span>
+            <h3 className="text-lg font-bold text-white mb-3">
+              Ajouter un fichier audio
+            </h3>
+            <div className="bg-blue-900/50 rounded-lg p-4 mb-4">
+              <p className="text-blue-300 text-sm mb-2">
+                📌 <strong>Formats acceptés :</strong>
+              </p>
+              <p className="text-gray-300 text-sm mb-3">
+                MP3, WAV, M4A, OGG, FLAC...
+              </p>
+              <p className="text-yellow-400 font-semibold">
+                ⚠️ Taille maximale : 50 Mo
+              </p>
+            </div>
+            <p className="text-gray-400 text-xs mb-4">
+              Les fichiers plus volumineux peuvent être compressés avec un outil en ligne.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowAudioInfo(false)}
+                className="flex-1 py-3 bg-gray-700 text-white rounded-lg"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => {
+                  setShowAudioInfo(false);
+                  if (audioInputRef.current) {
+                    audioInputRef.current.click();
+                  }
+                }}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold"
+              >
+                📂 Choisir un fichier
               </button>
             </div>
           </div>
