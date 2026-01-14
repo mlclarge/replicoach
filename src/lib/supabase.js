@@ -462,17 +462,24 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
 
 // RÃ©cupÃ©rer les documents publics approuvÃ©s
 export const fetchPublicDocuments = async (category = null) => {
+  // Ajout d'un paramètre unique pour forcer le bypass du cache SW
+  const unique = Date.now() + '-' + Math.floor(Math.random() * 100000);
   let query = supabase
     .from("public_documents")
     .select("*")
     .eq("is_approved", true)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .abortSignal(undefined); // Pour compatibilité
 
   if (category) {
     query = query.eq("category", category);
   }
 
-  const { data, error } = await query;
+  // Ajout du paramètre unique à l'URL de la requête
+  // @supabase-js ne permet pas d'ajouter des query params custom, donc on force via headers
+  // ou on utilise fetch direct si besoin, mais ici on force le cache SW à ignorer via header
+  const { data, error } = await query
+    .headers({ 'x-bypass-cache': unique });
 
   if (error) throw error;
   return data;
