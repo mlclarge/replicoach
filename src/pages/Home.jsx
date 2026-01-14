@@ -1219,14 +1219,16 @@ function Home() {
       />
 
       {/* Bibliothèque publique */}
-      <PublicLibrary onAddPersonalAudio={(audio) => {
-        setPersonalAudios((prev) => [...prev, audio]);
-        setAudioImportMsg({
-          type: "info",
-          text: `Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.`
-        });
-        setTimeout(() => setAudioImportMsg(null), 3500);
-      }} />
+      <PublicLibrary
+        onAddPersonalAudio={(audio) => {
+          setPersonalAudios((prev) => [...prev, audio]);
+          setAudioImportMsg({
+            type: "info",
+            text: `Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.`,
+          });
+          setTimeout(() => setAudioImportMsg(null), 3500);
+        }}
+      />
 
       {/* Barre de recherche */}
       {scripts.length > 3 && (
@@ -1488,11 +1490,11 @@ function Home() {
       {/* Bouton flottant Découvrez Réplicoach */}
       <button
         onClick={() => {
-          localStorage.removeItem('replicoach-onboarding-seen');
+          localStorage.removeItem("replicoach-onboarding-seen");
           window.location.reload();
         }}
         className="fixed bottom-24 right-6 z-50 p-4 bg-yellow-500 hover:bg-yellow-400 text-white rounded-full shadow-lg flex items-center gap-2 text-lg font-bold transition"
-        style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+        style={{ boxShadow: "0 4px 16px rgba(0,0,0,0.15)" }}
         title="Découvrez Réplicoach"
       >
         <span className="text-2xl">💡</span>

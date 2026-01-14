@@ -525,7 +525,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       const audio = await copyPublicAudioToPersonal(doc, userId);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
-      if (typeof onAddPersonalAudio === 'function') {
+      if (typeof onAddPersonalAudio === "function") {
         onAddPersonalAudio(audio);
       }
     } catch (err) {

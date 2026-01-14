@@ -154,7 +154,7 @@ export const uploadDirectorNote = async (file, userId, troupeId = null) => {
 
 export const fetchDirectorNotes = async (userId) => {
   console.log("fetchDirectorNotes appelé avec userId:", userId);
-  
+
   // Récupérer les troupes de l'utilisateur
   const { data: memberships, error: membershipError } = await supabase
     .from("troupe_members")
@@ -164,7 +164,7 @@ export const fetchDirectorNotes = async (userId) => {
   if (membershipError) {
     console.error("Erreur récupération troupes:", membershipError);
   }
-  
+
   const troupeIds = memberships?.map((m) => m.troupe_id) || [];
   console.log("Troupes trouvées:", troupeIds);
 
@@ -177,7 +177,9 @@ export const fetchDirectorNotes = async (userId) => {
   if (troupeIds.length > 0) {
     // Notes perso (user_id), notes des troupes, ou notes publiques (user_id IS NULL)
     query = query.or(
-      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")}),user_id.is.null`
+      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(
+        ","
+      )}),user_id.is.null`
     );
   } else {
     // Notes personnelles ou publiques
@@ -462,8 +464,6 @@ export const uploadPublicDocument = async (file, metadata, userId) => {
 
 // RÃ©cupÃ©rer les documents publics approuvÃ©s
 export const fetchPublicDocuments = async (category = null) => {
-  // Ajout d'un paramètre unique pour forcer le bypass du cache SW
-  const unique = Date.now() + '-' + Math.floor(Math.random() * 100000);
   let query = supabase
     .from("public_documents")
     .select("*")
@@ -475,12 +475,7 @@ export const fetchPublicDocuments = async (category = null) => {
     query = query.eq("category", category);
   }
 
-  // Ajout du paramètre unique à l'URL de la requête
-  // @supabase-js ne permet pas d'ajouter des query params custom, donc on force via headers
-  // ou on utilise fetch direct si besoin, mais ici on force le cache SW à ignorer via header
-  const { data, error } = await query
-    .headers({ 'x-bypass-cache': unique });
-
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 };
