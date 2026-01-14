@@ -128,7 +128,11 @@ function SortableScriptCard({
                              touch-none select-none"
                   style={{ touchAction: "none" }}
                 >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <svg
+                    className="w-4 h-4"
+                    fill="currentColor"
+                    viewBox="0 0 20 20"
+                  >
                     <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
                   </svg>
                 </div>
@@ -175,17 +179,19 @@ function SortableScriptCard({
 
         {/* Modal de confirmation suppression */}
         {showDeleteConfirm && (
-          <div 
+          <div
             className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
             onClick={() => setShowDeleteConfirm(false)}
           >
-            <div 
+            <div
               className="bg-gray-800 rounded-xl p-6 max-w-sm w-full border border-gray-600"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center mb-4">
                 <span className="text-4xl">🎵</span>
-                <h3 className="text-lg font-bold text-white mt-2">Supprimer cet audio ?</h3>
+                <h3 className="text-lg font-bold text-white mt-2">
+                  Supprimer cet audio ?
+                </h3>
                 <p className="text-gray-400 text-sm mt-1">« {script.title} »</p>
               </div>
               <div className="flex gap-3">
@@ -833,7 +839,9 @@ function Home() {
   const loadDirectorNotes = async () => {
     if (!user) return;
     try {
+      console.log("Chargement consignes pour user:", user.id);
       const notes = await fetchDirectorNotes(user.id);
+      console.log("Consignes reçues:", notes);
       setDirectorNotes(notes || []);
     } catch (error) {
       console.error("Erreur chargement consignes:", error);
@@ -1211,7 +1219,14 @@ function Home() {
       />
 
       {/* Bibliothèque publique */}
-      <PublicLibrary />
+      <PublicLibrary onAddPersonalAudio={(audio) => {
+        setPersonalAudios((prev) => [...prev, audio]);
+        setAudioImportMsg({
+          type: "info",
+          text: `Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.`
+        });
+        setTimeout(() => setAudioImportMsg(null), 3500);
+      }} />
 
       {/* Barre de recherche */}
       {scripts.length > 3 && (
@@ -1463,12 +1478,26 @@ function Home() {
         </DndContext>
       )}
 
-      {/* Footer avec crédit */}
+      {/* Menu bas : crédit */}
       <div className="mt-8 pt-4 border-t border-gray-800">
         <p className="text-gray-600 text-xs text-center">
           Fait avec ❤️ pour le Tpt par MLconseil
         </p>
       </div>
+
+      {/* Bouton flottant Découvrez Réplicoach */}
+      <button
+        onClick={() => {
+          localStorage.removeItem('replicoach-onboarding-seen');
+          window.location.reload();
+        }}
+        className="fixed bottom-24 right-6 z-50 p-4 bg-yellow-500 hover:bg-yellow-400 text-white rounded-full shadow-lg flex items-center gap-2 text-lg font-bold transition"
+        style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+        title="Découvrez Réplicoach"
+      >
+        <span className="text-2xl">💡</span>
+        <span className="hidden sm:inline">Découvrez Réplicoach</span>
+      </button>
 
       {/* Modal de confirmation suppression */}
       {deleteConfirm && (

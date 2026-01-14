@@ -1,8 +1,8 @@
-// Service Worker pour RépliCoach PWA - Version 3.0
+// Service Worker pour RépliCoach PWA - Version 4.0
 // Avec cache amélioré pour mode hors-ligne complet
 
-const CACHE_NAME = 'replicoach-v3';
-const DATA_CACHE_NAME = 'replicoach-data-v2';
+const CACHE_NAME = 'replicoach-v4';
+const DATA_CACHE_NAME = 'replicoach-data-v3';
 
 // Assets statiques à mettre en cache immédiatement
 const STATIC_ASSETS = [

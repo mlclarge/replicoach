@@ -153,27 +153,20 @@ export const uploadDirectorNote = async (file, userId, troupeId = null) => {
 };
 
 export const fetchDirectorNotes = async (userId) => {
-  // Essayer d'abord la fonction RPC (si elle existe)
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    "get_accessible_director_notes",
-    { p_user_id: userId }
-  );
-
-  // Si la fonction RPC existe et fonctionne
-  if (!rpcError) {
-    return rpcData || [];
-  }
-
-  // Fallback : méthode directe si RPC n'existe pas (erreur 400/404)
-  console.warn("RPC non disponible, utilisation méthode directe:", rpcError);
-
+  console.log("fetchDirectorNotes appelé avec userId:", userId);
+  
   // Récupérer les troupes de l'utilisateur
-  const { data: memberships } = await supabase
+  const { data: memberships, error: membershipError } = await supabase
     .from("troupe_members")
     .select("troupe_id")
     .eq("user_id", userId);
 
+  if (membershipError) {
+    console.error("Erreur récupération troupes:", membershipError);
+  }
+  
   const troupeIds = memberships?.map((m) => m.troupe_id) || [];
+  console.log("Troupes trouvées:", troupeIds);
 
   // Construire la requête
   let query = supabase
@@ -182,16 +175,17 @@ export const fetchDirectorNotes = async (userId) => {
     .order("created_at", { ascending: false });
 
   if (troupeIds.length > 0) {
-    // Notes perso (user_id) OU notes des troupes
+    // Notes perso (user_id), notes des troupes, ou notes publiques (user_id IS NULL)
     query = query.or(
-      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")})`
+      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")}),user_id.is.null`
     );
   } else {
-    // Seulement notes personnelles
-    query = query.eq("user_id", userId);
+    // Notes personnelles ou publiques
+    query = query.or(`user_id.eq.${userId},user_id.is.null`);
   }
 
   const { data, error } = await query;
+  console.log("Résultat requête director_notes:", { data, error });
   if (error) throw error;
   return data || [];
 };

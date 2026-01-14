@@ -24,7 +24,7 @@ import Loader from "./ui/Loader";
  * Bibliothèque de documents publics
  * Upload réservé aux membres de troupes - visible par tous
  */
-function PublicLibrary() {
+function PublicLibrary({ onAddPersonalAudio }) {
   const { user } = useAuthStore();
 
   const [loading, setLoading] = useState(true);
@@ -199,6 +199,7 @@ function PublicLibrary() {
                     }
                   }}
                   getFileIcon={getFileIcon}
+                  onAddPersonalAudio={onAddPersonalAudio}
                 />
               ))}
             </div>
@@ -521,9 +522,12 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     setSaving(true);
     setSaveError(null);
     try {
-      await copyPublicAudioToPersonal(doc, userId);
+      const audio = await copyPublicAudioToPersonal(doc, userId);
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
+      if (typeof onAddPersonalAudio === 'function') {
+        onAddPersonalAudio(audio);
+      }
     } catch (err) {
       setSaveError(err.message || "Erreur lors de l'import");
     } finally {
