@@ -512,27 +512,24 @@ function DirectorNotesSection({
       {/* Header cliquable */}
       <div
         onClick={onToggleExpand}
-        className="card cursor-pointer hover:border-yellow-500/50 transition group"
+        className="menu-director cursor-pointer transition group"
       >
         <div className="flex items-center gap-4">
           <div
-            className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center
-                          group-hover:bg-yellow-500/30 transition"
+            className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition"
           >
             <span className="text-3xl">📁</span>
           </div>
-
           <div className="flex-1">
-            <h3 className="font-semibold text-yellow-500">
+            <h3 className="font-semibold text-gray-800">
               Consignes du metteur en scène
             </h3>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-700 text-sm">
               {notes.length > 0
-                ? `${notes.length} document${notes.length > 1 ? "s" : ""}`
+                ? <span className="font-bold">{notes.length} document{notes.length > 1 ? "s" : ""}</span>
                 : "Aucun document pour le moment"}
             </p>
           </div>
-
           <div
             className={`text-gray-500 group-hover:text-yellow-500 transition transform ${
               expanded ? "rotate-90" : ""
@@ -1230,36 +1227,7 @@ function Home() {
         }}
       />
 
-      {/* Barre de recherche */}
-      {scripts.length > 3 && (
-        <div className="mb-4">
-          <div className="relative">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="🔍 Rechercher un texte..."
-              className="w-full p-3 pl-4 pr-10 bg-gray-800 border border-gray-700 rounded-xl
-                         text-white placeholder-gray-500 focus:outline-none focus:border-primary-500
-                         focus:ring-2 focus:ring-primary-500/30"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          {searchQuery && (
-            <p className="text-xs text-gray-500 mt-1">
-              {localScripts.length} résultat{localScripts.length > 1 ? "s" : ""}{" "}
-              pour "{searchQuery}"
-            </p>
-          )}
-        </div>
-      )}
+      {/* Barre de recherche (ancienne) supprimée - utilisation du champ local sous Mes saynètes */}
 
       {/* Raccourci vers le texte fréquemment consulté */}
       {recentScript && scripts.find((s) => s.id === recentScript.scriptId) && (
@@ -1306,7 +1274,10 @@ function Home() {
 
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold text-white">Mes saynètes</h2>
+        <h2 className="section-title">
+          <span className="section-icon" aria-hidden>📣</span>
+          Mes saynètes
+        </h2>
 
         <div className="flex items-center gap-2">
           {localScripts.length > 1 && (
@@ -1370,6 +1341,26 @@ function Home() {
           />
         </div>
       )}
+
+      {/* Recherche locale pour Mes saynètes (sous Tous / Tags) */}
+      <div className="mb-4 relative">
+        <span className="input-icon">📣</span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Rechercher parmi mes saynètes..."
+          className="w-full p-3 pl-10 pr-10 bg-white border border-gray-300 rounded-xl text-gray-900 placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
+      </div>
 
       {/* Toggle verrouillage d'ordre + indication */}
       {sortBy === "order" && localScripts.length > 1 && !selectedTagFilter && (

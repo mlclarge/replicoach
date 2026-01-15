@@ -20,13 +20,8 @@ import { extractTextFromPDF } from "../lib/pdfProcessor";
 import { parseScript } from "../lib/scriptParser";
 import Loader from "./ui/Loader";
 
-/**
- * Bibliothèque de documents publics
- * Upload réservé aux membres de troupes - visible par tous
- */
 function PublicLibrary({ onAddPersonalAudio }) {
   const { user } = useAuthStore();
-
   const [loading, setLoading] = useState(true);
   const [documents, setDocuments] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
@@ -38,13 +33,11 @@ function PublicLibrary({ onAddPersonalAudio }) {
   useEffect(() => {
     loadDocuments();
     checkUserTroupes();
-  }, [selectedCategory, user]);
+    // eslint-disable-next-line
+  }, [selectedCategory]);
 
-  const checkUserTroupes = async () => {
-    if (!user?.id) {
-      setCanUpload(false);
-      return;
-    }
+  async function checkUserTroupes() {
+    if (!user?.id) return;
     try {
       const troupes = await fetchUserTroupes(user.id);
       setUserTroupes(troupes || []);
@@ -53,7 +46,7 @@ function PublicLibrary({ onAddPersonalAudio }) {
       console.error("Erreur vérification troupes:", err);
       setCanUpload(false);
     }
-  };
+  }
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -102,10 +95,11 @@ function PublicLibrary({ onAddPersonalAudio }) {
         <div className="flex items-center gap-3">
           <span className="text-2xl">📚</span>
           <div className="text-left">
-            <h2 className="font-semibold text-white">Bibliothèque publique</h2>
-            <p className="text-gray-400 text-xs">
-              {documents.length} document{documents.length > 1 ? "s" : ""}{" "}
-              disponible{documents.length > 1 ? "s" : ""}
+            <h2 className="font-bold text-white" style={{fontFamily: 'Source Sans 3, Arial, sans-serif', fontWeight: 700, fontSize: '1.15em'}}>
+              Bibliothèque publique
+            </h2>
+            <p className="text-gray-200 text-xs">
+              <span className="font-bold">{documents.length}</span> document{documents.length > 1 ? "s" : ""} disponible{documents.length > 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -120,7 +114,7 @@ function PublicLibrary({ onAddPersonalAudio }) {
 
       {/* Contenu déplié */}
       {expanded && (
-        <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50">
+        <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50 menu-library-dropdown public-library-expanded" style={{overflowX: 'auto'}}>
           {/* Message d'aide permanent - uniquement si l'utilisateur est connecté */}
           {user?.id && (
             <div className="mb-4 p-3 bg-primary-900/30 border border-primary-700/50 rounded-lg flex items-center gap-2">
