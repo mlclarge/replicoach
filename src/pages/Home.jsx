@@ -515,9 +515,7 @@ function DirectorNotesSection({
         className="menu-director cursor-pointer transition group"
       >
         <div className="flex items-center gap-4">
-          <div
-            className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition"
-          >
+          <div className="w-14 h-14 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition">
             <span className="text-3xl">📁</span>
           </div>
           <div className="flex-1">
@@ -525,9 +523,13 @@ function DirectorNotesSection({
               Consignes du metteur en scène
             </h3>
             <p className="text-gray-700 text-sm">
-              {notes.length > 0
-                ? <span className="font-bold">{notes.length} document{notes.length > 1 ? "s" : ""}</span>
-                : "Aucun document pour le moment"}
+              {notes.length > 0 ? (
+                <span className="font-bold">
+                  {notes.length} document{notes.length > 1 ? "s" : ""}
+                </span>
+              ) : (
+                "Aucun document pour le moment"
+              )}
             </p>
           </div>
           <div
@@ -1212,12 +1214,26 @@ function Home() {
       {/* Bibliothèque publique */}
       <PublicLibrary
         onAddPersonalAudio={(audio) => {
+          // Optimistic update: show the new audio immediately
           setPersonalAudios((prev) => [...prev, audio]);
           setAudioImportMsg({
             type: "info",
             text: `Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.`,
           });
           setTimeout(() => setAudioImportMsg(null), 3500);
+
+          // Then reconcile with server authoritative data after a short delay
+          (async () => {
+            try {
+              await new Promise((r) => setTimeout(r, 900));
+              const audios = await fetchPersonalAudios(user.id);
+              // If fetch succeeds, replace local list to avoid duplicates/races
+              setPersonalAudios(audios || []);
+            } catch (e) {
+              // keep optimistic state if fetch fails
+              console.warn("Reconcile personal audios failed:", e);
+            }
+          })();
         }}
       />
 
@@ -1277,7 +1293,9 @@ function Home() {
       {/* En-tête liste + Actions */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="section-title">
-          <span className="section-icon" aria-hidden>📣</span>
+          <span className="section-icon" aria-hidden>
+            📣
+          </span>
           Mes saynètes
         </h2>
 
