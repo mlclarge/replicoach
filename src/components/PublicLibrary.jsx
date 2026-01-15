@@ -95,11 +95,11 @@ function PublicLibrary({ onAddPersonalAudio }) {
         <div className="flex items-center gap-3">
           <span className="text-2xl">📚</span>
           <div className="text-left">
-            <h2 className="section-title text-white">
-              Bibliothèque publique
-            </h2>
+            <h2 className="section-title text-white">Bibliothèque publique</h2>
             <p className="text-gray-200 text-xs">
-              <span className="font-bold">{documents.length}</span> document{documents.length > 1 ? "s" : ""} disponible{documents.length > 1 ? "s" : ""}
+              <span className="font-bold">{documents.length}</span> document
+              {documents.length > 1 ? "s" : ""} disponible
+              {documents.length > 1 ? "s" : ""}
             </p>
           </div>
         </div>
@@ -114,7 +114,10 @@ function PublicLibrary({ onAddPersonalAudio }) {
 
       {/* Contenu déplié */}
       {expanded && (
-        <div className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50 menu-library-dropdown public-library-expanded" style={{overflowX: 'auto'}}>
+        <div
+          className="bg-gray-800/30 rounded-xl p-4 border border-gray-700/50 menu-library-dropdown public-library-expanded"
+          style={{ overflowX: "auto" }}
+        >
           {/* Message d'aide permanent - uniquement si l'utilisateur est connecté */}
           {user?.id && (
             <div className="mb-4 p-3 bg-primary-900/30 border border-primary-700/50 rounded-lg flex items-center gap-2">
@@ -518,7 +521,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     try {
       const audio = await copyPublicAudioToPersonal(doc, userId);
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 10000);
       if (typeof onAddPersonalAudio === "function") {
         onAddPersonalAudio(audio);
       }
@@ -535,10 +538,23 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     setSavingToTexts(true);
     setSaveError(null);
     try {
-      await savePublicAudioAsScript(doc, userId);
-      await fetchScripts(userId);
+      // Create the script from the public audio
+      const created = await savePublicAudioAsScript(doc, userId);
+      // Ensure relations exist to avoid render issues
+      const createdScript = { ...created, characters: [], replicas: [] };
+
+      // Append directly to the global script store so the UI updates immediately
+      try {
+        useScriptStore.setState((state) => ({
+          scripts: [...(state.scripts || []), createdScript],
+        }));
+      } catch (e) {
+        // Fallback: request a full refresh from the store
+        await fetchScripts(userId);
+      }
+
       setSaveSuccessTexts(true);
-      setTimeout(() => setSaveSuccessTexts(false), 3000);
+      setTimeout(() => setSaveSuccessTexts(false), 10000);
     } catch (err) {
       setSaveError(err.message || "Erreur lors de l'import dans Mes textes");
     } finally {
@@ -641,7 +657,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
       await fetchScripts(userId);
 
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => setSaveSuccess(false), 10000);
     } catch (err) {
       setSaveError(err.message || "Erreur lors de l'enregistrement");
     } finally {
@@ -751,10 +767,10 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
                 <span className="text-lg">✅</span>
                 <div className="text-xs">
                   <p className="text-green-400 font-bold">
-                    Texte importé avec succès !
+                    Rafraichir la page
                   </p>
                   <p className="text-green-300">
-                    Disponible dans « Mes Textes »
+                    rafraichir la page, soit appuyer du haut vers le bas de la page pour voir le fichier sans sa liste
                   </p>
                 </div>
               </div>
@@ -799,7 +815,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
               <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
                 <span>✅</span>
                 <span className="text-green-400 text-xs font-bold">
-                  Ajouté aux audios !
+                  rafraichir la page, soit appuyer du haut vers le bas de la page pour voir le fichier sans sa liste
                 </span>
               </div>
             )}
@@ -826,7 +842,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
               <div className="flex items-center gap-1 px-2 py-1 bg-green-900/50 border border-green-500/50 rounded-lg">
                 <span>✅</span>
                 <span className="text-green-400 text-xs font-bold">
-                  Ajouté aux textes !
+                  rafraichir la page, soit appuyer du haut vers le bas de la page pour voir le fichier sans sa liste
                 </span>
               </div>
             )}
