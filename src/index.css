@@ -27,9 +27,7 @@
   font-family: 'Source Sans 3', Arial, sans-serif;
   font-weight: 700;
   font-size: 1.15rem;
-  color: #ffffff;
   letter-spacing: 0.01em;
-  text-shadow: 0 1px 0 rgba(0,0,0,0.35);
 }
 @media (min-width: 768px) {
   .section-title {
@@ -102,15 +100,42 @@
   padding: 18px 24px;
   margin-bottom: 18px;
   transition: box-shadow 0.2s, transform 0.2s;
+  font-family: 'Source Sans 3', Arial, sans-serif;
+  font-weight: 700;
 }
 .menu-director:hover {
   box-shadow: 0 4px 16px rgba(60,60,60,0.15);
   transform: translateY(-2px) scale(1.02);
 }
-.menu-library {
-  background: linear-gradient(90deg, #b71c50 0%, #e57373 100%);
+
+/* Nouveau style pour le bouton 'Nouveau texte' — vert bouteille */
+.btn-newtext {
+  background: linear-gradient(90deg, #0b6b44 0%, #095a39 100%);
+  color: #ffffff;
   border-radius: 18px;
-  box-shadow: 0 2px 8px rgba(183, 28, 80, 0.15);
+  padding: 14px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-family: 'Source Sans 3', Arial, sans-serif;
+  box-shadow: 0 2px 8px rgba(11,107,68,0.12);
+  border: 1px solid rgba(255,255,255,0.06);
+  transition: box-shadow 0.15s, transform 0.12s;
+}
+.btn-newtext:hover {
+  box-shadow: 0 6px 20px rgba(11,107,68,0.18);
+  transform: translateY(-2px);
+}
+.btn-newtext:focus {
+  outline: 3px solid rgba(11,107,68,0.15);
+  outline-offset: 2px;
+}
+.menu-library {
+  background: #0d4f8b; /* bleu profond, police conservée */
+  border-radius: 18px;
+  box-shadow: 0 2px 8px rgba(13,79,139,0.15);
   color: #fff;
   display: flex;
   align-items: center;
@@ -123,8 +148,8 @@
   transition: box-shadow 0.2s, transform 0.2s;
 }
 .menu-library:hover {
-  box-shadow: 0 4px 16px rgba(183, 28, 80, 0.25);
-  border: 2px solid #fff;
+  box-shadow: 0 4px 16px rgba(13,79,139,0.25);
+  border: 2px solid rgba(255,255,255,0.06);
   transform: translateY(-2px) scale(1.02);
 }
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600;700&display=swap');
@@ -197,6 +222,8 @@
   padding: 18px 24px;
   margin-bottom: 18px;
   transition: box-shadow 0.2s, transform 0.2s;
+  font-family: 'Source Sans 3', Arial, sans-serif;
+  font-weight: 700;
 }
 .menu-director:hover {
   box-shadow: 0 4px 16px rgba(255, 179, 0, 0.25);

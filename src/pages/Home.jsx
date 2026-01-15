@@ -521,7 +521,7 @@ function DirectorNotesSection({
             <span className="text-3xl">📁</span>
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-800">
+            <h3 className="section-title text-gray-800">
               Consignes du metteur en scène
             </h3>
             <p className="text-gray-700 text-sm">
@@ -1193,15 +1193,7 @@ function Home() {
 
   return (
     <div className="p-4 pb-24">
-      {/* Boutons d'action */}
-      <div className="flex gap-3 mb-4">
-        <Link
-          to="/upload"
-          className="btn-gold flex-1 flex items-center justify-center gap-2"
-        >
-          <span>➕</span> Nouveau texte
-        </Link>
-      </div>
+      {/* Boutons d'action (déplacé sous Bibliothèque publique) */}
 
       {/* Section Consignes Metteur en Scène - Expandable */}
       <DirectorNotesSection
@@ -1215,6 +1207,8 @@ function Home() {
         onToggleExpand={() => setDirectorNotesExpanded(!directorNotesExpanded)}
       />
 
+      {/* Bouton + Nouveau texte (déplacé plus bas) */}
+
       {/* Bibliothèque publique */}
       <PublicLibrary
         onAddPersonalAudio={(audio) => {
@@ -1226,6 +1220,14 @@ function Home() {
           setTimeout(() => setAudioImportMsg(null), 3500);
         }}
       />
+
+      {/* Bouton + Nouveau texte (sous Bibliothèque publique) */}
+      <div className="flex gap-3 mb-4 mt-4">
+        <Link to="/upload" className="btn-newtext w-full">
+          <span>➕</span>
+          <span>Nouveau texte</span>
+        </Link>
+      </div>
 
       {/* Barre de recherche (ancienne) supprimée - utilisation du champ local sous Mes saynètes */}
 

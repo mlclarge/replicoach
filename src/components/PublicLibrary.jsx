@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import {
   savePublicDocumentAsScript,
   savePublicAudioAsScript,
@@ -89,13 +90,12 @@ function PublicLibrary({ onAddPersonalAudio }) {
       {/* En-tête cliquable */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-primary-900/50 to-primary-800/30 
-                   rounded-xl border border-primary-700/50 hover:border-primary-600 transition mb-3"
+        className="w-full flex items-center justify-between p-4 menu-library rounded-xl border border-primary-700/50 hover:border-primary-600 transition mb-3"
       >
         <div className="flex items-center gap-3">
           <span className="text-2xl">📚</span>
           <div className="text-left">
-            <h2 className="font-bold text-white" style={{fontFamily: 'Source Sans 3, Arial, sans-serif', fontWeight: 700, fontSize: '1.15em'}}>
+            <h2 className="section-title text-white">
               Bibliothèque publique
             </h2>
             <p className="text-gray-200 text-xs">
