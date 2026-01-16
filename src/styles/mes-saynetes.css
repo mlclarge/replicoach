@@ -1,0 +1,208 @@
+/* Styles dédiés pour mettre en valeur la section "Mes saynètes" (mobile-first) */
+
+:root{
+  --accent: #f6c84c; /* gold */
+  --accent-dark: #d69e2e;
+  --card-bg: rgba(255,255,255,0.02);
+  --glass: rgba(255,255,255,0.03);
+}
+
+/* Hero compact sticky pour la section Mes saynètes */
+.mes-saynetes-hero{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 14px;
+  border-radius:12px;
+  background: linear-gradient(90deg, rgba(20,20,28,0.95), rgba(30,30,40,0.95));
+  box-shadow: 0 6px 22px rgba(2,6,23,0.55);
+  border: 1px solid rgba(255,255,255,0.04);
+  position: sticky;
+  top: 72px; /* under header */
+  z-index:30;
+}
+
+.mes-saynetes-hero h2{
+  margin:0;
+  font-size:1.05rem;
+  font-weight:800;
+  color:var(--accent);
+  letter-spacing:0.01em;
+}
+
+.mes-saynetes-hero .meta{
+  color:#cbd5e1;
+  font-size:0.85rem;
+  margin-top:2px;
+}
+
+/* Onglets 'Tous / Mine' plus visibles (pills) */
+.mes-saynetes-tabs{
+  display:flex;
+  gap:10px;
+  margin-top:10px;
+}
+.mes-saynetes-tabs .pill{
+  padding:8px 12px;
+  border-radius:999px;
+  font-weight:700;
+  font-size:0.9rem;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.35);
+}
+.mes-saynetes-tabs .pill--all{
+  background:var(--accent);
+  color:#111827;
+}
+.mes-saynetes-tabs .pill--mine{
+  background: linear-gradient(90deg,#014737,#0b6b44);
+  color:#fff;
+}
+
+/* Recherche flottante et mise en valeur */
+.mes-saynetes-search{
+  margin-top:12px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.mes-saynetes-search .search-input{
+  width:100%;
+  padding:12px 46px 12px 44px;
+  border-radius:14px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border:1px solid rgba(255,255,255,0.04);
+  color:#e6eef8;
+  font-weight:600;
+  box-shadow: 0 8px 30px rgba(2,6,23,0.5) inset;
+}
+.mes-saynetes-search .icon{
+  position:relative;
+  left:-38px;
+  color:var(--accent);
+  font-size:1.2rem;
+}
+
+/* Poignée / icône de drag plus lisible */
+.mes-saynetes-drag-handle{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:40px;height:40px;border-radius:10px;
+  background:var(--glass);
+  color:var(--accent);
+  box-shadow: 0 6px 18px rgba(2,6,23,0.45);
+}
+.mes-saynetes-drag-handle svg{opacity:0.95}
+
+/* Verrou d'ordre visible (flottant discret) */
+.mes-saynetes-lock{
+  position:fixed;right:14px;bottom:110px;z-index:40;
+  background:var(--accent);color:#111;border-radius:999px;padding:10px 12px;font-weight:800;
+  box-shadow:0 10px 30px rgba(11,19,23,0.55);
+}
+
+/* CTA 'Nouveau texte' mise en avant sur mobile */
+.mes-saynetes-cta{position:sticky;bottom:18px;z-index:28;display:flex;justify-content:center;padding-top:10px}
+.mes-saynetes-cta .btn-newtext{width:92%;max-width:540px;padding:14px 18px;font-size:1.05rem;border-radius:14px}
+
+/* Animations subtiles */
+@keyframes pulseAccent{
+  0%{box-shadow:0 6px 18px rgba(246,200,76,0.12)}
+  50%{box-shadow:0 10px 30px rgba(246,200,76,0.18)}
+  100%{box-shadow:0 6px 18px rgba(246,200,76,0.12)}
+}
+.mes-saynetes-hero{animation: pulseAccent 5s ease-in-out infinite}
+
+/* Desktop adjustments */
+@media(min-width:900px){
+  .mes-saynetes-hero{position:relative;top:auto;padding:18px}
+  .mes-saynetes-search .search-input{width:450px}
+  .mes-saynetes-lock{display:none}
+}
+
+/* Accessibility: focus styles */
+.mes-saynetes-search .search-input:focus{outline:3px solid rgba(246,200,76,0.18);outline-offset:2px}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .mes-saynetes-hero{animation:none;transition:none}
+}
+
+/* Overrides specific to the Home page hero (red gradient variant) */
+.mes-saynetes-hero {
+  display: block;
+  background: linear-gradient(90deg, #BF222F 0%, #f97316 100%);
+  padding: 0; /* keep child grid padding for spacing */
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(191,34,47,0.14);
+}
+
+.mes-saynetes-hero .grid {
+  background: transparent;
+  padding: 18px 24px;
+}
+
+.mes-saynetes-icon {
+  background: transparent;
+  color: #ffffff;
+  padding: 0;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+}
+
+.mes-saynetes-hero .section-title {
+  color: #ffffff;
+  margin: 0;
+  font-weight: 800;
+  font-size: 1.125rem; /* match 'Nouveau texte' text-lg */
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+@media (min-width: 900px) {
+  .mes-saynetes-hero .section-title { font-size: 1.25rem; }
+}
+
+/* Slight left nudge to align icon/title with other menu blocks */
+.mes-saynetes-hero .section-title { transform: none !important; }
+
+@media (max-width: 640px) {
+  .mes-saynetes-hero .section-title { transform: none !important; }
+}
+
+/* Reset icon margin (restore default) */
+.mes-saynetes-icon { margin-left: 0 !important; }
+@media (max-width: 640px) {
+  .mes-saynetes-icon { margin-left: 0 !important; }
+}
+
+/* Shift 'Nouveau texte' block slightly left to align with hero */
+.menu-newtext { transform: none !important; }
+@media (max-width: 640px) {
+  .menu-newtext { transform: none !important; }
+}
+
+@media (max-width: 640px) {
+  .mes-saynetes-hero { padding: 0.5rem; }
+  .mes-saynetes-hero .grid { padding: 0.5rem; }
+}
+
+/* Slight, very subtle left nudge specifically for the "Nouveau texte" button */
+.menu-newtext{display:flex;align-items:center;gap:12px}
+.menu-newtext > .w-14{transform:translateX(-12px);transition:transform .12s ease}
+.menu-newtext .flex-1 h3{transform:translateX(-12px);transition:transform .12s ease}
+.menu-newtext .flex-1 p{transform:translateX(-10px);transition:transform .12s ease}
+
+@media(min-width:640px){
+  .menu-newtext > .w-14{transform:translateX(-16px)}
+  .menu-newtext .flex-1 h3{transform:translateX(-18px)}
+  .menu-newtext .flex-1 p{transform:translateX(-16px)}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .menu-newtext > .w-14, .menu-newtext .flex-1 h3{transition:none}
+}

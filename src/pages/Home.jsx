@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
@@ -44,6 +44,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import FloatingActionButton from "../components/FloatingActionButton";
+import "../styles/mes-saynetes.css";
 
 /**
  * Carte de script draggable - FOND BEIGE/CRÈME + CONTRASTE FORT
@@ -519,7 +520,7 @@ function DirectorNotesSection({
             <span className="text-3xl">📁</span>
           </div>
           <div className="flex-1">
-            <h3 className="section-title text-gray-800">
+            <h3 className="section-title text-gray-800 text-base">
               Consignes du metteur en scène
             </h3>
             <p className="text-gray-700 text-sm">
@@ -733,6 +734,14 @@ function Home() {
 
   // État pour la notification d'import audio
   const [audioImportMsg, setAudioImportMsg] = useState(null);
+
+  // Compter les textes (scripts) et les fichiers audio affichés
+  const { textCount, audioCount } = useMemo(() => {
+    return {
+      textCount: localScripts.length,
+      audioCount: personalAudios.length,
+    };
+  }, [localScripts, personalAudios]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -1171,6 +1180,7 @@ function Home() {
 
   return (
     <div className="p-4 pb-24">
+      {/* Styles for mes-saynetes hero moved to src/styles/mes-saynetes.css */}
       {/* Boutons d'action (déplacé sous Bibliothèque publique) */}
 
       {/* Section Consignes Metteur en Scène - Expandable */}
@@ -1213,11 +1223,19 @@ function Home() {
         }}
       />
 
-      {/* Bouton + Nouveau texte (sous Bibliothèque publique) */}
-      <div className="flex gap-3 mb-4 mt-4">
-        <Link to="/upload" className="btn-newtext w-full">
-          <span>➕</span>
-          <span>Nouveau texte</span>
+      {/* Bouton 'Nouveau texte' — bloc vert aligné à gauche (comme Consignes/Bibliothèque) */}
+      <div className="mb-4">
+        <Link to="/upload" className="menu-newtext">
+          <div className="w-14 h-14 bg-green-700/15 rounded-xl flex items-center justify-center">
+            <span className="text-2xl">📄</span>
+          </div>
+
+          <div className="flex-1 text-left">
+            <h3 className="text-white font-bold text-base m-0">Nouveau texte</h3>
+            <p className="text-green-100 text-sm mt-1 hidden sm:block">Créer ou importer un nouveau texte</p>
+          </div>
+
+          <div className="text-amber-400 text-2xl">→</div>
         </Link>
       </div>
 
@@ -1266,27 +1284,33 @@ function Home() {
         </div>
       )}
 
-      {/* En-tête liste + Actions */}
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="section-title">
-          <span className="section-icon" aria-hidden>
-            📣
-          </span>
-          Mes saynètes
-        </h2>
+      {/* En-tête liste + Actions - full width grid: left / center / right */}
+      <div className="mes-saynetes-hero mb-4">
+        <div className="grid grid-cols-3 items-center w-full mb-3">
+          <div className="flex flex-col items-start">
+            <h2 className="section-title m-0 flex items-center gap-2 text-white text-base">
+              <span className="section-icon mes-saynetes-icon" aria-hidden>
+                📣
+              </span>
+              Mes saynètes
+            </h2>
 
-        <div className="flex items-center gap-2">
-          {/* Bouton renumérotation supprimé */}
+            <p className="text-white/90 text-sm mt-1 block ml-4 sm:ml-8 md:ml-12">
+              {textCount} saynète{textCount > 1 ? "s" : ""} • {audioCount} fichier{audioCount > 1 ? "s" : ""} audio
+            </p>
+          </div>
 
+          <div className="flex items-center justify-center">{/* center preserved for symmetry */}</div>
+
+          <div className="flex items-center justify-end space-x-3">
+          {/* Right-side actions (aligned) */}
           {localScripts.length > 1 && (
-            <div className="flex gap-1 ml-2">
-              <button
-                className={`px-2 py-1 rounded text-xs transition bg-gold-500 text-dark`}
-                title="Tri manuel (drag & drop)"
-              >
-                ⋮⋮
-              </button>
-            </div>
+            <button
+              className={`w-10 h-10 flex items-center justify-center rounded-lg text-white bg-gold-500 transition`}
+              title="Tri manuel (drag & drop)"
+            >
+              ⋮⋮
+            </button>
           )}
         </div>
       </div>
@@ -1430,6 +1454,9 @@ function Home() {
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* Fin du conteneur Mes saynètes */}
+      </div>
 
       {/* Menu bas : crédit */}
       <div className="mt-8 pt-4 border-t border-gray-800">

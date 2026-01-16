@@ -95,7 +95,7 @@ function PublicLibrary({ onAddPersonalAudio }) {
         <div className="flex items-center gap-3">
           <span className="text-2xl">📚</span>
           <div className="text-left">
-            <h2 className="section-title text-white">Bibliothèque publique</h2>
+            <h2 className="section-title text-white text-base">Bibliothèque publique</h2>
             <p className="text-gray-200 text-xs">
               <span className="font-bold">{documents.length}</span> document
               {documents.length > 1 ? "s" : ""} disponible

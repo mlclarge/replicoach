@@ -106,7 +106,7 @@ function FloatingActionButton({ onAddVideo, onAddAudio, onRecordFree }) {
       )}
 
       {/* POSITION GAUCHE - bottom-24 pour alignement */}
-      <div className="fixed bottom-24 left-4 z-50">
+      <div className="fixed bottom-24 left-0 z-50">
         {isOpen && (
           <div className="mb-3 space-y-2">
             {actions.map((action, index) => (
