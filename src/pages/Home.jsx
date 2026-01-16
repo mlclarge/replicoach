@@ -676,7 +676,7 @@ function Home() {
 
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
-  const [sortBy, setSortBy] = useState("order");
+  // `sortBy` retiré : tri toujours par `display_order`
   const [searchQuery, setSearchQuery] = useState(""); // Recherche par titre
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
@@ -878,21 +878,11 @@ function Home() {
       );
     }
 
-    // Tri selon l'option choisie
-    switch (sortBy) {
-      case "alpha":
-        sorted.sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      case "date":
-        sorted.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        break;
-      case "order":
-      default:
-        sorted.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
-    }
+    // Tri par numéro d'affichage (ordre manuel)
+    sorted.sort((a, b) => (a.display_order || 0) - (b.display_order || 0));
 
     setLocalScripts(sorted);
-  }, [scripts, sortBy, selectedTagFilter, scriptTagsMap, searchQuery]);
+  }, [scripts, selectedTagFilter, scriptTagsMap, searchQuery]);
 
   const handleOpenScript = (scriptId) => {
     // Suivre l'accès au script pour les raccourcis
@@ -1002,21 +992,7 @@ function Home() {
     }
   };
 
-  const handleRenumber = async () => {
-    const updates = localScripts.map((script, index) => ({
-      id: script.id,
-      display_order: index + 1,
-    }));
-
-    setLocalScripts((prev) =>
-      prev.map((script, index) => ({
-        ...script,
-        display_order: index + 1,
-      }))
-    );
-
-    await updateScriptOrder(updates);
-  };
+  // `handleRenumber` supprimé — la numérotation reste basée sur l'ordre actuel
 
   // Gestion des consignes metteur en scène
   const handleUploadDirectorNote = async (files) => {
@@ -1300,51 +1276,15 @@ function Home() {
         </h2>
 
         <div className="flex items-center gap-2">
-          {localScripts.length > 1 && (
-            <button
-              onClick={handleRenumber}
-              className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-400 
-                         hover:bg-primary-600 hover:text-white transition"
-              title="Renuméroter à partir de 1"
-            >
-              🔄 1,2,3...
-            </button>
-          )}
+          {/* Bouton renumérotation supprimé */}
 
           {localScripts.length > 1 && (
             <div className="flex gap-1 ml-2">
               <button
-                onClick={() => setSortBy("order")}
-                className={`px-2 py-1 rounded text-xs transition ${
-                  sortBy === "order"
-                    ? "bg-gold-500 text-dark"
-                    : "bg-gray-700 text-gray-400"
-                }`}
+                className={`px-2 py-1 rounded text-xs transition bg-gold-500 text-dark`}
                 title="Tri manuel (drag & drop)"
               >
                 ⋮⋮
-              </button>
-              <button
-                onClick={() => setSortBy("alpha")}
-                className={`px-2 py-1 rounded text-xs transition ${
-                  sortBy === "alpha"
-                    ? "bg-gold-500 text-dark"
-                    : "bg-gray-700 text-gray-400"
-                }`}
-                title="Tri alphabétique"
-              >
-                A-Z
-              </button>
-              <button
-                onClick={() => setSortBy("date")}
-                className={`px-2 py-1 rounded text-xs transition ${
-                  sortBy === "date"
-                    ? "bg-gold-500 text-dark"
-                    : "bg-gray-700 text-gray-400"
-                }`}
-                title="Tri par date"
-              >
-                📅
               </button>
             </div>
           )}
@@ -1383,7 +1323,7 @@ function Home() {
       </div>
 
       {/* Toggle verrouillage d'ordre + indication */}
-      {sortBy === "order" && localScripts.length > 1 && !selectedTagFilter && (
+      {localScripts.length > 1 && !selectedTagFilter && (
         <div className="flex items-center justify-between mb-3">
           <p className="text-gray-500 text-xs flex items-center gap-1">
             {orderLocked ? (
