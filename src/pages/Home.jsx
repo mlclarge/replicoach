@@ -1287,15 +1287,15 @@ function Home() {
       {/* En-tête liste + Actions - full width grid: left / center / right */}
       <div className="mes-saynetes-hero mb-4">
         <div className="grid grid-cols-3 items-center w-full mb-3">
-          <div className="flex flex-col items-start">
-            <h2 className="section-title m-0 flex items-center gap-2 text-white text-base">
+          <div className="flex flex-col items-start min-w-0">
+            <h2 className="section-title m-0 flex items-center gap-2 text-white text-base truncate">
               <span className="section-icon mes-saynetes-icon" aria-hidden>
                 📣
               </span>
               Mes saynètes
             </h2>
 
-            <p className="text-white/90 text-sm mt-1 block ml-4 sm:ml-8 md:ml-12">
+            <p className="text-white/90 text-sm mt-1 block ml-4 sm:ml-8 md:ml-12 whitespace-nowrap">
               {textCount} saynète{textCount > 1 ? "s" : ""} • {audioCount} fichier{audioCount > 1 ? "s" : ""} audio
             </p>
           </div>
