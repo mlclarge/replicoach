@@ -1633,6 +1633,9 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   };
 
   const selectedChar = characters.find((c) => c.id === selectedCharId);
+  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
 
   const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
     navigator.userAgent
