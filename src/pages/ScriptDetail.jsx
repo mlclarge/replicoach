@@ -1633,9 +1633,10 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   };
 
   const selectedChar = characters.find((c) => c.id === selectedCharId);
-  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
+  const isMobile =
+    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
   const canSubmit = text.trim() && selectedCharId && !saving;
 
   // Message d'insertion
@@ -1758,6 +1759,10 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarStyle, setToolbarStyle] = useState({ top: 0, left: 0 });
   const touchPos = useRef({ x: 0, y: 0 });
+  const isMobile =
+    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
 
   useEffect(() => {
     if (editableRef.current) {
@@ -2019,7 +2024,7 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
 function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
   // Détecter mobile
   const isMobile =
-    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
       navigator.userAgent
     );
 
