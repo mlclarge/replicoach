@@ -1633,6 +1633,10 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   };
 
   const selectedChar = characters.find((c) => c.id === selectedCharId);
+
+  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  );
   const canSubmit = text.trim() && selectedCharId && !saving;
 
   // Message d'insertion
@@ -1754,6 +1758,7 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const editableRef = useRef(null);
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarStyle, setToolbarStyle] = useState({ top: 0, left: 0 });
+  const touchPos = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (editableRef.current) {
@@ -1781,6 +1786,34 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
     };
     document.addEventListener("selectionchange", onSelectionChange);
     return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
+
+  // Support mobile: detect touch position and show toolbar on touchend if selection exists
+  useEffect(() => {
+    const onTouchEnd = (e) => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      if (!editableRef.current || !editableRef.current.contains(range.commonAncestorContainer)) return;
+      // Try to get bounding rect; fallback to last touch position
+      const rect = range.getBoundingClientRect();
+      const top = rect && rect.top ? rect.top - 48 + window.scrollY : touchPos.current.y - 48 + window.scrollY;
+      const left = rect && rect.left ? rect.left + window.scrollX : touchPos.current.x + window.scrollX;
+      setToolbarStyle({ top, left });
+      setShowToolbar(true);
+    };
+
+    const onTouchStart = (e) => {
+      const t = e.touches && e.touches[0];
+      if (t) touchPos.current = { x: t.clientX, y: t.clientY };
+    };
+
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchstart", onTouchStart);
+    };
   }, []);
 
   useEffect(() => {
@@ -1900,7 +1933,7 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             />
           </div>
 
-          {/* Floating toolbar pour selection */}
+          {/* Floating toolbar pour selection (desktop) */}
           {showToolbar && (
             <div
               className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg flex items-center gap-2 p-2"
@@ -1908,6 +1941,31 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             >
               <button onClick={applyHighlight} className="px-2 py-1 bg-amber-400 text-dark rounded">Surligner</button>
               <button onClick={removeHighlight} className="px-2 py-1 bg-gray-700 text-white rounded">Retirer</button>
+            </div>
+          )}
+
+          {/* Mobile floating buttons inside modal - always visible on mobile for easier access */}
+          {isMobile && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex gap-3">
+              <button
+                onClick={() => {
+                  applyHighlight();
+                  // small feedback
+                  setTimeout(() => setShowToolbar(false), 200);
+                }}
+                className="px-4 py-2 bg-amber-400 text-dark rounded-xl shadow-lg"
+              >
+                Surligner
+              </button>
+              <button
+                onClick={() => {
+                  removeHighlight();
+                  setTimeout(() => setShowToolbar(false), 200);
+                }}
+                className="px-4 py-2 bg-gray-700 text-white rounded-xl shadow-lg"
+              >
+                Retirer
+              </button>
             </div>
           )}
 
@@ -1951,6 +2009,10 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
     </div>
   );
 }
+
+// Note: on mobile some browsers hide native selection toolbar. We add a small floating
+// mobile toolbar inside the modal to allow applying highlight/remove when selection
+// is active.
 
 /**
  * Modal fichier original
