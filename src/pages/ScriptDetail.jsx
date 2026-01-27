@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
@@ -22,6 +22,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import DOMPurify from "dompurify";
 
 function ScriptDetail() {
   const { id } = useParams();
@@ -1324,6 +1325,7 @@ function SortableReplicaBubble({
         viewMode={viewMode}
         isRight={isRight}
         number={number}
+        editMode={editMode}
         onEdit={onEdit}
         onDelete={onDelete}
         onSplit={onSplit}
@@ -1342,6 +1344,7 @@ function ChatBubble({
   viewMode,
   isRight,
   number,
+  editMode,
   onEdit,
   onDelete,
   onSplit,
@@ -1361,24 +1364,33 @@ function ChatBubble({
   };
 
   const renderContent = () => {
-    // Fonction pour obtenir les 3 premiers mots
+    // Helper pour enlever les balises HTML et obtenir du texte brut
+    const stripHtml = (html) => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html || "";
+      return tmp.textContent || tmp.innerText || "";
+    };
+
+    // Fonction pour obtenir les 3 premiers mots (sur du texte brut)
     const getFirst3Words = (text) => {
-      const words = text.trim().split(/\s+/).slice(0, 3);
-      return (
-        words.join(" ") + (text.trim().split(/\s+/).length > 3 ? "..." : "")
-      );
+      const plain = stripHtml(text || "");
+      const words = plain.trim().split(/\s+/).slice(0, 3);
+      return words.join(" ") + (plain.trim().split(/\s+/).length > 3 ? "..." : "");
     };
 
     switch (viewMode) {
       case "gaps":
         if (revealed) {
           return (
-            <p className="text-white whitespace-pre-wrap">{replica.text}</p>
+            <p
+              className="text-white whitespace-pre-wrap"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+            />
           );
         } else {
           return (
             <p className="text-white/80 font-mono text-sm tracking-wide whitespace-pre-wrap">
-              {replica.text_gaps || replica.text}
+              {replica.text_gaps || stripHtml(replica.text)}
             </p>
           );
         }
@@ -1387,13 +1399,12 @@ function ChatBubble({
         return (
           <div>
             {/* Toujours afficher les 3 premiers mots */}
-            <p className="text-white font-bold">
-              {getFirst3Words(replica.text)}
-            </p>
+            <p className="text-white font-bold">{getFirst3Words(replica.text)}</p>
             {revealed ? (
-              <p className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20">
-                {replica.text}
-              </p>
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+              />
             ) : (
               <p className="text-white/60 text-xs text-center mt-2">
                 👆 Toucher pour voir la suite
@@ -1411,7 +1422,10 @@ function ChatBubble({
               </p>
             )}
             {revealed ? (
-              <p className="text-white whitespace-pre-wrap">{replica.text}</p>
+              <p
+                className="text-white whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+              />
             ) : (
               <p className="text-white/70 text-sm text-center py-2">
                 👆 Toucher pour révéler
@@ -1422,9 +1436,10 @@ function ChatBubble({
 
       default:
         return (
-          <p className="text-white leading-relaxed whitespace-pre-wrap">
-            {replica.text}
-          </p>
+          <p
+            className="text-white leading-relaxed whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+          />
         );
     }
   };
@@ -1474,9 +1489,23 @@ function ChatBubble({
 
           {/* En-tête avec nom et numéro */}
           <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-sm font-bold text-white drop-shadow">
-              {character?.name || "Inconnu"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white drop-shadow">
+                {character?.name || "Inconnu"}
+              </span>
+              {editMode && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="text-xs bg-white/10 text-white px-2 py-1 rounded-md hover:bg-white/20"
+                  title="Modifier (test visible)"
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
             <span className="text-xs text-white/70">#{number}</span>
           </div>
 
@@ -1720,14 +1749,99 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
  */
 function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(replica.character_id);
-  const [text, setText] = useState(replica.text);
+  const [text, setText] = useState(replica.text || "");
   const [saving, setSaving] = useState(false);
+  const editableRef = useRef(null);
+  const [showToolbar, setShowToolbar] = useState(false);
+  const [toolbarStyle, setToolbarStyle] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    if (editableRef.current) {
+      editableRef.current.innerHTML = replica.text || "";
+      setText(replica.text || "");
+    }
+  }, [replica]);
+
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) {
+        setShowToolbar(false);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      if (!editableRef.current || !editableRef.current.contains(container)) {
+        setShowToolbar(false);
+        return;
+      }
+      const rect = range.getBoundingClientRect();
+      setToolbarStyle({ top: rect.top - 48 + window.scrollY, left: rect.left + window.scrollX });
+      setShowToolbar(!sel.isCollapsed);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
+
+  useEffect(() => {
+    console.log("EditReplicaModal mounted for replica", replica?.id);
+  }, [replica]);
+
+  const handleInput = (e) => {
+    setText(e.currentTarget.innerHTML);
+  };
+
+  const applyHighlight = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!editableRef.current.contains(range.commonAncestorContainer)) return;
+    const mark = document.createElement("mark");
+    mark.className = "rc-highlight";
+    mark.style.backgroundColor = "#ffe58a";
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0 2px";
+    try {
+      range.surroundContents(mark);
+    } catch (e) {
+      const contents = range.extractContents();
+      mark.appendChild(contents);
+      range.insertNode(mark);
+    }
+    sel.removeAllRanges();
+    setShowToolbar(false);
+    setText(editableRef.current.innerHTML);
+  };
+
+  const removeHighlight = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === 3) node = node.parentNode;
+    if (!node.querySelectorAll) return;
+    const marks = node.querySelectorAll("mark.rc-highlight");
+    marks.forEach((m) => {
+      const parent = m.parentNode;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+    });
+    sel.removeAllRanges();
+    setShowToolbar(false);
+    setText(editableRef.current.innerHTML);
+  };
 
   const handleSave = async () => {
-    if (!text.trim()) return;
+    if (!editableRef.current) return;
+    const raw = editableRef.current.innerHTML;
+    if (!raw || !raw.trim()) return;
+    const clean = DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ["mark", "b", "i", "em", "strong", "br", "p", "span"],
+      ALLOWED_ATTR: ["class"],
+    });
     setSaving(true);
     try {
-      await onSave(replica.id, selectedCharId, text.trim());
+      await onSave(replica.id, selectedCharId, clean);
     } finally {
       setSaving(false);
     }
@@ -1752,12 +1866,10 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
         </div>
 
         {/* Contenu scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
           {/* Sélection du personnage */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">
-              Personnage
-            </label>
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
             <div className="flex gap-2 flex-wrap">
               {characters.map((char) => (
                 <button
@@ -1765,8 +1877,7 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
                   onClick={() => setSelectedCharId(char.id)}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{
-                    backgroundColor:
-                      selectedCharId === char.id ? char.color : "#374151",
+                    backgroundColor: selectedCharId === char.id ? char.color : "#374151",
                     color: selectedCharId === char.id ? "white" : "#9CA3AF",
                   }}
                 >
@@ -1776,17 +1887,29 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             </div>
           </div>
 
-          {/* Texte de la réplique */}
+          {/* Texte de la réplique - contentEditable */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">Texte</label>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              className="w-full h-40 bg-gray-800 border border-gray-600 rounded-xl p-4 
-                         text-white text-base resize-none focus:border-gold-500 focus:outline-none"
+            <div
+              ref={editableRef}
+              onInput={handleInput}
+              contentEditable
+              suppressContentEditableWarning
+              className="w-full min-h-[8rem] bg-gray-800 border border-gray-600 rounded-xl p-4 text-white text-base focus:border-gold-500 focus:outline-none"
               placeholder="Texte de la réplique..."
             />
           </div>
+
+          {/* Floating toolbar pour selection */}
+          {showToolbar && (
+            <div
+              className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg flex items-center gap-2 p-2"
+              style={{ top: toolbarStyle.top, left: toolbarStyle.left }}
+            >
+              <button onClick={applyHighlight} className="px-2 py-1 bg-amber-400 text-dark rounded">Surligner</button>
+              <button onClick={removeHighlight} className="px-2 py-1 bg-gray-700 text-white rounded">Retirer</button>
+            </div>
+          )}
 
           {/* Prévisualisation */}
           <div
@@ -1802,7 +1925,10 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             >
               {selectedChar?.name || "?"}
             </p>
-            <p className="text-gray-300 text-sm">{text || "..."}</p>
+            <div
+              className="text-gray-300 text-sm"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(text || "...") }}
+            />
           </div>
         </div>
 
