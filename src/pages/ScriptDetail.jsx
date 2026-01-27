@@ -1636,10 +1636,6 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
     navigator.userAgent
   );
-
-  const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
   const canSubmit = text.trim() && selectedCharId && !saving;
 
   // Message d'insertion
