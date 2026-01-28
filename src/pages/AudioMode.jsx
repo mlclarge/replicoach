@@ -132,6 +132,7 @@ function AudioMode() {
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
+  const audioContextRef = useRef(null);
 
   // Charger le script
   useEffect(() => {
@@ -505,7 +506,9 @@ function AudioMode() {
   // ==================== LECTURE ====================
 
   // Lecture avec synthèse vocale
-  const speakSynth = (text, characterId) => {
+  const speakSynth = async (text, characterId) => {
+    await ensureAudioUnlocked();
+
     return new Promise((resolve) => {
       const cleanedText = cleanTextForSpeech(text);
 
@@ -547,7 +550,9 @@ function AudioMode() {
 
   // Lecture avec enregistrement
   const speakRecorded = (characterId) => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
+      await ensureAudioUnlocked();
+
       const recording = characterRecordings[characterId];
 
       if (!recording?.audioUrl) {
@@ -564,6 +569,51 @@ function AudioMode() {
 
       audio.play().catch(resolve);
     });
+  };
+
+  // Ensure audio is unlocked (resume AudioContext / prime speechSynthesis)
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
+  const ensureAudioUnlocked = async () => {
+    if (audioUnlocked) return;
+
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) {
+        if (!audioContextRef.current) audioContextRef.current = new AudioCtx();
+        const ctx = audioContextRef.current;
+        if (ctx.state === "suspended") {
+          try {
+            await ctx.resume();
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        // Play a tiny silent buffer to fully unlock audio on some mobiles
+        try {
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const src = ctx.createBufferSource();
+          src.buffer = buffer;
+          src.connect(ctx.destination);
+          try {
+            src.start(0);
+          } catch (e) {
+            // ignore
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (speechSynthesis && typeof speechSynthesis.getVoices === "function") {
+        // Prime TTS voices
+        speechSynthesis.getVoices();
+      }
+
+      setAudioUnlocked(true);
+    } catch (e) {
+      console.warn("Error unlocking audio:", e);
+    }
   };
 
   // Fonction speak unifiée
@@ -1251,6 +1301,10 @@ const AudioBubble = forwardRef(
             <div
               className="py-3 text-center cursor-pointer"
               onClick={onBubbleClick}
+              onTouchStart={(e) => {
+                e.stopPropagation();
+                if (typeof onBubbleClick === "function") onBubbleClick();
+              }}
             >
               {isWaiting ? (
                 <>
