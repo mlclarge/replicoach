@@ -479,11 +479,31 @@ function AudioMode() {
   };
 
   const playReplicaRecording = (replicaId) => {
-    const recording = replicaRecordings[replicaId];
-    if (recording?.data) {
+    return new Promise(async (resolve) => {
+      const recording = replicaRecordings[replicaId];
+      if (!recording?.data) return resolve();
+
+      try {
+        await ensureAudioUnlocked();
+      } catch (e) {
+        // ignore
+      }
+
       const audio = new Audio(recording.data);
-      audio.play();
-    }
+      audioPlayerRef.current = audio;
+      audio.playbackRate = rate;
+
+      audio.onended = () => {
+        audioPlayerRef.current = null;
+        resolve();
+      };
+      audio.onerror = () => {
+        audioPlayerRef.current = null;
+        resolve();
+      };
+
+      audio.play().catch(() => resolve());
+    });
   };
 
   const deleteRecording = async (charId) => {
@@ -618,14 +638,21 @@ function AudioMode() {
   };
 
   // Fonction speak unifiée
-  const speak = (text, characterId) => {
-    const mode = voiceMode[characterId] || "synth";
-
-    if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
-      return speakRecorded(characterId);
-    } else {
-      return speakSynth(text, characterId);
+  // Fonction speak unifiée: priorise enregistrement par réplique, puis par personnage, sinon TTS
+  const speak = async (text, characterId, replicaId = null) => {
+    // 1) Enregistrement par réplique (local)
+    if (replicaId && replicaRecordings[replicaId]?.data) {
+      return await playReplicaRecording(replicaId);
     }
+
+    // 2) Enregistrement par personnage (remote)
+    const mode = voiceMode[characterId] || "synth";
+    if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
+      return await speakRecorded(characterId);
+    }
+
+    // 3) Synthèse vocale
+    return await speakSynth(text, characterId);
   };
 
   // Test voix synthétique
@@ -688,7 +715,7 @@ function AudioMode() {
         continue;
       }
 
-      await speak(replica.text, replica.character_id);
+      await speak(replica.text, replica.character_id, replica.id);
     }
 
     setIsPlaying(false);
@@ -709,7 +736,7 @@ function AudioMode() {
     setCurrentIndex(index);
     singleBubbleRef.current = true;
 
-    await speak(replica.text, replica.character_id);
+    await speak(replica.text, replica.character_id, replica.id);
 
     setPlayingSingleBubble(null);
     singleBubbleRef.current = false;
@@ -760,8 +787,8 @@ function AudioMode() {
       setCurrentIndex(index);
 
       (async () => {
-        try {
-          await speak(replica.text || "", replica.character_id);
+          try {
+          await speak(replica.text || "", replica.character_id, replica.id);
         } catch (e) {
           console.warn("Erreur lecture réplique masquée:", e);
         }
