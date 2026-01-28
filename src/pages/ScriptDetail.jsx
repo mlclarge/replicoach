@@ -1100,8 +1100,9 @@ function ScriptDetail() {
           replicas={replicas}
           characters={characters}
           onClose={() => setShowReplicaGroups(false)}
-          onSelectGroup={(replicaIds, name) => {
-            setStudyingGroup({ replicaIds, name });
+          onSelectGroup={(group) => {
+            // ReplicaGroupsManager passes an object { replicaIds, name, color }
+            setStudyingGroup(group);
           }}
         />
       )}
