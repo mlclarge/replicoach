@@ -122,6 +122,7 @@ function AudioMode() {
   const [showSettings, setShowSettings] = useState(!isMobile());
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
   const [savingRecording, setSavingRecording] = useState(false);
+  const [tempRevealedReplicas, setTempRevealedReplicas] = useState({});
 
   // Refs
   const playingRef = useRef(false);
@@ -740,30 +741,44 @@ function AudioMode() {
 
   const onBubbleClick = (index) => {
     const replica = currentScript?.replicas[index];
-    // Si on est en attente (mode italienne) et que la bulle cliquée
-    // appartient à un personnage masqué, jouer la réplique puis
-    // lever l'attente pour que la lecture continue.
-    if (waitingForClick && hiddenCharacters.has(replica?.character_id)) {
-      // désactiver l'indicateur d'attente UI
-      setWaitingForClick(false);
-      // annuler la boucle d'attente
-      waitingRef.current = false;
+    if (!replica) return;
 
-      // Jouer la réplique masquée de manière asynchrone.
-      // On n'appelle pas `playSingleBubble` (qui appelle `stop()`)
-      // pour ne pas interrompre l'état global du player.
+    const isHidden = hiddenCharacters.has(replica.character_id);
+
+    // Si la bulle est masquée, on la révèle temporairement et on joue l'audio
+    if (isHidden) {
+      setTempRevealedReplicas((prev) => ({ ...prev, [replica.id]: true }));
+
+      // lever l'attente si on était en attente
+      if (waitingForClick) {
+        setWaitingForClick(false);
+        waitingRef.current = false;
+      }
+
+      // Marquer la bulle en train d'être jouée
+      setPlayingSingleBubble(index);
+      setCurrentIndex(index);
+
       (async () => {
         try {
-          await speak(replica?.text || "", replica?.character_id);
+          await speak(replica.text || "", replica.character_id);
         } catch (e) {
           console.warn("Erreur lecture réplique masquée:", e);
         }
+
+        // nettoyer l'état temporaire
+        setPlayingSingleBubble(null);
+        setTempRevealedReplicas((prev) => {
+          const copy = { ...prev };
+          delete copy[replica.id];
+          return copy;
+        });
       })();
 
       return;
     }
 
-    // Clic normal sur une bulle: lecture unique
+    // Clic normal sur une bulle visible: lecture unique
     playSingleBubble(index);
   };
 
@@ -1113,6 +1128,7 @@ function AudioMode() {
                 (isPlaying && isCurrent && !isHidden) || isBubblePlaying
               }
               isHidden={isHidden}
+                isTemporarilyRevealed={!!tempRevealedReplicas[replica.id]}
               isWaiting={isWaitingOnThis}
               isBubblePlaying={isBubblePlaying}
               hasRecording={hasRecording && currentMode === "recorded"}
@@ -1238,6 +1254,7 @@ const AudioBubble = forwardRef(
       isCurrent,
       isPlaying,
       isHidden,
+      isTemporarilyRevealed,
       isWaiting,
       isBubblePlaying,
       hasRecording,
@@ -1297,7 +1314,7 @@ const AudioBubble = forwardRef(
           </div>
 
           {/* Contenu */}
-          {isHidden ? (
+          {isHidden && !isTemporarilyRevealed ? (
             <div
               className="py-3 text-center cursor-pointer"
               onClick={onBubbleClick}
