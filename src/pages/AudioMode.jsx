@@ -140,6 +140,35 @@ function AudioMode() {
     }
   }, [id, currentScript, fetchScript]);
 
+  // Mode dev: injection d'un script mock si `?devMock=1` présent dans l'URL.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("devMock") === "1") {
+        const mock = {
+          id: "dev-mock",
+          title: "Script de test (mock)",
+          characters: [
+            { id: "c1", name: "Le Brigadier", color: "#7f1d1d" },
+            { id: "c2", name: "Adjudant", color: "#374151" },
+          ],
+          replicas: [
+            { id: "r1", character_id: "c1", text: "Tout de suite, adjudant-chef.", order_index: 0 },
+            { id: "r2", character_id: "c2", text: "Faites votre rapport, brigadière Robert...", order_index: 1 },
+            { id: "r3", character_id: "c1", text: "Merci.", order_index: 2 },
+          ],
+        };
+
+        // Injecter directement dans le store pour simplifier les tests locaux.
+        if (useScriptStore && typeof useScriptStore.setState === "function") {
+          useScriptStore.setState({ currentScript: mock, loading: false });
+        }
+      }
+    } catch (e) {
+      // noop
+    }
+  }, []);
+
   // Dans le useEffect de chargement, charger les enregistrements par réplique depuis localStorage
   useEffect(() => {
     const saved = localStorage.getItem(`replicaRecordings_${id}`);
@@ -661,10 +690,31 @@ function AudioMode() {
 
   const onBubbleClick = (index) => {
     const replica = currentScript?.replicas[index];
-
+    // Si on est en attente (mode italienne) et que la bulle cliquée
+    // appartient à un personnage masqué, jouer la réplique puis
+    // lever l'attente pour que la lecture continue.
     if (waitingForClick && hiddenCharacters.has(replica?.character_id)) {
+      // désactiver l'indicateur d'attente UI
+      setWaitingForClick(false);
+      // annuler la boucle d'attente
       waitingRef.current = false;
+
+      // Jouer la réplique masquée de manière asynchrone.
+      // On n'appelle pas `playSingleBubble` (qui appelle `stop()`)
+      // pour ne pas interrompre l'état global du player.
+      (async () => {
+        try {
+          await speak(replica?.text || "", replica?.character_id);
+        } catch (e) {
+          console.warn("Erreur lecture réplique masquée:", e);
+        }
+      })();
+
+      return;
     }
+
+    // Clic normal sur une bulle: lecture unique
+    playSingleBubble(index);
   };
 
   // Navigation
