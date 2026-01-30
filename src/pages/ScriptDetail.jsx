@@ -77,6 +77,9 @@ function ScriptDetail() {
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null); // { replicaIds: [], name: '' }
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
+  // Mon personnage et option de cacher seulement ses répliques (mode exercices)
+  const [myCharacterId, setMyCharacterId] = useState(null);
+  const [hideMyReplicas, setHideMyReplicas] = useState(false);
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -85,7 +88,7 @@ function ScriptDetail() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // ⚠️ TOUS LES HOOKS DOIVENT ÊTRE AVANT LES RETURNS CONDITIONNELS
@@ -140,13 +143,16 @@ function ScriptDetail() {
       result = result.filter((r) => groupSet.has(r.id));
     }
 
-    // Filtre par personnage
-    if (selectedCharacter) {
+    // Si on demande de cacher uniquement les répliques de "mon personnage"
+    if (hideMyReplicas && myCharacterId) {
+      result = result.filter((r) => r.character_id !== myCharacterId);
+    } else if (selectedCharacter) {
+      // Filtre par personnage (comportement existant)
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
     return result;
-  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
+  }, [currentScript?.replicas, selectedCharacter, studyingGroup, myCharacterId, hideMyReplicas]);
 
   // Handler pour supprimer le script
   const handleDelete = async () => {
@@ -222,13 +228,13 @@ function ScriptDetail() {
         alert("Un personnage avec ce nom existe déjà dans ce script");
       } else if (err.code === "42501") {
         alert(
-          "Vous n'avez pas la permission d'ajouter un personnage à ce script"
+          "Vous n'avez pas la permission d'ajouter un personnage à ce script",
         );
       } else {
         alert(
           `Erreur lors de l'ajout du personnage: ${
             err.message || "Erreur inconnue"
-          }`
+          }`,
         );
       }
       throw err;
@@ -239,7 +245,7 @@ function ScriptDetail() {
   const handleSplitReplica = async (
     originalReplica,
     splitIndex,
-    newCharacterId
+    newCharacterId,
   ) => {
     try {
       const originalText = originalReplica.text;
@@ -275,7 +281,7 @@ function ScriptDetail() {
       // 4. Réordonner toutes les répliques
       // Trouver l'index de la réplique originale
       const originalIndex = replicas.findIndex(
-        (r) => r.id === originalReplica.id
+        (r) => r.id === originalReplica.id,
       );
 
       // Construire le nouvel ordre : toutes les répliques jusqu'à l'originale,
@@ -296,7 +302,7 @@ function ScriptDetail() {
       console.error("Error splitting replica:", err);
       alert(
         "Erreur lors de la division de la réplique: " +
-          (err.message || "Erreur inconnue")
+          (err.message || "Erreur inconnue"),
       );
     }
   };
@@ -465,7 +471,7 @@ function ScriptDetail() {
       console.error("Error adding replica:", err);
       alert(
         "Erreur lors de l'ajout de la réplique: " +
-          (err.message || "Erreur inconnue")
+          (err.message || "Erreur inconnue"),
       );
     }
   };
@@ -616,23 +622,50 @@ function ScriptDetail() {
             Tous ({replicas.length})
           </button>
           {characters.map((char) => (
-            <button
-              key={char.id}
-              onClick={() => setSelectedCharacter(char.id)}
-              className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
-              style={{
-                backgroundColor:
-                  selectedCharacter === char.id ? char.color : "white",
-                color: selectedCharacter === char.id ? "white" : "#4B5563",
-                border:
-                  selectedCharacter === char.id
-                    ? `2px solid ${char.color}`
-                    : "1px solid #D1D5DB",
-              }}
-            >
-              {char.name} ({replicaCountByCharacter[char.id] || 0})
-            </button>
+            <div key={char.id} className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedCharacter(char.id)}
+                className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
+                style={{
+                  backgroundColor:
+                    selectedCharacter === char.id ? char.color : "white",
+                  color: selectedCharacter === char.id ? "white" : "#4B5563",
+                  border:
+                    selectedCharacter === char.id
+                      ? `2px solid ${char.color}`
+                      : "1px solid #D1D5DB",
+                }}
+              >
+                {char.name} ({replicaCountByCharacter[char.id] || 0})
+              </button>
+
+              {/* Bouton pour marquer comme 'Mon personnage' */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMyCharacterId(myCharacterId === char.id ? null : char.id);
+                }}
+                title={myCharacterId === char.id ? "Ceci est votre personnage" : "Marquer comme mon personnage"}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm transition border ${
+                  myCharacterId === char.id ? "bg-gold-400 text-white border-gold-500" : "bg-white text-gray-600 border-gray-300"
+                }`}
+              >
+                {myCharacterId === char.id ? "⭐" : "☆"}
+              </button>
+            </div>
           ))}
+          {/* Toggle cacher mes répliques (visible en mode exercices) */}
+          {viewMode !== "full" && myCharacterId && (
+            <div className="ml-2 flex items-center">
+              <button
+                onClick={() => setHideMyReplicas(!hideMyReplicas)}
+                className={`px-3 py-2 rounded-full text-sm font-medium border transition
+                  ${hideMyReplicas ? "bg-red-600 text-white" : "bg-white text-gray-600 border-gray-300"}`}
+              >
+                {hideMyReplicas ? "🔒 Caché" : "👁️ Cacher"}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Modes de vue - Adaptés au fond beige */}
@@ -670,6 +703,28 @@ function ScriptDetail() {
               }`}
           >
             3️⃣ 3 mots
+          </button>
+          <button
+            onClick={() => setViewMode("debut_fin")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+              ${
+                viewMode === "debut_fin"
+                  ? "bg-primary-700 text-white"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+              }`}
+          >
+            🟢 Début/Fin
+          </button>
+          <button
+            onClick={() => setViewMode("last_word")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow
+              ${
+                viewMode === "last_word"
+                  ? "bg-primary-700 text-white"
+                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+              }`}
+          >
+            🟣 Derniers Mots
           </button>
           <button
             onClick={() => setViewMode("cue")}
@@ -771,7 +826,7 @@ function ScriptDetail() {
             <div className="space-y-3">
               {filteredReplicas.map((replica, index) => {
                 const character = characters.find(
-                  (c) => c.id === replica.character_id
+                  (c) => c.id === replica.character_id,
                 );
                 const isRight = characterPositions[replica.character_id] === 1;
                 const notesAfterThisReplica =
@@ -802,6 +857,8 @@ function ScriptDetail() {
                       isRight={isRight}
                       number={index + 1}
                       editMode={editMode}
+                      myCharacterId={myCharacterId}
+                      hideMyReplicas={hideMyReplicas}
                       onEdit={() => setEditingReplica(replica)}
                       onDelete={() => setDeleteReplicaConfirm(replica)}
                       onSplit={() => setSplittingReplica(replica)}
@@ -1205,7 +1262,7 @@ function FloatingActionMenu({
                   {action.label}
                 </span>
               </button>
-            )
+            ),
           )}
         </div>
       )}
@@ -1287,6 +1344,8 @@ function SortableReplicaBubble({
   onDelete,
   onSplit,
   onAddNote,
+  myCharacterId,
+  hideMyReplicas,
 }) {
   const {
     attributes,
@@ -1331,6 +1390,8 @@ function SortableReplicaBubble({
         onDelete={onDelete}
         onSplit={onSplit}
         onAddNote={onAddNote}
+        myCharacterId={myCharacterId}
+        hideMyReplicas={hideMyReplicas}
       />
     </div>
   );
@@ -1350,6 +1411,8 @@ function ChatBubble({
   onDelete,
   onSplit,
   onAddNote,
+  myCharacterId,
+  hideMyReplicas,
 }) {
   const [revealed, setRevealed] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -1365,6 +1428,22 @@ function ChatBubble({
   };
 
   const renderContent = () => {
+    // Si on cache uniquement les répliques de "mon personnage" (et non encore révélées)
+    const isHiddenReplica =
+      hideMyReplicas &&
+      myCharacterId &&
+      replica.character_id === myCharacterId &&
+      viewMode !== "full" &&
+      !revealed;
+
+    if (isHiddenReplica) {
+      return (
+        <div className="text-center py-3">
+          <p className="text-white/40 italic">(Réplique cachée)</p>
+          <p className="text-white/60 text-xs mt-2">👆 Touchez pour révéler</p>
+        </div>
+      );
+    }
     // Helper pour enlever les balises HTML et obtenir du texte brut
     const stripHtml = (html) => {
       const tmp = document.createElement("div");
@@ -1376,7 +1455,9 @@ function ChatBubble({
     const getFirst3Words = (text) => {
       const plain = stripHtml(text || "");
       const words = plain.trim().split(/\s+/).slice(0, 3);
-      return words.join(" ") + (plain.trim().split(/\s+/).length > 3 ? "..." : "");
+      return (
+        words.join(" ") + (plain.trim().split(/\s+/).length > 3 ? "..." : "")
+      );
     };
 
     switch (viewMode) {
@@ -1385,7 +1466,9 @@ function ChatBubble({
           return (
             <p
               className="text-white whitespace-pre-wrap"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(replica.text || ""),
+              }}
             />
           );
         } else {
@@ -1400,11 +1483,69 @@ function ChatBubble({
         return (
           <div>
             {/* Toujours afficher les 3 premiers mots */}
-            <p className="text-white font-bold">{getFirst3Words(replica.text)}</p>
+            <p className="text-white font-bold">
+              {getFirst3Words(replica.text)}
+            </p>
             {revealed ? (
               <p
                 className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
+
+      case "debut_fin":
+        // Affiche le premier et le dernier mot
+        const getFirstAndLast = (text) => {
+          const plain = stripHtml(text || "").trim();
+          if (!plain) return "";
+          const words = plain.split(/\s+/);
+          if (words.length <= 2) return words.join(" ");
+          return `${words[0]} ... ${words[words.length - 1]}`;
+        };
+
+        return (
+          <div>
+            <p className="text-white font-bold">{getFirstAndLast(replica.text)}</p>
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
+
+      case "last_word":
+        const getLastWord = (text) => {
+          const plain = stripHtml(text || "").trim();
+          if (!plain) return "";
+          const words = plain.split(/\s+/);
+          return words[words.length - 1] || "";
+        };
+
+        return (
+          <div>
+            <p className="text-white font-bold">{getLastWord(replica.text)}</p>
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
               />
             ) : (
               <p className="text-white/60 text-xs text-center mt-2">
@@ -1425,7 +1566,9 @@ function ChatBubble({
             {revealed ? (
               <p
                 className="text-white whitespace-pre-wrap"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
               />
             ) : (
               <p className="text-white/70 text-sm text-center py-2">
@@ -1439,7 +1582,9 @@ function ChatBubble({
         return (
           <p
             className="text-white leading-relaxed whitespace-pre-wrap"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(replica.text || "") }}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(replica.text || ""),
+            }}
           />
         );
     }
@@ -1617,7 +1762,7 @@ function ChatBubble({
  */
 function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
   const [selectedCharId, setSelectedCharId] = useState(
-    characters[0]?.id || null
+    characters[0]?.id || null,
   );
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1635,8 +1780,9 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
 
   const selectedChar = characters.find((c) => c.id === selectedCharId);
   const isMobile =
-    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
     );
   const canSubmit = text.trim() && selectedCharId && !saving;
 
@@ -1645,8 +1791,8 @@ function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
     insertAfterIndex === -1
       ? "📍 Sera inséré au début du texte"
       : insertAfterIndex !== null && insertAfterIndex !== undefined
-      ? `📍 Sera inséré après la réplique #${insertAfterIndex + 1}`
-      : "📍 Sera ajouté à la fin du texte";
+        ? `📍 Sera inséré après la réplique #${insertAfterIndex + 1}`
+        : "📍 Sera ajouté à la fin du texte";
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/95">
@@ -1761,8 +1907,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
   const [toolbarStyle, setToolbarStyle] = useState({ top: 0, left: 0 });
   const touchPos = useRef({ x: 0, y: 0 });
   const isMobile =
-    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
     );
 
   useEffect(() => {
@@ -1786,11 +1933,15 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
         return;
       }
       const rect = range.getBoundingClientRect();
-      setToolbarStyle({ top: rect.top - 48 + window.scrollY, left: rect.left + window.scrollX });
+      setToolbarStyle({
+        top: rect.top - 48 + window.scrollY,
+        left: rect.left + window.scrollX,
+      });
       setShowToolbar(!sel.isCollapsed);
     };
     document.addEventListener("selectionchange", onSelectionChange);
-    return () => document.removeEventListener("selectionchange", onSelectionChange);
+    return () =>
+      document.removeEventListener("selectionchange", onSelectionChange);
   }, []);
 
   // Support mobile: detect touch position and show toolbar on touchend if selection exists
@@ -1799,11 +1950,21 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
       const sel = window.getSelection();
       if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
       const range = sel.getRangeAt(0);
-      if (!editableRef.current || !editableRef.current.contains(range.commonAncestorContainer)) return;
+      if (
+        !editableRef.current ||
+        !editableRef.current.contains(range.commonAncestorContainer)
+      )
+        return;
       // Try to get bounding rect; fallback to last touch position
       const rect = range.getBoundingClientRect();
-      const top = rect && rect.top ? rect.top - 48 + window.scrollY : touchPos.current.y - 48 + window.scrollY;
-      const left = rect && rect.left ? rect.left + window.scrollX : touchPos.current.x + window.scrollX;
+      const top =
+        rect && rect.top
+          ? rect.top - 48 + window.scrollY
+          : touchPos.current.y - 48 + window.scrollY;
+      const left =
+        rect && rect.left
+          ? rect.left + window.scrollX
+          : touchPos.current.x + window.scrollX;
       setToolbarStyle({ top, left });
       setShowToolbar(true);
     };
@@ -1907,7 +2068,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
         <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
           {/* Sélection du personnage */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <label className="block text-sm text-gray-400 mb-2">
+              Personnage
+            </label>
             <div className="flex gap-2 flex-wrap">
               {characters.map((char) => (
                 <button
@@ -1915,7 +2078,8 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
                   onClick={() => setSelectedCharId(char.id)}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition"
                   style={{
-                    backgroundColor: selectedCharId === char.id ? char.color : "#374151",
+                    backgroundColor:
+                      selectedCharId === char.id ? char.color : "#374151",
                     color: selectedCharId === char.id ? "white" : "#9CA3AF",
                   }}
                 >
@@ -1944,8 +2108,18 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
               className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg flex items-center gap-2 p-2"
               style={{ top: toolbarStyle.top, left: toolbarStyle.left }}
             >
-              <button onClick={applyHighlight} className="px-2 py-1 bg-amber-400 text-dark rounded">Surligner</button>
-              <button onClick={removeHighlight} className="px-2 py-1 bg-gray-700 text-white rounded">Retirer</button>
+              <button
+                onClick={applyHighlight}
+                className="px-2 py-1 bg-amber-400 text-dark rounded"
+              >
+                Surligner
+              </button>
+              <button
+                onClick={removeHighlight}
+                className="px-2 py-1 bg-gray-700 text-white rounded"
+              >
+                Retirer
+              </button>
             </div>
           )}
 
@@ -1990,7 +2164,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
             </p>
             <div
               className="text-gray-300 text-sm"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(text || "...") }}
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(text || "..."),
+              }}
             />
           </div>
         </div>
@@ -2025,8 +2201,9 @@ function EditReplicaModal({ replica, characters, onSave, onClose }) {
 function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
   // Détecter mobile
   const isMobile =
-    typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent,
     );
 
   const [showText, setShowText] = useState(isMobile); // Texte par défaut sur mobile
@@ -2339,10 +2516,10 @@ function SplitReplicaModal({
   ];
   const usedColors = characters.map((c) => c.color);
   const availableColors = CHARACTER_COLORS.filter(
-    (c) => !usedColors.includes(c)
+    (c) => !usedColors.includes(c),
   );
   const [newCharColor, setNewCharColor] = useState(
-    availableColors[0] || CHARACTER_COLORS[0]
+    availableColors[0] || CHARACTER_COLORS[0],
   );
 
   // Trouver la position de coupure par clic sur le texte
@@ -2373,7 +2550,7 @@ function SplitReplicaModal({
           name: match[1].trim(),
           preview: text.substring(
             Math.max(0, match.index - 20),
-            match.index + 30
+            match.index + 30,
           ),
         });
       }
@@ -2403,7 +2580,7 @@ function SplitReplicaModal({
     try {
       const newChar = await onAddCharacter(
         newCharName.trim().toUpperCase(),
-        newCharColor
+        newCharColor,
       );
       setSelectedCharId(newChar.id);
       setShowNewCharForm(false);
@@ -2679,7 +2856,7 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
     "#EC4899",
   ];
   const availableColors = CHARACTER_COLORS.filter(
-    (c) => !existingColors.includes(c)
+    (c) => !existingColors.includes(c),
   );
   const [color, setColor] = useState(availableColors[0] || CHARACTER_COLORS[0]);
 
@@ -3355,12 +3532,12 @@ function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
                       noteType.color === "amber"
                         ? "#f59e0b"
                         : noteType.color === "blue"
-                        ? "#3b82f6"
-                        : noteType.color === "purple"
-                        ? "#8b5cf6"
-                        : noteType.color === "green"
-                        ? "#22c55e"
-                        : "#ef4444",
+                          ? "#3b82f6"
+                          : noteType.color === "purple"
+                            ? "#8b5cf6"
+                            : noteType.color === "green"
+                              ? "#22c55e"
+                              : "#ef4444",
                   }}
                 >
                   {/* Header note */}

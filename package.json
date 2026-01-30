@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:5174": "vite --port 5174",
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
@@ -16,6 +17,7 @@
     "@supabase/auth-ui-react": "^0.4.7",
     "@supabase/auth-ui-shared": "^0.1.8",
     "@supabase/supabase-js": "^2.45.0",
+    "dompurify": "^2.4.0",
     "mammoth": "^1.11.0",
     "pdfjs-dist": "^5.4.530",
     "react": "^18.3.1",
@@ -24,8 +26,7 @@
     "react-router-dom": "^6.26.0",
     "sharp": "^0.34.5",
     "tesseract.js": "^7.0.0",
-    "zustand": "^4.5.4",
-    "dompurify": "^2.4.0"
+    "zustand": "^4.5.4"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
@@ -36,6 +37,7 @@
     "eslint-plugin-react": "^7.34.3",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.7",
+    "playwright": "^1.58.0",
     "postcss": "^8.4.41",
     "tailwindcss": "^3.4.9",
     "vite": "^5.4.0"
