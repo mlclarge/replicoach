@@ -80,6 +80,9 @@ function ScriptDetail() {
   // Mon personnage et option de cacher seulement ses répliques (mode exercices)
   const [myCharacterId, setMyCharacterId] = useState(null);
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
+  // Mode "Tous sauf moi" / sélection multiple des personnages
+  const [othersModeActive, setOthersModeActive] = useState(false);
+  const [visibleCharacters, setVisibleCharacters] = useState(new Set());
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -115,6 +118,17 @@ function ScriptDetail() {
     return positions;
   }, [currentScript?.characters]);
 
+  // Initialiser la sélection visible à tous les personnages quand on charge le script
+  useEffect(() => {
+    if (currentScript?.characters) {
+      setVisibleCharacters(new Set(currentScript.characters.map((c) => c.id)));
+    }
+  }, [currentScript?.characters]);
+
+  useEffect(() => {
+    // Keep effect dependency so React tracks visibleCharacters changes if needed
+  }, [othersModeActive, visibleCharacters]);
+
   // URL du fichier original
   const originalFileUrl = useMemo(() => {
     if (!currentScript?.pdf_url) return null;
@@ -143,16 +157,29 @@ function ScriptDetail() {
       result = result.filter((r) => groupSet.has(r.id));
     }
 
-    // Si on demande de cacher uniquement les répliques de "mon personnage"
-    if (hideMyReplicas && myCharacterId) {
-      result = result.filter((r) => r.character_id !== myCharacterId);
-    } else if (selectedCharacter) {
-      // Filtre par personnage (comportement existant)
-      result = result.filter((r) => r.character_id === selectedCharacter);
+    // Mode 'Tous sauf moi' / sélection multiple : filtrer selon visibleCharacters
+    if (othersModeActive && visibleCharacters && visibleCharacters.size > 0) {
+      result = result.filter((r) => visibleCharacters.has(r.character_id));
+    } else {
+      // Si on demande de cacher uniquement les répliques de "mon personnage"
+      if (hideMyReplicas && myCharacterId) {
+        result = result.filter((r) => r.character_id !== myCharacterId);
+      } else if (selectedCharacter) {
+        // Filtre par personnage (comportement existant)
+        result = result.filter((r) => r.character_id === selectedCharacter);
+      }
     }
 
     return result;
-  }, [currentScript?.replicas, selectedCharacter, studyingGroup, myCharacterId, hideMyReplicas]);
+  }, [
+    currentScript?.replicas,
+    selectedCharacter,
+    studyingGroup,
+    myCharacterId,
+    hideMyReplicas,
+    othersModeActive,
+    visibleCharacters,
+  ]);
 
   // Handler pour supprimer le script
   const handleDelete = async () => {
@@ -624,22 +651,60 @@ function ScriptDetail() {
           {characters.map((char) => (
             <div key={char.id} className="flex items-center gap-2">
               <button
-                onClick={() => setSelectedCharacter(char.id)}
+                onClick={() => {
+                  // En mode Lecture (full) on veut comportement toggle (comme audio)
+                  if (viewMode === "full") {
+                    setOthersModeActive(true);
+                    setSelectedCharacter(null);
+                    setVisibleCharacters((prev) => {
+                      const s = new Set(prev);
+                      if (s.has(char.id)) s.delete(char.id);
+                      else s.add(char.id);
+                      return s;
+                    });
+                    return;
+                  }
+
+                  if (othersModeActive) {
+                    setVisibleCharacters((prev) => {
+                      const s = new Set(prev);
+                      if (s.has(char.id)) s.delete(char.id);
+                      else s.add(char.id);
+                      return s;
+                    });
+                  } else {
+                    setSelectedCharacter(char.id);
+                  }
+                }}
                 className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
                 style={{
-                  backgroundColor:
-                    selectedCharacter === char.id ? char.color : "white",
-                  color: selectedCharacter === char.id ? "white" : "#4B5563",
-                  border:
-                    selectedCharacter === char.id
+                  backgroundColor: othersModeActive
+                    ? visibleCharacters.has(char.id)
+                      ? char.color
+                      : "white"
+                    : selectedCharacter === char.id
+                    ? char.color
+                    : "white",
+                  color: othersModeActive
+                    ? visibleCharacters.has(char.id)
+                      ? "white"
+                      : "#4B5563"
+                    : selectedCharacter === char.id
+                    ? "white"
+                    : "#4B5563",
+                  border: othersModeActive
+                    ? visibleCharacters.has(char.id)
                       ? `2px solid ${char.color}`
-                      : "1px solid #D1D5DB",
+                      : "1px solid #D1D5DB"
+                    : selectedCharacter === char.id
+                    ? `2px solid ${char.color}`
+                    : "1px solid #D1D5DB",
                 }}
               >
                 {char.name} ({replicaCountByCharacter[char.id] || 0})
               </button>
 
-              {/* Bouton pour marquer comme 'Mon personnage' */}
+              {/* Bouton pour marquer comme 'Mon personnage' (indépendant) */}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -654,6 +719,7 @@ function ScriptDetail() {
               </button>
             </div>
           ))}
+
           {/* Toggle cacher mes répliques (visible en mode exercices) */}
           {viewMode !== "full" && myCharacterId && (
             <div className="ml-2 flex items-center">
@@ -663,6 +729,33 @@ function ScriptDetail() {
                   ${hideMyReplicas ? "bg-red-600 text-white" : "bg-white text-gray-600 border-gray-300"}`}
               >
                 {hideMyReplicas ? "🔒 Caché" : "👁️ Cacher"}
+              </button>
+            </div>
+          )}
+
+          {/* Bouton mode 'Tous sauf moi' (visible si 'Mon personnage' défini) */}
+          {myCharacterId && (
+            <div className="ml-2 flex items-center">
+              <button
+                onClick={() => {
+                  setOthersModeActive((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      // inclure tous sauf mon personnage
+                      const ids = characters.map((c) => c.id).filter((id) => id !== myCharacterId);
+                      setVisibleCharacters(new Set(ids));
+                      setSelectedCharacter(null);
+                    } else {
+                      // réinitialiser à tous
+                      setVisibleCharacters(new Set(characters.map((c) => c.id)));
+                    }
+                    return next;
+                  });
+                }}
+                className={`px-3 py-2 rounded-full text-sm font-medium border transition
+                  ${othersModeActive ? "bg-green-600 text-white" : "bg-white text-gray-600 border-gray-300"}`}
+              >
+                {othersModeActive ? "✅ Tous sauf moi" : "👥 Tous sauf moi"}
               </button>
             </div>
           )}
