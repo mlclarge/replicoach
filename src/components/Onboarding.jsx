@@ -64,10 +64,17 @@ const ONBOARDING_SLIDES = [
   },
   {
     icon: "🔖",
-    title: "4 modes d'apprentissage",
+    title: "Nouveaux modes d'apprentissage",
     description:
-      "Progressez étape par étape : 📖 Complet → 🔤 Trous (premières lettres) → 3️⃣ 3 mots → 🎭 Répliques (indices seulement).",
-    tip: '💡 Le mode "3 mots" affiche juste le début, touchez pour révéler !',
+      "Progressez étape par étape : 📖 Complet → 🔤 Trous (lettres masquées) → 3️⃣ 3 mots → 🟢 Début/Fin (1er + dernier mot) → 🟣 Derniers Mots (seul le dernier mot) → 🎭 Répliques (indices seulement).",
+    tip: '💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices',
+  },
+  {
+    icon: "👤",
+    title: "Cacher mon personnage",
+    description:
+      "Marquez votre personnage avec l'étoile ⭐ dans la liste des personnages, puis activez 'Cacher' en mode exercice pour masquer uniquement VOS répliques — pratique pour répéter sans les lire.",
+    tip: '💡 Le placeholder indique "(Réplique cachée)" — touchez-le pour révéler temporairement',
   },
   {
     icon: "🔊",
