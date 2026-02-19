@@ -68,9 +68,39 @@ function detectGender(name) {
   return "male";
 }
 
+// Supprimer les balises HTML pour l'affichage (sans autres transformations)
+function stripHtml(text) {
+  if (!text) return "";
+  try {
+    if (typeof document !== "undefined") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = text;
+      return tmp.textContent || tmp.innerText || text;
+    }
+  } catch (e) {}
+  return text.replace(/<[^>]+>/g, "");
+}
+
 // Nettoyer le texte pour la lecture audio
 function cleanTextForSpeech(text) {
   if (!text) return "";
+  // Supprimer les balises HTML et décoder les entités si possible
+  try {
+    if (typeof document !== "undefined") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = text;
+      // Decodage des entités HTML
+      text = tmp.textContent || tmp.innerText || text;
+      // Si le texte contient encore des chevrons (ex: "&lt;mark&gt;...&lt;/mark&gt;" décodés en texte), supprimer les balises restantes
+      text = text.replace(/<[^>]+>/g, " ");
+    } else {
+      // fallback: simple suppression des balises
+      text = text.replace(/<[^>]+>/g, " ");
+    }
+  } catch (e) {
+    text = text.replace(/<[^>]+>/g, " ");
+  }
+
   return text
     .replace(/\([^)]*\)/g, "")
     .replace(/\[[^\]]*\]/g, "")
@@ -79,7 +109,7 @@ function cleanTextForSpeech(text) {
     .replace(/[\s]*[-–—]+[\s]*$/g, "")
     .replace(/[\s]+[-–—]+[\s]+/g, " ")
     .replace(/[*_#~`•·]/g, "")
-    .replace(/^["«»'']+|["«»'']+$/g, "")
+    .replace(/^['"«»']+|['"«»']+$/g, "")
     .replace(/\.{4,}/g, "...")
     .replace(/\s+/g, " ")
     .trim();
@@ -531,7 +561,14 @@ function AudioMode() {
     await ensureAudioUnlocked();
 
     return new Promise((resolve) => {
+      const originalText = text;
       const cleanedText = cleanTextForSpeech(text);
+
+      // Log temporaire pour debug local : montrer ce qui est réellement envoyé au TTS
+      try {
+        // eslint-disable-next-line no-console
+        console.log("TTS text:", { original: originalText, cleaned: cleanedText });
+      } catch (e) {}
 
       if (!cleanedText) {
         resolve();
@@ -640,6 +677,15 @@ function AudioMode() {
   // Fonction speak unifiée
   // Fonction speak unifiée: priorise enregistrement par réplique, puis par personnage, sinon TTS
   const speak = async (text, characterId, replicaId = null) => {
+    // Nettoyer systématiquement le texte destiné au TTS (debug + robustesse)
+    const cleanedForDecision = cleanTextForSpeech(text || "");
+
+    // Log pour debug local
+    try {
+      // eslint-disable-next-line no-console
+      console.log("speak() called:", { original: text, cleaned: cleanedForDecision, characterId, replicaId });
+    } catch (e) {}
+
     // 1) Enregistrement par réplique (local)
     if (replicaId && replicaRecordings[replicaId]?.data) {
       return await playReplicaRecording(replicaId);
@@ -651,8 +697,8 @@ function AudioMode() {
       return await speakRecorded(characterId);
     }
 
-    // 3) Synthèse vocale
-    return await speakSynth(text, characterId);
+    // 3) Synthèse vocale — passer le texte nettoyé
+    return await speakSynth(cleanedForDecision, characterId);
   };
 
   // Test voix synthétique
@@ -1195,7 +1241,7 @@ function AudioMode() {
               <p className="text-gray-400 text-xs truncate">
                 {waitingForClick
                   ? "À vous de jouer !"
-                  : (replicas[currentIndex]?.text?.substring(0, 40) || "") +
+                  : (stripHtml(replicas[currentIndex]?.text || "").substring(0, 40) || "") +
                     "..."}
               </p>
             </div>
@@ -1373,7 +1419,7 @@ const AudioBubble = forwardRef(
           ) : (
             <>
               <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">
-                {replica.text}
+                {stripHtml(replica.text)}
               </p>
 
               {/* Bouton play/stop */}
