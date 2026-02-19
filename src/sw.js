@@ -18,6 +18,11 @@ precacheAndRoute(self.__WB_MANIFEST);
 // Supprimer les anciens caches des versions précédentes
 cleanupOutdatedCaches();
 
+// Prendre le contrôle immédiat de toutes les pages ouvertes (important pour Android)
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // SPA : toutes les navigations retournent /index.html depuis le pré-cache
 registerRoute(new NavigationRoute(createHandlerBoundToURL('/index.html')));
 
