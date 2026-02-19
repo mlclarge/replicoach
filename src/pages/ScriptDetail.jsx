@@ -149,11 +149,7 @@ function ScriptDetail() {
     }
 
     return result;
-  }, [
-    currentScript?.replicas,
-    selectedCharacter,
-    studyingGroup,
-  ]);
+  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
 
   // Handler pour supprimer le script
   const handleDelete = async () => {
@@ -610,68 +606,83 @@ function ScriptDetail() {
         )}
 
         {/* Filtres personnages */}
-        <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
-          <button
-            onClick={() => setSelectedCharacter(null)}
-            className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow
-              ${
-                !selectedCharacter
-                  ? "bg-gold-500 text-dark"
-                  : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
-              }`}
-          >
-            Tous ({replicas.length})
-          </button>
-          {characters.map((char) => (
-            <div key={char.id} className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setSelectedCharacter(selectedCharacter === char.id ? null : char.id);
-                }}
-                className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
-                style={{
-                  backgroundColor: selectedCharacter === char.id ? char.color : "white",
-                  color: selectedCharacter === char.id ? "white" : "#4B5563",
-                  border: selectedCharacter === char.id ? `2px solid ${char.color}` : "1px solid #D1D5DB",
-                }}
-              >
-                {char.name} ({replicaCountByCharacter[char.id] || 0})
-              </button>
-
-              {/* Marquer comme Mon rôle */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMyCharacterId(myCharacterId === char.id ? null : char.id);
-                  if (hideMyReplicas && myCharacterId === char.id) setHideMyReplicas(false);
-                }}
-                title={myCharacterId === char.id ? "Retirer mon rôle" : "Marquer comme mon rôle"}
-                className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition border whitespace-nowrap ${
-                  myCharacterId === char.id
-                    ? "bg-gold-400 text-white border-gold-500 shadow-sm"
-                    : "bg-white text-gray-400 border-gray-300 hover:border-gold-400 hover:text-gold-500"
-                }`}
-              >
-                {myCharacterId === char.id ? "⭐ Mon rôle" : "☆"}
-              </button>
-            </div>
-          ))}
-
-          {/* Masquer mon rôle — visible dès qu'un personnage est marqué "Mon rôle" */}
+        <div className="mb-4">
+          {/* Bouton "Masquer mon rôle" — toujours visible à gauche, hors du scroll */}
           {myCharacterId && (
-            <div className="ml-2 flex items-center flex-shrink-0">
+            <div className="mb-2">
               <button
                 onClick={() => setHideMyReplicas(!hideMyReplicas)}
                 className={`flex items-center gap-1 px-3 py-2 rounded-full text-sm font-semibold border transition shadow-sm whitespace-nowrap
-                  ${hideMyReplicas
-                    ? "bg-red-600 text-white border-red-700"
-                    : "bg-white text-gray-600 border-gray-300 hover:border-red-400 hover:text-red-500"
+                  ${
+                    hideMyReplicas
+                      ? "bg-red-600 text-white border-red-700"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-red-400 hover:text-red-500"
                   }`}
               >
                 {hideMyReplicas ? "🙈 Masqué" : "👁️ Masquer mon rôle"}
               </button>
             </div>
           )}
+
+          {/* Filtres par personnage — scrollable horizontalement */}
+          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+            <button
+              onClick={() => setSelectedCharacter(null)}
+              className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow
+                ${
+                  !selectedCharacter
+                    ? "bg-gold-500 text-dark"
+                    : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+                }`}
+            >
+              Tous ({replicas.length})
+            </button>
+            {characters.map((char) => (
+              <div key={char.id} className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedCharacter(
+                      selectedCharacter === char.id ? null : char.id,
+                    );
+                  }}
+                  className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
+                  style={{
+                    backgroundColor:
+                      selectedCharacter === char.id ? char.color : "white",
+                    color: selectedCharacter === char.id ? "white" : "#4B5563",
+                    border:
+                      selectedCharacter === char.id
+                        ? `2px solid ${char.color}`
+                        : "1px solid #D1D5DB",
+                  }}
+                >
+                  {char.name} ({replicaCountByCharacter[char.id] || 0})
+                </button>
+
+                {/* Marquer comme Mon rôle */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMyCharacterId(myCharacterId === char.id ? null : char.id);
+                    if (hideMyReplicas && myCharacterId === char.id)
+                      setHideMyReplicas(false);
+                  }}
+                  title={
+                    myCharacterId === char.id
+                      ? "Retirer mon rôle"
+                      : "Marquer comme mon rôle"
+                  }
+                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition border whitespace-nowrap ${
+                    myCharacterId === char.id
+                      ? "bg-gold-400 text-white border-gold-500 shadow-sm"
+                      : "bg-white text-gray-400 border-gray-300 hover:border-gold-400 hover:text-gold-500"
+                  }`}
+                >
+                  {myCharacterId === char.id ? "⭐ Mon rôle" : "☆"}
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Modes de vue - Adaptés au fond beige */}
@@ -1433,14 +1444,14 @@ function ChatBubble({
     return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   };
 
-  const renderContent = () => {
-    // Si on cache uniquement les répliques de "mon personnage" (et non encore révélées)
-    const isHiddenReplica =
-      hideMyReplicas &&
-      myCharacterId &&
-      replica.character_id === myCharacterId &&
-      !revealed;
+  // Calculé en dehors de renderContent pour pouvoir l'utiliser dans isClickable
+  const isHiddenReplica =
+    hideMyReplicas &&
+    myCharacterId &&
+    replica.character_id === myCharacterId &&
+    !revealed;
 
+  const renderContent = () => {
     if (isHiddenReplica) {
       return (
         <div className="text-center py-3">
@@ -1518,7 +1529,9 @@ function ChatBubble({
 
         return (
           <div>
-            <p className="text-white font-bold">{getFirstAndLast(replica.text)}</p>
+            <p className="text-white font-bold">
+              {getFirstAndLast(replica.text)}
+            </p>
             {revealed ? (
               <p
                 className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
@@ -1595,7 +1608,8 @@ function ChatBubble({
     }
   };
 
-  const isClickable = viewMode !== "full";
+  // Cliquable si le mode le permet OU si la réplique est cachée (pour la révéler)
+  const isClickable = viewMode !== "full" || isHiddenReplica;
 
   // Fermer le menu quand on clique ailleurs
   const handleBubbleClick = () => {
