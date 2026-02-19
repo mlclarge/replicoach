@@ -70,11 +70,11 @@ const ONBOARDING_SLIDES = [
     tip: '💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices',
   },
   {
-    icon: "👤",
-    title: "Cacher mon personnage",
+    icon: "🙈",
+    title: "Masquer mon rôle",
     description:
-      "Marquez votre personnage avec l'étoile ⭐ dans la liste des personnages, puis activez 'Cacher' en mode exercice pour masquer uniquement VOS répliques — pratique pour répéter sans les lire.",
-    tip: '💡 Le placeholder indique "(Réplique cachée)" — touchez-le pour révéler temporairement',
+      "Cliquez sur ☆ à côté de votre personnage pour le marquer ⭐ 'Mon rôle'. Le bouton '👁️ Masquer mon rôle' apparaît alors — cliquez-le pour masquer VOS répliques dans TOUS les modes, y compris la lecture complète. Vos bulles affichent '(Réplique cachée)' : touchez-les pour les révéler une à une.",
+    tip: "💡 Parfait pour répéter en suivant le texte sans lire vos répliques à l'avance",
   },
   {
     icon: "🔊",
