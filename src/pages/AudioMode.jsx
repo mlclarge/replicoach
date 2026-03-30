@@ -185,8 +185,18 @@ function AudioMode() {
             { id: "c2", name: "Adjudant", color: "#374151" },
           ],
           replicas: [
-            { id: "r1", character_id: "c1", text: "Tout de suite, adjudant-chef.", order_index: 0 },
-            { id: "r2", character_id: "c2", text: "Faites votre rapport, brigadière Robert...", order_index: 1 },
+            {
+              id: "r1",
+              character_id: "c1",
+              text: "Tout de suite, adjudant-chef.",
+              order_index: 0,
+            },
+            {
+              id: "r2",
+              character_id: "c2",
+              text: "Faites votre rapport, brigadière Robert...",
+              order_index: 1,
+            },
             { id: "r3", character_id: "c1", text: "Merci.", order_index: 2 },
           ],
         };
@@ -210,7 +220,7 @@ function AudioMode() {
       } catch (e) {
         console.warn(
           "Impossible de parser replicaRecordings depuis localStorage",
-          e
+          e,
         );
       }
     }
@@ -221,7 +231,7 @@ function AudioMode() {
     const loadVoices = () => {
       const availableVoices = speechSynthesis.getVoices();
       const frenchVoices = availableVoices.filter((v) =>
-        v.lang.startsWith("fr")
+        v.lang.startsWith("fr"),
       );
       const voicesToUse =
         frenchVoices.length > 0 ? frenchVoices : availableVoices;
@@ -235,7 +245,7 @@ function AudioMode() {
           (!v.name.toLowerCase().includes("female") &&
             !v.name.toLowerCase().includes("femme") &&
             !v.name.toLowerCase().includes("julie") &&
-            !v.name.toLowerCase().includes("marie"))
+            !v.name.toLowerCase().includes("marie")),
       );
 
       const femaleVoices = voicesToUse.filter(
@@ -245,7 +255,7 @@ function AudioMode() {
           v.name.toLowerCase().includes("julie") ||
           v.name.toLowerCase().includes("marie") ||
           v.name.toLowerCase().includes("hortense") ||
-          v.name.toLowerCase().includes("amélie")
+          v.name.toLowerCase().includes("amélie"),
       );
 
       setVoices({
@@ -567,7 +577,10 @@ function AudioMode() {
       // Log temporaire pour debug local : montrer ce qui est réellement envoyé au TTS
       try {
         // eslint-disable-next-line no-console
-        console.log("TTS text:", { original: originalText, cleaned: cleanedText });
+        console.log("TTS text:", {
+          original: originalText,
+          cleaned: cleanedText,
+        });
       } catch (e) {}
 
       if (!cleanedText) {
@@ -578,7 +591,7 @@ function AudioMode() {
       const utterance = new SpeechSynthesisUtterance(cleanedText);
 
       const character = currentScript?.characters?.find(
-        (c) => c.id === characterId
+        (c) => c.id === characterId,
       );
       const gender =
         characterGenders[characterId] ||
@@ -683,7 +696,12 @@ function AudioMode() {
     // Log pour debug local
     try {
       // eslint-disable-next-line no-console
-      console.log("speak() called:", { original: text, cleaned: cleanedForDecision, characterId, replicaId });
+      console.log("speak() called:", {
+        original: text,
+        cleaned: cleanedForDecision,
+        characterId,
+        replicaId,
+      });
     } catch (e) {}
 
     // 1) Enregistrement par réplique (local)
@@ -833,7 +851,7 @@ function AudioMode() {
       setCurrentIndex(index);
 
       (async () => {
-          try {
+        try {
           await speak(replica.text || "", replica.character_id, replica.id);
         } catch (e) {
           console.warn("Erreur lecture réplique masquée:", e);
@@ -869,7 +887,7 @@ function AudioMode() {
     if (!currentScript?.replicas) return;
     const newIndex = Math.min(
       currentScript.replicas.length - 1,
-      currentIndex + 1
+      currentIndex + 1,
     );
     setCurrentIndex(newIndex);
     if (isPlaying) {
@@ -1178,7 +1196,7 @@ function AudioMode() {
       <div className="p-4 space-y-3">
         {replicas.map((replica, index) => {
           const character = characters.find(
-            (c) => c.id === replica.character_id
+            (c) => c.id === replica.character_id,
           );
           const isRight = characterPositions[replica.character_id] === 1;
           const isCurrent = index === currentIndex;
@@ -1201,7 +1219,7 @@ function AudioMode() {
                 (isPlaying && isCurrent && !isHidden) || isBubblePlaying
               }
               isHidden={isHidden}
-                isTemporarilyRevealed={!!tempRevealedReplicas[replica.id]}
+              isTemporarilyRevealed={!!tempRevealedReplicas[replica.id]}
               isWaiting={isWaitingOnThis}
               isBubblePlaying={isBubblePlaying}
               hasRecording={hasRecording && currentMode === "recorded"}
@@ -1221,10 +1239,15 @@ function AudioMode() {
         })}
       </div>
 
-      {/* ====== PANNEAU DE CONTRÔLE ====== */}
-      <div className="fixed bottom-16 left-0 right-0 z-50 bg-gray-900 border-t-2 border-gold-500 shadow-2xl">
-        <div className="px-4 py-2 bg-gray-800 border-b border-gray-700">
-          <div className="flex items-center gap-3">
+      {/* ====== PANNEAU DE CONTRÔLE - THÉÂTRAL ====== */}
+      <div className="fixed bottom-16 left-0 right-0 z-50 bg-black border-t-4 border-red-800 shadow-2xl relative overflow-hidden">
+        {/* Effet rideau théâtral */}
+        <div className="absolute inset-0 opacity-20 bg-gradient-to-b from-red-900/20 to-black pointer-events-none"></div>
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-900 via-red-700 to-red-900"></div>
+
+        {/* Infos réplique */}
+        <div className="px-4 py-2 bg-black/80 border-b border-red-900/50">
+          <div className="flex items-center gap-3 relative z-10">
             <div
               className={`text-2xl ${
                 isPlaying && !waitingForClick ? "animate-pulse" : ""
@@ -1233,77 +1256,76 @@ function AudioMode() {
               {waitingForClick ? "🎭" : isPlaying ? "🔊" : "⏸️"}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium truncate">
+              <p className="text-white text-sm font-bold truncate">
                 {characters.find(
-                  (c) => c.id === replicas[currentIndex]?.character_id
+                  (c) => c.id === replicas[currentIndex]?.character_id,
                 )?.name || "-"}
               </p>
               <p className="text-gray-400 text-xs truncate">
                 {waitingForClick
                   ? "À vous de jouer !"
-                  : (stripHtml(replicas[currentIndex]?.text || "").substring(0, 40) || "") +
-                    "..."}
+                  : (stripHtml(replicas[currentIndex]?.text || "").substring(
+                      0,
+                      40,
+                    ) || "") + "..."}
               </p>
             </div>
-            <span className="text-gold-500 text-sm font-bold">
+            <span className="text-red-400 text-sm font-bold drop-shadow">
               {currentIndex + 1}/{replicas.length}
             </span>
           </div>
         </div>
 
-        <div className="px-4 py-3 pb-4">
-          <div className="flex items-center justify-center gap-2 sm:gap-3">
+        {/* Contrôles - Design épuré minimaliste */}
+        <div className="px-4 py-8 pb-8 relative z-10">
+          <div className="flex items-center justify-center gap-10 sm:gap-16">
+            {/* Arrêter */}
             <button
               onClick={stop}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-red-600 hover:bg-red-500 
-                         flex items-center justify-center text-lg sm:text-xl text-white shadow-lg transition
-                         active:scale-95"
+              title="Arrêter"
+              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95"
             >
               ⏹️
             </button>
 
+            {/* Précédent */}
             <button
               onClick={goToPrevious}
               disabled={currentIndex === 0}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gray-700 hover:bg-gray-600 
-                         flex items-center justify-center text-lg sm:text-xl text-white
-                         disabled:opacity-30 transition active:scale-95"
+              title="Réplique précédente"
+              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95 disabled:opacity-30"
             >
               ⏮️
             </button>
 
+            {/* PLAY PRINCIPAL - Juste l'emoji énorme vert */}
             <button
               onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center 
-                         text-2xl sm:text-3xl shadow-lg transition active:scale-95
-                ${
-                  isPlaying
-                    ? "bg-orange-500 hover:bg-orange-400 text-white"
-                    : "bg-gold-500 hover:bg-gold-400 text-dark"
-                }`}
+              title={isPlaying ? "Pause" : "Lecture"}
+              className="text-8xl sm:text-9xl text-emerald-500 hover:text-emerald-400 transition-colors duration-200 transform hover:scale-120 active:scale-95 drop-shadow-xl"
             >
               {isPlaying ? "⏸️" : "▶️"}
             </button>
 
+            {/* Suivant */}
             <button
               onClick={goToNext}
               disabled={currentIndex === replicas.length - 1}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gray-700 hover:bg-gray-600 
-                         flex items-center justify-center text-lg sm:text-xl text-white
-                         disabled:opacity-30 transition active:scale-95"
+              title="Réplique suivante"
+              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95 disabled:opacity-30"
             >
               ⏭️
             </button>
 
+            {/* Recommencer */}
             <button
               onClick={() => {
                 stop();
                 setCurrentIndex(0);
                 setTimeout(() => playAll(0), 100);
               }}
-              className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gray-700 hover:bg-gray-600 
-                         flex items-center justify-center text-lg sm:text-xl text-white transition
-                         active:scale-95"
+              title="Recommencer"
+              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95"
             >
               🔄
             </button>
@@ -1343,7 +1365,7 @@ const AudioBubble = forwardRef(
       deleteReplicaRecording,
       playReplicaRecording,
     },
-    ref
+    ref,
   ) => {
     const bubbleColor = character?.color || "#6B7280";
 
@@ -1423,17 +1445,17 @@ const AudioBubble = forwardRef(
               </p>
 
               {/* Bouton play/stop */}
-              <div className="flex justify-end mt-2 pt-2 border-t border-white/20">
+              <div className="flex justify-end mt-3 pt-3 border-t border-white/20">
                 {isBubblePlaying ? (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
                       onStop();
                     }}
-                    className="flex items-center gap-1 px-3 py-1 bg-red-500 hover:bg-red-400 
-                             text-white rounded-full text-xs font-semibold transition active:scale-95"
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-500 
+                             text-white rounded-full text-sm font-bold transition active:scale-95 shadow-md"
                   >
-                    ⏹️ Stop
+                    ⏹️ Arrêter
                   </button>
                 ) : (
                   <button
@@ -1441,33 +1463,33 @@ const AudioBubble = forwardRef(
                       e.stopPropagation();
                       onPlay();
                     }}
-                    className="flex items-center gap-1 px-3 py-1 bg-white/20 hover:bg-white/30 
-                             text-white rounded-full text-xs font-semibold transition active:scale-95"
+                    className="flex items-center justify-center gap-2 px-5 py-2.5 bg-white/25 hover:bg-white/35 
+                             text-white rounded-full text-sm font-bold transition active:scale-95 shadow-md"
                   >
                     ▶️ Écouter {hasRecording && "🎙️"}
                   </button>
                 )}
               </div>
               {/* Sous chaque bulle de réplique : enregistrement / lecture locale */}
-              <div className="flex gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/20">
                 {replicaRecordings[replica.id] ? (
                   <>
                     <button
                       onClick={() => playReplicaRecording(replica.id)}
-                      className="text-xs px-2 py-1 bg-green-600 text-white rounded"
+                      className="flex items-center justify-center gap-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
                     >
-                      ▶️ Écouter
+                      ▶️ Écouter ma prise
                     </button>
                     <button
                       onClick={() => deleteReplicaRecording(replica.id)}
-                      className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                      className="flex items-center justify-center gap-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
                     >
-                      🗑️
+                      🗑️ Supprimer
                     </button>
                   </>
                 ) : recordingReplicaId === replica.id ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-red-500 animate-pulse">
+                  <div className="w-full flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
+                    <span className="text-red-600 font-bold animate-pulse flex items-center gap-2">
                       🔴 {recordingDuration}s
                     </span>
                     <button
@@ -1475,20 +1497,20 @@ const AudioBubble = forwardRef(
                         stopReplicaRecording();
                         saveReplicaRecording(
                           replica.id,
-                          character?.name || "Inconnu"
+                          character?.name || "Inconnu",
                         );
                       }}
-                      className="text-xs px-2 py-1 bg-red-600 text-white rounded"
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
                     >
-                      ⏹️ Stop
+                      ⏹️ Finir
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => startReplicaRecording(replica.id)}
-                    className="text-xs px-2 py-1 bg-orange-500 text-white rounded"
+                    className="flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95 w-full sm:w-auto"
                   >
-                    🎤 Enregistrer
+                    🎤 Enregistrer ma voix
                   </button>
                 )}
               </div>
@@ -1497,7 +1519,7 @@ const AudioBubble = forwardRef(
         </div>
       </div>
     );
-  }
+  },
 );
 
 AudioBubble.displayName = "AudioBubble";
