@@ -69,8 +69,13 @@ const ONBOARDING_SLIDES = [
       "Progressez étape par étape : 📖 Complet → 🔤 Trous (lettres masquées) → 3️⃣ 3 mots → 🟢 Début/Fin (1er + dernier mot) → 🟣 Derniers Mots (seul le dernier mot) → 🎭 Répliques (indices seulement).",
     tip: '💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices',
   },
-  {
-    icon: "🙈",
+  {    icon: "💡",
+    title: "Coaching IA pour votre jeu",
+    description:
+      "Cliquez sur le bouton 💡 à côté d'un personnage pour obtenir des suggestions de jeu d'acteur personnalisées par l'IA (Gemini). Décrivez votre approche du rôle et recevez des conseils de jeu, des indications de mouvement et des suggestions d'intonation.",
+    tip: "💡 Chaque suggestion IA a un coût minime (~0,02€). Les suggestions sont sauvegardables comme notes persistantes.",
+  },
+  {    icon: "🙈",
     title: "Masquer mon rôle",
     description:
       "Cliquez sur ☆ à côté de votre personnage pour le marquer ⭐ 'Mon rôle'. Le bouton '👁️ Masquer mon rôle' apparaît alors — cliquez-le pour masquer VOS répliques dans TOUS les modes, y compris la lecture complète. Vos bulles affichent '(Réplique cachée)' : touchez-les pour les révéler une à une.",

@@ -598,19 +598,6 @@ function ScriptDetail() {
             >
               👥
             </button>
-            {/* Bouton coaching IA - VIOLET */}
-            <button
-              onClick={() => {
-                setCoachingMode('global');
-                setCoachingCharacterId(null);
-              }}
-              className="p-2.5 rounded-lg transition shadow-md
-                         bg-violet-500 hover:bg-violet-600 text-white
-                         border-2 border-violet-600"
-              title="Conseil IA pour jeu d'acteur"
-            >
-              💡
-            </button>
             {/* Bouton micro - ORANGE */}
 
             {/* Bouton supprimer - ROUGE */}
@@ -1243,11 +1230,8 @@ function ScriptDetail() {
             setCoachingMode(null);
             setCoachingCharacterId(null);
           }}
-          mode={coachingMode}
           characterName={
-            coachingMode === "character"
-              ? characters.find(c => c.id === coachingCharacterId)?.name || "Personnage"
-              : "Saynète complète"
+            characters.find(c => c.id === coachingCharacterId)?.name || "Personnage"
           }
           scriptText={replicas.map((r) => `${r.character?.name}: ${r.text}`).join("\n\n")}
           coachingCharacterId={coachingCharacterId}

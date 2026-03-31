@@ -3,13 +3,11 @@ import { getGameSuggestions, isApiConfigured } from "../lib/geminiService";
 
 /**
  * Modal pour le coaching IA du comédien
- * Permet au comédien de donner du contexte et reçoit des suggestions de jeu
- * Mode: 'global' (saynète entière) ou 'character' (personnage spécifique)
+ * Suggestions ciblées pour un personnage spécifique
  */
 export default function AICoachingModal({
   isOpen,
   onClose,
-  mode = "global", // 'global' ou 'character'
   characterName = "Personnage",
   scriptText = "",
   coachingCharacterId = null,
@@ -17,11 +15,9 @@ export default function AICoachingModal({
   allReplicas = [],
   onSaveAsNote,
 }) {
-  // Filtrer le scriptText pour afficher seulement les répliques du personnage si mode='character'
+  // Filtrer le scriptText pour afficher seulement les répliques du personnage
   const getFilteredScriptText = () => {
-    if (mode !== "character" || !coachingCharacterId) {
-      return scriptText;
-    }
+    if (!coachingCharacterId) return scriptText;
     
     const character = allCharacters.find(c => c.id === coachingCharacterId);
     if (!character) return scriptText;
@@ -32,8 +28,7 @@ export default function AICoachingModal({
       .join("\n\n");
   };
 
-  const displayCharacterName = () => {
-    if (mode === "global") return "Saynète complète";
+  const getCharacterName = () => {
     const character = allCharacters.find(c => c.id === coachingCharacterId);
     return character?.name || characterName;
   };
@@ -61,16 +56,13 @@ export default function AICoachingModal({
 
     try {
       const filteredScript = getFilteredScriptText();
-      const character = mode === "character" 
-        ? allCharacters.find(c => c.id === coachingCharacterId)
-        : null;
-      const displayName = character?.name || characterName;
+      const displayName = getCharacterName();
 
       const result = await getGameSuggestions(
         displayName,
         filteredScript,
         actorContext,
-        mode === "character" // Pass true if character-specific coaching
+        true // Always character-specific coaching
       );
 
       setSuggestions(result.suggestions);
@@ -190,10 +182,10 @@ export default function AICoachingModal({
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-white">
-              💡 Coaching IA {mode === "character" ? "par rôle" : "global"}
+              💡 Coaching IA
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              {displayCharacterName()}
+              Rôle: {getCharacterName()}
             </p>
           </div>
           <button
