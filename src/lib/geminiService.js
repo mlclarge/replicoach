@@ -1,10 +1,10 @@
 /**
  * Service pour l'API Google Gemini
  * Génère des suggestions de jeu basées sur le contexte du comédien
+ * Utilise une serverless function Vercel pour sécuriser la clé API
  */
 
-const API_KEY = typeof __VITE_GEMINI_API_KEY__ !== 'undefined' ? __VITE_GEMINI_API_KEY__ : '';
-const API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
+const API_ENDPOINT = "/api/gemini-proxy";
 
 // System instruction globale pour l'IA théâtre
 const SYSTEM_INSTRUCTION = `Tu es un COACH DE THÉÂTRE EXPERT et PASSIONNÉ.
@@ -48,12 +48,6 @@ const USD_TO_EUR = 0.92;
  * @returns {Promise<{suggestions: string, inputTokens: number, outputTokens: number, totalTokens: number, estimatedCost: string}>}
  */
 export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  if (!API_KEY) {
-    throw new Error(
-      "Clé API Gemini non configurée. Veuillez ajouter VITE_GEMINI_API_KEY au fichier .env"
-    );
-  }
-
   if (!characterName || !scriptText) {
     throw new Error(
       "Nom du personnage et texte du script sont obligatoires"
@@ -63,59 +57,34 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
   const prompt = buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching);
 
   try {
-    const response = await fetch(`${API_ENDPOINT}?key=${API_KEY}`, {
+    const response = await fetch(API_ENDPOINT, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [
-            {
-              text: SYSTEM_INSTRUCTION,
-            },
-          ],
-        },
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 1024,
-        },
+        prompt,
+        systemInstruction: SYSTEM_INSTRUCTION,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
-        `Erreur API Gemini: ${errorData.error?.message || response.statusText}`
+        `Erreur API Gemini: ${errorData.error || response.statusText}`
       );
     }
 
     const data = await response.json();
 
-    // Extraire les tokens et le texte
-    const generatedText =
-      data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const usageMetadata = data.usageMetadata || {};
-
-    const inputTokens = usageMetadata.promptTokenCount || 0;
-    const outputTokens = usageMetadata.candidatesTokenCount || 0;
-    const totalTokens = inputTokens + outputTokens;
+    const inputTokens = data.inputTokens || 0;
+    const outputTokens = data.outputTokens || 0;
+    const totalTokens = data.totalTokens || 0;
 
     const costs = calculateCost(inputTokens, outputTokens);
 
     return {
-      suggestions: generatedText,
+      suggestions: data.content || "",
       inputTokens,
       outputTokens,
       totalTokens,
@@ -183,7 +152,8 @@ function calculateCost(inputTokens, outputTokens) {
 
 /**
  * Vérifie si l'API est configurée
+ * Retourne toujours true si on utilise la serverless function
  */
 export function isApiConfigured() {
-  return !!API_KEY;
+  return true;
 }
