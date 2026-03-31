@@ -682,7 +682,9 @@ function ScriptDetail() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setMyCharacterId(myCharacterId === char.id ? null : char.id);
+                    setMyCharacterId(
+                      myCharacterId === char.id ? null : char.id,
+                    );
                     if (hideMyReplicas && myCharacterId === char.id)
                       setHideMyReplicas(false);
                   }}
@@ -704,13 +706,17 @@ function ScriptDetail() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    setCoachingMode('character');
+                    setCoachingMode("character");
                     setCoachingCharacterId(char.id);
                   }}
                   title={`Coaching IA pour ${char.name}`}
-                  className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition border whitespace-nowrap bg-white text-violet-500 border-violet-300 hover:border-violet-500 hover:bg-violet-50"
+                  className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
+                  style={{
+                    background: "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
+                  }}
                 >
-                  💡
+                  <span className="text-lg">💡</span>
+                  <span className="hidden sm:inline text-sm">Coach</span>
                 </button>
               </div>
             ))}
@@ -1231,9 +1237,12 @@ function ScriptDetail() {
             setCoachingCharacterId(null);
           }}
           characterName={
-            characters.find(c => c.id === coachingCharacterId)?.name || "Personnage"
+            characters.find((c) => c.id === coachingCharacterId)?.name ||
+            "Personnage"
           }
-          scriptText={replicas.map((r) => `${r.character?.name}: ${r.text}`).join("\n\n")}
+          scriptText={replicas
+            .map((r) => `${r.character?.name}: ${r.text}`)
+            .join("\n\n")}
           coachingCharacterId={coachingCharacterId}
           allCharacters={characters}
           allReplicas={replicas}

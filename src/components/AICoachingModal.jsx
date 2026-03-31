@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { getGameSuggestions, isApiConfigured } from "../lib/geminiService";
+import CoachingHelpModal from "./CoachingHelpModal";
+import CoachingIntroModal from "./CoachingIntroModal";
 
 /**
  * Modal pour le coaching IA du comédien
@@ -18,18 +20,20 @@ export default function AICoachingModal({
   // Filtrer le scriptText pour afficher seulement les répliques du personnage
   const getFilteredScriptText = () => {
     if (!coachingCharacterId) return scriptText;
-    
-    const character = allCharacters.find(c => c.id === coachingCharacterId);
+
+    const character = allCharacters.find((c) => c.id === coachingCharacterId);
     if (!character) return scriptText;
-    
-    const filteredReplicas = allReplicas.filter(r => r.character_id === coachingCharacterId);
+
+    const filteredReplicas = allReplicas.filter(
+      (r) => r.character_id === coachingCharacterId,
+    );
     return filteredReplicas
-      .map(r => `${character.name}: ${r.text}`)
+      .map((r) => `${character.name}: ${r.text}`)
       .join("\n\n");
   };
 
   const getCharacterName = () => {
-    const character = allCharacters.find(c => c.id === coachingCharacterId);
+    const character = allCharacters.find((c) => c.id === coachingCharacterId);
     return character?.name || characterName;
   };
   const [actorContext, setActorContext] = useState("");
@@ -40,6 +44,20 @@ export default function AICoachingModal({
   const [savingNote, setSavingNote] = useState(false);
   const [cumulativeCost, setCumulativeCost] = useState(0); // Coût total de la session
   const [showInitialWarning, setShowInitialWarning] = useState(true); // Montrer l'avertissement initial une fois
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showIntroModal, setShowIntroModal] = useState(false);
+
+  // Afficher la popup intro au premier clic sur le coaching IA
+  useEffect(() => {
+    if (isOpen && !localStorage.getItem("coaching-intro-seen")) {
+      setShowIntroModal(true);
+    }
+  }, [isOpen]);
+
+  const handleIntroUnderstand = () => {
+    localStorage.setItem("coaching-intro-seen", "true");
+    setShowIntroModal(false);
+  };
 
   if (!isOpen) return null;
 
@@ -62,11 +80,11 @@ export default function AICoachingModal({
         displayName,
         filteredScript,
         actorContext,
-        true // Always character-specific coaching
+        true, // Always character-specific coaching
       );
 
       setSuggestions(result.suggestions);
-      
+
       // Ajouter au coût cumulé
       const newCumulativeCost = cumulativeCost + result.costInEuroAsNumber;
       setCumulativeCost(newCumulativeCost);
@@ -79,13 +97,13 @@ export default function AICoachingModal({
         costInEuroAsNumber: result.costInEuroAsNumber,
         cumulativeCost: newCumulativeCost,
       });
-      
+
       // Cacher l'avertissement initial après la première génération
       setShowInitialWarning(false);
     } catch (err) {
       setError(
         err.message ||
-          "Une erreur s'est produite lors de la génération des suggestions"
+          "Une erreur s'est produite lors de la génération des suggestions",
       );
       console.error("Erreur API Gemini:", err);
     } finally {
@@ -124,9 +142,7 @@ export default function AICoachingModal({
         <div className="h-full flex flex-col max-h-screen">
           {/* Header */}
           <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">
-              💡 Coaching IA
-            </h3>
+            <h3 className="text-lg font-semibold text-white">💡 Coaching IA</h3>
             <button
               onClick={onClose}
               className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
@@ -144,7 +160,9 @@ export default function AICoachingModal({
               </h4>
               <p className="text-gray-300 mb-4">
                 Veuillez ajouter votre clé API Google Gemini dans le fichier
-                <code className="bg-gray-800 px-2 py-1 rounded text-sm">.env</code>
+                <code className="bg-gray-800 px-2 py-1 rounded text-sm">
+                  .env
+                </code>
               </p>
               <div className="bg-gray-800 rounded p-3 mb-4 text-left text-xs text-gray-300">
                 <p className="font-mono mb-2">
@@ -181,19 +199,26 @@ export default function AICoachingModal({
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-white">
-              💡 Coaching IA
-            </h3>
+            <h3 className="text-lg font-semibold text-white">💡 Coaching IA</h3>
             <p className="text-xs text-gray-400 mt-1">
               Rôle: {getCharacterName()}
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700 text-lg font-bold"
+              title="Besoin d'aide ?"
+            >
+              ?
+            </button>
+            <button
+              onClick={onClose}
+              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Content */}
@@ -201,9 +226,12 @@ export default function AICoachingModal({
           {/* Avertissement initial */}
           {showInitialWarning && !suggestions && (
             <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/50 rounded-lg">
-              <p className="text-blue-300 text-xs font-semibold mb-1">ℹ️ Information importante</p>
+              <p className="text-blue-300 text-xs font-semibold mb-1">
+                ℹ️ Information importante
+              </p>
               <p className="text-blue-200 text-xs">
-                Les suggestions IA ont un coût associé. Chaque requête utilise des tokens facturés par Google (~0,02€ par suggestion).
+                Les suggestions IA ont un coût associé. Chaque requête utilise
+                des tokens facturés par Google (~0,02€ par suggestion).
               </p>
             </div>
           )}
@@ -244,7 +272,10 @@ export default function AICoachingModal({
                 </p>
                 {cumulativeCost > 0 && (
                   <p className="text-orange-200 text-xs">
-                    Coût cumulé cette session: <span className="font-bold">{cumulativeCost.toFixed(2)}€</span>
+                    Coût cumulé cette session:{" "}
+                    <span className="font-bold">
+                      {cumulativeCost.toFixed(2)}€
+                    </span>
                   </p>
                 )}
               </div>
@@ -253,7 +284,8 @@ export default function AICoachingModal({
               {cumulativeCost > 5 && (
                 <div className="mt-3 p-3 bg-red-500/20 border border-red-500 rounded-lg">
                   <p className="text-red-300 text-xs font-semibold">
-                    ⚠️ Attention: Vous avez dépensé {cumulativeCost.toFixed(2)}€ en suggestions cette session!
+                    ⚠️ Attention: Vous avez dépensé {cumulativeCost.toFixed(2)}€
+                    en suggestions cette session!
                   </p>
                 </div>
               )}
@@ -274,7 +306,9 @@ export default function AICoachingModal({
 
               {tokenStats && (
                 <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/50 rounded-lg text-xs">
-                  <p className="text-blue-300 mb-3 font-semibold">📊 Coûts payés:</p>
+                  <p className="text-blue-300 mb-3 font-semibold">
+                    📊 Coûts payés:
+                  </p>
                   <div className="space-y-2 text-gray-300">
                     <div className="flex justify-between">
                       <span>• Tokens input:</span>
@@ -286,16 +320,26 @@ export default function AICoachingModal({
                     </div>
                     <div className="flex justify-between border-t border-blue-500/30 pt-2">
                       <span className="font-semibold">Total tokens:</span>
-                      <span className="font-semibold">{tokenStats.totalTokens}</span>
+                      <span className="font-semibold">
+                        {tokenStats.totalTokens}
+                      </span>
                     </div>
                     <div className="flex justify-between bg-blue-500/20 rounded p-2 mt-2">
-                      <span className="text-blue-300 font-bold">Coût cette demande:</span>
-                      <span className="text-blue-200 font-bold">{tokenStats.estimatedCost}</span>
+                      <span className="text-blue-300 font-bold">
+                        Coût cette demande:
+                      </span>
+                      <span className="text-blue-200 font-bold">
+                        {tokenStats.estimatedCost}
+                      </span>
                     </div>
                     {tokenStats.cumulativeCost > 0 && (
                       <div className="flex justify-between bg-orange-500/20 rounded p-2">
-                        <span className="text-orange-300 font-bold">Coût total session:</span>
-                        <span className="text-orange-200 font-bold">{tokenStats.cumulativeCost.toFixed(2)}€</span>
+                        <span className="text-orange-300 font-bold">
+                          Coût total session:
+                        </span>
+                        <span className="text-orange-200 font-bold">
+                          {tokenStats.cumulativeCost.toFixed(2)}€
+                        </span>
                       </div>
                     )}
                   </div>
@@ -342,7 +386,9 @@ export default function AICoachingModal({
                       : "bg-gray-700 text-gray-500 cursor-not-allowed"
                   }`}
               >
-                {savingNote ? "⏳ Enregistrement..." : "💾 Enregistrer en tant que note"}
+                {savingNote
+                  ? "⏳ Enregistrement..."
+                  : "💾 Enregistrer en tant que note"}
               </button>
               <button
                 onClick={handleRegenerateWithNewContext}
@@ -372,6 +418,17 @@ export default function AICoachingModal({
           </button>
         </div>
       </div>
+
+      {/* Modals */}
+      <CoachingIntroModal
+        isOpen={showIntroModal}
+        onClose={() => setShowIntroModal(false)}
+        onUnderstand={handleIntroUnderstand}
+      />
+      <CoachingHelpModal
+        isOpen={showHelpModal}
+        onClose={() => setShowHelpModal(false)}
+      />
     </div>
   );
 }
