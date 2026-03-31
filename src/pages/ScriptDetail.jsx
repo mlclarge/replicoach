@@ -6,6 +6,7 @@ import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
+import AICoachingModal from "../components/AICoachingModal";
 import {
   DndContext,
   closestCenter,
@@ -80,6 +81,8 @@ function ScriptDetail() {
   // Mon personnage et option de masquer ses répliques
   const [myCharacterId, setMyCharacterId] = useState(null);
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
+  const [coachingMode, setCoachingMode] = useState(null); // null, 'global', ou 'character'
+  const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
   // Sensors pour drag and drop
   const sensors = useSensors(
@@ -340,6 +343,22 @@ function ScriptDetail() {
     }
   };
 
+  // Handler pour sauvegarder les suggestions IA en tant que note
+  const handleSaveAICoachingNote = async ({ text, type }) => {
+    try {
+      await addPersonalNote({
+        user_id: user.id,
+        script_id: id,
+        after_replica_id: null,
+        text: text,
+        note_type: type,
+      });
+    } catch (err) {
+      console.error("Error saving AI coaching note:", err);
+      throw err;
+    }
+  };
+
   // Handler pour modifier une note
   const handleUpdateNote = async (noteId, text, noteType) => {
     try {
@@ -579,6 +598,19 @@ function ScriptDetail() {
             >
               👥
             </button>
+            {/* Bouton coaching IA - VIOLET */}
+            <button
+              onClick={() => {
+                setCoachingMode('global');
+                setCoachingCharacterId(null);
+              }}
+              className="p-2.5 rounded-lg transition shadow-md
+                         bg-violet-500 hover:bg-violet-600 text-white
+                         border-2 border-violet-600"
+              title="Conseil IA pour jeu d'acteur"
+            >
+              💡
+            </button>
             {/* Bouton micro - ORANGE */}
 
             {/* Bouton supprimer - ROUGE */}
@@ -679,6 +711,19 @@ function ScriptDetail() {
                   }`}
                 >
                   {myCharacterId === char.id ? "⭐ Mon rôle" : "☆"}
+                </button>
+
+                {/* Coaching IA par personnage */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCoachingMode('character');
+                    setCoachingCharacterId(char.id);
+                  }}
+                  title={`Coaching IA pour ${char.name}`}
+                  className="flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition border whitespace-nowrap bg-white text-violet-500 border-violet-300 hover:border-violet-500 hover:bg-violet-50"
+                >
+                  💡
                 </button>
               </div>
             ))}
@@ -1188,6 +1233,27 @@ function ScriptDetail() {
             setShowFloatingRecorder(false);
           }}
           onClose={() => setShowFloatingRecorder(false)}
+        />
+      )}
+      {/* Modal AI Coaching */}
+      {coachingMode && (
+        <AICoachingModal
+          isOpen={true}
+          onClose={() => {
+            setCoachingMode(null);
+            setCoachingCharacterId(null);
+          }}
+          mode={coachingMode}
+          characterName={
+            coachingMode === "character"
+              ? characters.find(c => c.id === coachingCharacterId)?.name || "Personnage"
+              : "Saynète complète"
+          }
+          scriptText={replicas.map((r) => `${r.character?.name}: ${r.text}`).join("\n\n")}
+          coachingCharacterId={coachingCharacterId}
+          allCharacters={characters}
+          allReplicas={replicas}
+          onSaveAsNote={handleSaveAICoachingNote}
         />
       )}
     </div>
