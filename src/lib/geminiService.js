@@ -3,7 +3,7 @@
  * Génère des suggestions de jeu basées sur le contexte du comédien
  */
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+const API_KEY = typeof __VITE_GEMINI_API_KEY__ !== 'undefined' ? __VITE_GEMINI_API_KEY__ : '';
 const API_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
 
 // System instruction globale pour l'IA théâtre
