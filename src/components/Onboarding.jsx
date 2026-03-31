@@ -67,15 +67,17 @@ const ONBOARDING_SLIDES = [
     title: "Nouveaux modes d'apprentissage",
     description:
       "Progressez étape par étape : 📖 Complet → 🔤 Trous (lettres masquées) → 3️⃣ 3 mots → 🟢 Début/Fin (1er + dernier mot) → 🟣 Derniers Mots (seul le dernier mot) → 🎭 Répliques (indices seulement).",
-    tip: '💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices',
+    tip: "💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices",
   },
-  {    icon: "💡",
-    title: "Coaching IA pour votre jeu",
+  {
+    icon: "💡",
+    title: "Coach IA : Conseils de jeu d'acteur",
     description:
-      "Cliquez sur le bouton 💡 à côté d'un personnage pour obtenir des suggestions de jeu d'acteur personnalisées par l'IA (Gemini). Décrivez votre approche du rôle et recevez des conseils de jeu, des indications de mouvement et des suggestions d'intonation.",
-    tip: "💡 Chaque suggestion IA a un coût minime (~0,02€). Les suggestions sont sauvegardables comme notes persistantes.",
+      "Besoin d'aide pour interpréter un personnage ? Cliquez sur 💡 à côté de son nom. Décrivez brièvement votre vision du rôle, et l'IA vous propose 5-7 conseils : techniques de jeu, mouvements scéniques, intonations, psychologie du personnage...",
+    tip: "💡 Très peu coûteux (~0,02€ par suggestion). Les conseils se sauvegardent comme notes permanentes pour vos archives.",
   },
-  {    icon: "🙈",
+  {
+    icon: "🙈",
     title: "Masquer mon rôle",
     description:
       "Cliquez sur ☆ à côté de votre personnage pour le marquer ⭐ 'Mon rôle'. Le bouton '👁️ Masquer mon rôle' apparaît alors — cliquez-le pour masquer VOS répliques dans TOUS les modes, y compris la lecture complète. Vos bulles affichent '(Réplique cachée)' : touchez-les pour les révéler une à une.",
@@ -140,7 +142,7 @@ function Onboarding() {
   useEffect(() => {
     // Vérifier si l'utilisateur a déjà vu l'onboarding
     const hasSeenOnboarding = localStorage.getItem(
-      "replicoach-onboarding-seen"
+      "replicoach-onboarding-seen",
     );
     if (!hasSeenOnboarding) {
       // Petit délai pour laisser l'app se charger
