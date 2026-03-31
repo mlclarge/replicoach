@@ -631,14 +631,15 @@ function ScriptDetail() {
             <div className="mb-2">
               <button
                 onClick={() => setHideMyReplicas(!hideMyReplicas)}
-                className={`flex items-center gap-1 px-3 py-2 rounded-full text-sm font-semibold border transition shadow-sm whitespace-nowrap
+                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition border-2 shadow-md whitespace-nowrap
                   ${
                     hideMyReplicas
-                      ? "bg-red-600 text-white border-red-700"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-red-400 hover:text-red-500"
+                      ? "bg-red-600 text-white border-red-700 hover:bg-red-700"
+                      : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50"
                   }`}
               >
-                {hideMyReplicas ? "🙈 Masqué" : "👁️ Masquer mon rôle"}
+                <span className="text-lg">{hideMyReplicas ? "🚫" : "👁️"}</span>
+                <span>{hideMyReplicas ? "Cachées" : "Visibles"}</span>
               </button>
             </div>
           )}
@@ -693,13 +694,14 @@ function ScriptDetail() {
                       ? "Retirer mon rôle"
                       : "Marquer comme mon rôle"
                   }
-                  className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition border whitespace-nowrap ${
+                  className={`flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap shadow-md ${
                     myCharacterId === char.id
-                      ? "bg-gold-400 text-white border-gold-500 shadow-sm"
-                      : "bg-white text-gray-400 border-gray-300 hover:border-gold-400 hover:text-gold-500"
+                      ? "bg-gold-400 text-white border-gold-500 hover:bg-gold-500"
+                      : "bg-white text-gray-600 border-gray-300 hover:border-gold-400 hover:bg-gold-50"
                   }`}
                 >
-                  {myCharacterId === char.id ? "⭐ Mon rôle" : "☆"}
+                  <span className="text-lg">👁️</span>
+                  <span className="hidden sm:inline text-sm">{myCharacterId === char.id ? "Mon rôle" : ""}</span>
                 </button>
 
                 {/* Coaching IA par personnage */}
@@ -715,7 +717,7 @@ function ScriptDetail() {
                     background: "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
                   }}
                 >
-                  <span className="text-lg">💡</span>
+                  <span className="text-lg">✨</span>
                   <span className="hidden sm:inline text-sm">Coach</span>
                 </button>
               </div>

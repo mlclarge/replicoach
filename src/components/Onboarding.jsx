@@ -70,17 +70,17 @@ const ONBOARDING_SLIDES = [
     tip: "💡 Touchez une bulle pour révéler le texte complet dans tous les modes exercices",
   },
   {
-    icon: "💡",
+    icon: "✨",
     title: "Coach IA : Conseils de jeu d'acteur",
     description:
-      "Besoin d'aide pour interpréter un personnage ? Cliquez sur 💡 à côté de son nom. Décrivez brièvement votre vision du rôle, et l'IA vous propose 5-7 conseils : techniques de jeu, mouvements scéniques, intonations, psychologie du personnage...",
-    tip: "💡 Très peu coûteux (~0,02€ par suggestion). Les conseils se sauvegardent comme notes permanentes pour vos archives.",
+      "Besoin d'aide pour interpréter un personnage ? Cliquez sur ✨ à côté de son nom. Décrivez brièvement votre vision du rôle, et l'IA vous propose 5-7 conseils : techniques de jeu, mouvements scéniques, intonations, psychologie du personnage...",
+    tip: "✨ C'est gratuit (le développeur offre !). Les conseils se sauvegardent comme notes permanentes pour vos archives.",
   },
   {
     icon: "🙈",
     title: "Masquer mon rôle",
     description:
-      "Cliquez sur ☆ à côté de votre personnage pour le marquer ⭐ 'Mon rôle'. Le bouton '👁️ Masquer mon rôle' apparaît alors — cliquez-le pour masquer VOS répliques dans TOUS les modes, y compris la lecture complète. Vos bulles affichent '(Réplique cachée)' : touchez-les pour les révéler une à une.",
+      "Cliquez sur 👁️ à côté de votre personnage pour le marquer comme 'Mon rôle'. Le bouton '🚫 Masquer mon rôle' apparaît alors — cliquez-le pour masquer VOS répliques dans TOUS les modes, y compris la lecture complète. Vos bulles affichent '(Réplique cachée)' : touchez-les pour les révéler une à une.",
     tip: "💡 Parfait pour répéter en suivant le texte sans lire vos répliques à l'avance",
   },
   {
