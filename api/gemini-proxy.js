@@ -4,34 +4,35 @@
  */
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   const API_KEY = process.env.VITE_GEMINI_API_KEY;
   if (!API_KEY) {
-    return res.status(500).json({ error: 'API key not configured' });
+    return res.status(500).json({ error: "API key not configured" });
   }
 
   try {
     const { prompt, systemInstruction } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
+      return res.status(400).json({ error: "Prompt is required" });
     }
 
     const response = await fetch(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=' + API_KEY,
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=" +
+        API_KEY,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           systemInstruction: {
             parts: [
               {
-                text: systemInstruction || '',
+                text: systemInstruction || "",
               },
             ],
           },
@@ -48,10 +49,10 @@ export default async function handler(req, res) {
             temperature: 0.7,
             topK: 40,
             topP: 0.95,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 3000,
           },
         }),
-      }
+      },
     );
 
     if (!response.ok) {
@@ -60,9 +61,9 @@ export default async function handler(req, res) {
     }
 
     const data = await response.json();
-    
+
     // Extraire les tokens et le contenu
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const usageMetadata = data.usageMetadata || {};
 
     return res.status(200).json({
@@ -72,7 +73,7 @@ export default async function handler(req, res) {
       totalTokens: usageMetadata.totalTokenCount || 0,
     });
   } catch (error) {
-    console.error('Gemini API error:', error);
+    console.error("Gemini API error:", error);
     return res.status(500).json({ error: error.message });
   }
 }
