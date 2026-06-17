@@ -145,6 +145,11 @@ function detectScriptFormat(text) {
     return 'initials'
   }
   
+  // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte" (très courant dans les scripts français)
+  // Au moins 3 lignes correspondantes pour éviter les faux positifs
+  const dashCount = lines.filter(l => /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–]\s+\S/.test(l.trim())).length
+  if (dashCount >= 2) return 'dash'
+
   // Format nom seul sur ligne (majuscules sans :)
   let hasStandaloneNames = false
   for (let i = 0; i < lines.length - 1; i++) {
@@ -308,8 +313,23 @@ function extractCharactersAndReplicas(text, distribution, format) {
         i += match.skipLines
       }
     } else if (currentCharacter) {
-      // Suite de la réplique
-      currentText += ' ' + line
+      // Vérifier si c'est un changement de personnage inline (format tiret + nom connu)
+      // Ex: "JACQUES (désignant son œil) - T'es contente de toi ?"
+      const inlineDash = matchInlineDash(line, knownCharacters)
+      if (inlineDash) {
+        if (currentText.trim()) {
+          replicas.push({ character: currentCharacter, text: cleanReplicaText(currentText) })
+        }
+        currentCharacter = inlineDash.character
+        currentText = inlineDash.text
+        if (!characters.has(currentCharacter)) {
+          characters.set(currentCharacter, { name: currentCharacter })
+          knownCharacters.add(currentCharacter)
+        }
+      } else {
+        // Suite de la réplique
+        currentText += ' ' + line
+      }
     }
   }
   
@@ -342,6 +362,7 @@ function findDialogueStart(lines, format) {
     // Première réplique détectée
     if (format === 'initials' && /^[A-Z]\.\s+[A-ZÀ-ÿ]/.test(line)) return i
     if (format === 'standalone' && /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(line)) return i
+    if (format === 'dash' && /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–]\s+\S/.test(line)) return i
     if (format === 'fullname' && /^[A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*\s*(?:\([^)]+\))?\s*:/u.test(line)) return i
     if (/^[A-ZÀ-Ÿ][a-zà-ÿ]+\s*:/.test(line) && line.length > 20) return i
   }
@@ -354,7 +375,16 @@ function findDialogueStart(lines, format) {
  */
 function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
   let match
-  
+
+  // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte"
+  if (format === 'dash') {
+    match = line.match(/^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{0,25}?)\s*(?:\(([^)]+)\))?\s*[-–]\s+(.{2,})$/)
+    if (match) {
+      const didascalie = match[2] ? `(${match[2]}) ` : ''
+      return { character: normalizeCharacterName(match[1]), text: didascalie + match[3] }
+    }
+  }
+
   // Format initiales : "C. texte" ou "R. (didascalie) texte"
   if (format === 'initials') {
     match = line.match(/^([A-Z])\.\s*(\([^)]+\))?\s*(.+)$/)
@@ -593,6 +623,20 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
 }
 
 /**
+ * Détecte un changement de personnage inline via format tiret
+ * N'accepte que les personnages déjà connus pour éviter les faux positifs
+ * Ex: "JACQUES (désignant son œil) - T'es contente de toi ?"
+ */
+function matchInlineDash(line, knownCharacters) {
+  const match = line.match(/^([AÀÂÄBCÇDEÉÈÊËFGHIÏÎJKLMNOÔPQRSTUÙÛÜVWXYZ][AÀÂÄBCÇDEÉÈÊËFGHIÏÎJKLMNOÔPQRSTUÙÛÜVWXYZ\s\-']{0,25}?)\s*(?:\(([^)]+)\))?\s*[-–]\s+(.{2,})$/)
+  if (!match) return null
+  const charName = normalizeCharacterName(match[1].trim())
+  if (!knownCharacters.has(charName)) return null
+  const didascalie = match[2] ? `(${match[2]}) ` : ''
+  return { character: charName, text: didascalie + match[3] }
+}
+
+/**
  * Parsing de secours
  */
 function fallbackParsing(text) {
@@ -666,6 +710,8 @@ function normalizeCharacterName(name) {
   let normalized = name.trim().toUpperCase().replace(/\s+/g, ' ').replace(/[:\.\-]+$/, '').trim()
   // Normaliser les variations de ponctuation après Pr/Dr : "LE PR, CHARCUT" -> "LE PR. CHARCUT"
   normalized = normalized.replace(/^(LE\s+(?:PR|DR))[,.]?\s+/i, '$1. ')
+  // Supprimer les artefacts OCR : lettre isolée + espace + nom (ex: "F EMMANUELLE" → "EMMANUELLE", "F JACQUES" → "JACQUES")
+  normalized = normalized.replace(/^([A-Z])\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ])/, '$2')
   return normalized
 }
 
