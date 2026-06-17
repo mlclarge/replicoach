@@ -231,11 +231,17 @@ export function parseScript(text, filename = "") {
   const cleanedText = cleanText(text);
   // Pré-traitement : séparer les répliques inline sur une même ligne (artefact OCR PDF)
   const preprocessedText = splitInlineTransitions(cleanedText);
+
+  // DEBUG : afficher les premières lignes après pré-traitement
+  const _dbgLines = preprocessedText.split('\n');
+  console.log(`[Parser DEBUG] ${filename}: ${_dbgLines.length} lignes après splitInlineTransitions`);
+  console.log(`[Parser DEBUG] Lignes 0-14:`, _dbgLines.slice(0, 15).map((l, i) => `${i}:"${l.substring(0, 70)}"`).join('\n'));
+
   const title = extractTitle(preprocessedText, filename);
 
   // Détecter le format du script
   const format = detectScriptFormat(preprocessedText);
-  console.log(`[Parser] Format détecté: ${format}`);
+  console.log(`[Parser DEBUG] Format détecté: "${format}" pour "${title}"`);
 
   // Extraire la distribution (mapping rôle -> acteur)
   const distribution = extractDistribution(preprocessedText, format);
@@ -264,6 +270,10 @@ export function parseScript(text, filename = "") {
   console.log(
     `[Parser] ${title}: ${coloredCharacters.length} personnages, ${enrichedReplicas.length} répliques`,
   );
+  console.log(`[Parser DEBUG] Personnages détectés:`, coloredCharacters.map(c => c.name).join(', '));
+  if (enrichedReplicas.length > 0) {
+    console.log(`[Parser DEBUG] Répliques 1-3:`, enrichedReplicas.slice(0, 3).map((r, i) => `#${i+1} [${r.character}]: "${r.text.substring(0, 50)}"`).join('\n'));
+  }
 
   return { title, characters: coloredCharacters, replicas: enrichedReplicas };
 }
@@ -348,9 +358,9 @@ function detectScriptFormat(text) {
   }
 
   // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte" (très courant dans les scripts français)
-  // Au moins 3 lignes correspondantes pour éviter les faux positifs
+  // Inclut tiret court (-), demi-cadratin (–) et cadratin (—) pour couvrir les artefacts OCR
   const dashCount = lines.filter((l) =>
-    /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–]\s+\S/.test(
+    /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–—]\s+\S/.test(
       l.trim(),
     ),
   ).length;
@@ -604,9 +614,19 @@ function findDialogueStart(lines, format) {
       return i;
     if (
       format === "dash" &&
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–]\s+\S/.test(
+      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–—]\s+\S/.test(
         line,
       )
+    )
+      return i;
+    // Format dash mixte OCR : nom seul avant les répliques (ex: "LUCIE" sur sa ligne avant "(off) - texte")
+    if (
+      format === "dash" &&
+      i > 3 &&
+      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(line) &&
+      line.length >= 3 &&
+      line.length <= 25 &&
+      !['ACTE', 'SCENE', 'SCÈNE', 'TABLEAU', 'FIN', 'RIDEAU', 'PAGE', 'NOTE', 'TOUT', 'BASCULE'].includes(line)
     )
       return i;
     if (
@@ -631,7 +651,7 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
   // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte"
   if (format === "dash") {
     match = line.match(
-      /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{0,25}?)\s*(?:\(([^)]+)\))?\s*[-–]\s+(.{2,})$/,
+      /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{0,25}?)\s*(?:\(([^)]+)\))?\s*[-–—]\s+(.{2,})$/,
     );
     if (match) {
       const didascalie = match[2] ? `(${match[2]}) ` : "";
@@ -639,6 +659,16 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
         character: normalizeCharacterName(match[1]),
         text: didascalie + match[3],
       };
+    }
+    // Nom seul en majuscules (format mixte OCR page 1 : nom sur sa propre ligne)
+    // ex: "LUCIE" ou "JEAN TOURILLE" → personnage sans texte, le texte suit sur la ligne d'après
+    if (
+      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(line) &&
+      line.length >= 3 &&
+      line.length <= 25 &&
+      !COMMON_CAPS_EXCL.has(line.split(' ')[0])
+    ) {
+      return { character: normalizeCharacterName(line), text: '' };
     }
   }
 
