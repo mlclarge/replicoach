@@ -123,7 +123,7 @@ export default function AICoachingModal({
     setSavingNote(true);
     try {
       await onSaveAsNote({
-        text: `💡 Coaching IA - ${characterName}\n\n${actorContext}\n\n---\n\n${suggestions}`,
+        text: `✨ Coaching IA - ${characterName}\n\n${actorContext}\n\n---\n\n${suggestions}`,
         type: "intention",
       });
       // Close modal after successful save
@@ -142,7 +142,7 @@ export default function AICoachingModal({
         <div className="h-full flex flex-col max-h-screen">
           {/* Header */}
           <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">💡 Coaching IA</h3>
+            <h3 className="text-lg font-semibold text-white">✨ Coaching IA</h3>
             <button
               onClick={onClose}
               className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
@@ -199,7 +199,7 @@ export default function AICoachingModal({
         {/* Header */}
         <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-white">💡 Coaching IA</h3>
+            <h3 className="text-lg font-semibold text-white">✨ Coaching IA</h3>
             <p className="text-xs text-gray-400 mt-1">
               Rôle: {getCharacterName()}
             </p>

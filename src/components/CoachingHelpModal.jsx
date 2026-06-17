@@ -20,7 +20,7 @@ export default function CoachingHelpModal({ isOpen, onClose }) {
     {
       id: 3,
       q: "Quel est le coût des suggestions IA ?",
-      a: "Environ 0,02€ par suggestion. C'est très peu coûteux ! Une alerte apparaît si vous dépassez 5€ en une session pour vous protéger.",
+      a: "C'est gratuit pour l'instant ! Le développeur offre ce service. Le coût réel par suggestion est environ 0,02€, mais vous ne payez rien.",
     },
     {
       id: 4,
@@ -62,7 +62,7 @@ export default function CoachingHelpModal({ isOpen, onClose }) {
         <div className="sticky top-0 bg-gradient-to-r from-violet-600 to-violet-700 text-white p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="text-2xl">💡</span>
+              <span className="text-2xl">✨</span>
               <h2 className="text-2xl font-bold">Besoin d'aide ?</h2>
             </div>
             <button
@@ -105,7 +105,7 @@ export default function CoachingHelpModal({ isOpen, onClose }) {
           {/* Additional Info */}
           <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-900">
-              <strong>💡 Conseil :</strong> Les conseils de l'IA sont sauvegardables ! 
+              <strong>✨ Conseil :</strong> Les conseils de l'IA sont sauvegardables ! 
               Cliquez "Sauvegarder comme note" pour les archiver et les relire plus tard.
             </p>
           </div>

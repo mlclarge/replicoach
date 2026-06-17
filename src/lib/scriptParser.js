@@ -27,7 +27,9 @@ const PRENOMS_FEMININS = [
   'sarah', 'laura', 'audrey', 'valérie', 'fabienne', 'claudette', 'rolande',
   'colette', 'suzanne', 'monique', 'nicole', 'sylvie', 'nathalie', 'isabelle',
   'christine', 'patricia', 'martine', 'sandrine', 'véronique', 'céline',
-  'amavi', 'claudia', 'rosette', 'clémence', 'céleste', 'roberte'
+  'amavi', 'claudia', 'rosette', 'clémence', 'céleste', 'roberte',
+  'lucie', 'corinne', 'emmanuelle', 'elodie', 'élodie', 'adèle', 'adele',
+  'alice', 'charlotte', 'élise', 'elise', 'inès', 'ines', 'léonie'
 ]
 
 const PRENOMS_MASCULINS = [
@@ -176,6 +178,12 @@ function detectScriptFormat(text) {
   // Format nom + numéro : "Répondeur 1 :" ou "Policier 2 :"
   if (lines.some(l => /^[A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d\s*:/u.test(l.trim()))) {
     return 'numbered'
+  }
+  
+  // Format prénom + nom composé : "Jacques Lasségué :" ou "Corinne Lasségué :"
+  // Détecté AVANT firstname car plus spécifique (2 mots capitalisés)
+  if (lines.some(l => /^[A-ZÀ-Ÿ][a-zà-ÿ\-]+\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)?\s*(?:\([^)]+\))?\s*:/u.test(l.trim()))) {
+    return 'fullname'
   }
   
   // Format prénom simple avec : "Rosette :" ou "Consultant :"
@@ -334,6 +342,7 @@ function findDialogueStart(lines, format) {
     // Première réplique détectée
     if (format === 'initials' && /^[A-Z]\.\s+[A-ZÀ-ÿ]/.test(line)) return i
     if (format === 'standalone' && /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(line)) return i
+    if (format === 'fullname' && /^[A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*\s*(?:\([^)]+\))?\s*:/u.test(line)) return i
     if (/^[A-ZÀ-Ÿ][a-zà-ÿ]+\s*:/.test(line) && line.length > 20) return i
   }
   
@@ -491,6 +500,21 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
     }
   }
   
+  // Format prénom + nom composé : "Jacques Lasségué : texte", "Lucie : texte", "Jean Tourille (irrité) : texte"
+  if (format === 'fullname') {
+    // Avec ou sans didascalie avant le ":"
+    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*)\s*(\([^)]+\))?\s*:\s*(.+)$/u)
+    if (match) {
+      const didascalie = match[2] ? match[2] + ' ' : ''
+      return { character: normalizeCharacterName(match[1]), text: didascalie + match[3] }
+    }
+    // Avec didascalie après le ":" : "Jacques Lasségué : (entrant) texte"
+    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*)\s*:\s*(\([^)]+\))\s*(.+)$/u)
+    if (match) {
+      return { character: normalizeCharacterName(match[1]), text: match[2] + ' ' + match[3] }
+    }
+  }
+
   // Formats génériques (pour tous les formats)
   
   // Numéroté : "1. Maurice : texte"
@@ -517,6 +541,20 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
     return {
       character: normalizeCharacterName(match[1]),
       text: match[2]
+    }
+  }
+
+  // Prénom Nom mixte (fallback) : "Jacques Lasségué : texte", "Michel Rolors : texte"
+  // Deux mots max, les deux avec majuscule, pas de mots de mise en scène
+  {
+    const STAGE_WORDS = ['scène', 'scene', 'acte', 'décor', 'rideau', 'note', 'fin', 'début', 'suite', 'tableau']
+    const mixedMatch = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){1,2})\s*(?:\([^)]+\))?\s*:\s*(.+)$/u)
+    if (mixedMatch) {
+      const charName = mixedMatch[1].trim()
+      const textPart = mixedMatch[2].trim()
+      if (textPart.length > 0 && !STAGE_WORDS.some(w => charName.toLowerCase().startsWith(w))) {
+        return { character: normalizeCharacterName(charName), text: textPart }
+      }
     }
   }
   

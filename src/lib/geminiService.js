@@ -32,8 +32,8 @@ Format tes réponses avec clarté et structure.`;
 
 // Estimation des coûts (en dollars par 1M tokens)
 const PRICING = {
-  inputTokens: 0.075,    // $0.075 par 1M tokens input
-  outputTokens: 0.30,    // $0.30 par 1M tokens output
+  inputTokens: 0.075, // $0.075 par 1M tokens input
+  outputTokens: 0.3, // $0.30 par 1M tokens output
 };
 
 // Taux de change USD/EUR
@@ -47,14 +47,22 @@ const USD_TO_EUR = 0.92;
  * @param {boolean} isCharacterCoaching - Si true, suggestions ciblées pour ce personnage uniquement
  * @returns {Promise<{suggestions: string, inputTokens: number, outputTokens: number, totalTokens: number, estimatedCost: string}>}
  */
-export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
+export async function getGameSuggestions(
+  characterName,
+  scriptText,
+  actorContext,
+  isCharacterCoaching = false,
+) {
   if (!characterName || !scriptText) {
-    throw new Error(
-      "Nom du personnage et texte du script sont obligatoires"
-    );
+    throw new Error("Nom du personnage et texte du script sont obligatoires");
   }
 
-  const prompt = buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching);
+  const prompt = buildPrompt(
+    characterName,
+    scriptText,
+    actorContext,
+    isCharacterCoaching,
+  );
 
   try {
     const response = await fetch(API_ENDPOINT, {
@@ -71,7 +79,7 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
     if (!response.ok) {
       const errorData = await response.json();
       throw new Error(
-        `Erreur API Gemini: ${errorData.error || response.statusText}`
+        `Erreur API Gemini: ${errorData.error || response.statusText}`,
       );
     }
 
@@ -96,7 +104,7 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
   } catch (error) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
       throw new Error(
-        "Erreur de connexion. Vérifiez votre connexion internet."
+        "Erreur de connexion. Vérifiez votre connexion internet.",
       );
     }
     throw error;
@@ -106,7 +114,12 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
 /**
  * Construit le prompt pour Gemini
  */
-function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
+function buildPrompt(
+  characterName,
+  scriptText,
+  actorContext,
+  isCharacterCoaching = false,
+) {
   const contextSection = actorContext
     ? `\n\nContexte du comédien:\n${actorContext}`
     : "";
