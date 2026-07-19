@@ -67,11 +67,18 @@ function Upload() {
     }
   }, []);
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  // États pour les métadonnées de scan obligatoires
+  const [showMetadataModal, setShowMetadataModal] = useState(false);
+  const [metaCharacters, setMetaCharacters] = useState("");
+  const [metaActs, setMetaActs] = useState("");
+
+  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
     accept: ACCEPTED_FILE_TYPES,
     maxFiles: 50,
     maxSize: 50 * 1024 * 1024,
+    noClick: true, // Désactive l'ouverture au clic pour imposer le formulaire obligatoire
+    noKeyboard: true,
   });
 
   /**
@@ -82,8 +89,12 @@ function Upload() {
     const extension = file.name.toLowerCase().split(".").pop();
 
     if (extension === "pdf") {
-      // extractTextFromPDF retourne maintenant un objet avec métadonnées
-      return await extractTextFromPDF(file, onProgress);
+      // On passe les métadonnées obligatoires
+      const metadata = {
+        characters: metaCharacters,
+        acts: parseInt(metaActs, 10),
+      };
+      return await extractTextFromPDF(file, onProgress, metadata);
     } else if (extension === "docx" || extension === "doc") {
       const text = await extractTextFromWord(file, onProgress);
       return {
@@ -178,7 +189,17 @@ function Upload() {
         step: "Analyse du script...",
         percent: basePercent + filePercent * 0.5,
       });
-      const { title, characters, replicas } = parseScript(text, file.name);
+      const refCharsArray = metaCharacters
+        ? metaCharacters
+            .split(",")
+            .map((c) => c.split("(")[0].trim().toUpperCase())
+            .filter(Boolean)
+        : null;
+      const { title, characters, replicas } = parseScript(
+        text,
+        file.name,
+        refCharsArray,
+      );
       result.title = title;
 
       setProgress({
@@ -418,8 +439,82 @@ function Upload() {
     setProcessing(false);
   };
 
+  const handleMetadataSubmit = (e) => {
+    e.preventDefault();
+    if (!metaCharacters.trim() || !metaActs) return;
+    setShowMetadataModal(false);
+    open(); // Déclenche programmatiquement l'explorateur de fichiers react-dropzone
+  };
+
   return (
     <div className="p-4 max-w-2xl mx-auto">
+      {/* Modale de métadonnées obligatoire */}
+      {showMetadataModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 border border-gold-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <h2 className="text-xl font-display text-gold-500 mb-4 flex items-center gap-2">
+              📋 Configuration du scan OCR
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Veuillez configurer ces informations obligatoires pour permettre
+              au moteur OCR d'effectuer une correction sémantique stricte.
+            </p>
+            <form onSubmit={handleMetadataSubmit} className="space-y-4">
+              <div>
+                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                  Noms des personnages *
+                </label>
+                <textarea
+                  value={metaCharacters}
+                  onChange={(e) => setMetaCharacters(e.target.value)}
+                  placeholder="Ex: JACQUES, LUCIE, JEAN, CORINNE, EMMANUELLE, MICHEL, QUERROCHOT (QQ)"
+                  rows={3}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors font-mono text-sm resize-none"
+                  required
+                />
+                <p className="text-gray-500 text-xs mt-1">
+                  Séparez les noms par des virgules. Pour les abréviations lues
+                  par l'OCR, utilisez les parenthèses. Exemple : JACQUES, JEAN,
+                  QUERROCHOT (QQ)
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                  Nombre d'actes *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={metaActs}
+                  onChange={(e) => setMetaActs(e.target.value)}
+                  placeholder="Ex: 3"
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:gold-500 focus:outline-none transition-colors"
+                  required
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowMetadataModal(false)}
+                  className="btn-secondary flex-1 py-3 rounded-xl font-medium"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={!metaCharacters.trim() || !metaActs}
+                  className="btn-gold flex-1 py-3 rounded-xl font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Valider et Importer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-display text-gold-500 mb-6">
         📄 Importer des textes
       </h1>
@@ -454,7 +549,13 @@ function Upload() {
       {!processing && !showResults && activeTab === "file" && (
         <>
           <div
-            {...getRootProps()}
+            {...getRootProps({
+              onClick: (e) => {
+                // Intercepter l'action pour forcer le formulaire de métadonnées avant sélection de fichier
+                e.preventDefault();
+                setShowMetadataModal(true);
+              },
+            })}
             className={`
               border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
               ${
@@ -486,7 +587,7 @@ function Upload() {
                   ))}
                 </div>
                 <p className="text-primary-400 text-sm mt-3">
-                  Cliquez pour modifier la sélection
+                  Cliquez pour re-configurer et modifier la sélection
                 </p>
               </div>
             ) : (
@@ -495,10 +596,10 @@ function Upload() {
                 <p className="text-gray-300 font-semibold">
                   {isDragActive
                     ? "Déposez les fichiers ici..."
-                    : "Glissez vos fichiers ici"}
+                    : "Glissez vos fichiers ou cliquez pour configurer l'import"}
                 </p>
                 <p className="text-gray-500 text-sm mt-2">
-                  ou cliquez pour sélectionner
+                  (Remplissage des métadonnées obligatoire avant sélection)
                 </p>
                 {/* Formats supportés */}
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
@@ -631,6 +732,12 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             {currentFileName}
           </p>
           <p className="text-gray-400 mt-2">{progress.step}</p>
+          {progress.step.includes("OCR") && (
+            <p className="text-xs text-yellow-500/80 mt-1 max-w-sm mx-auto">
+              (L'analyse intelligente est en cours sur votre processeur local.
+              Cela peut prendre plusieurs minutes pour un document complet.)
+            </p>
+          )}
           <div className="w-full bg-gray-700 rounded-full h-2 mt-4">
             <div
               className="bg-gold-500 h-2 rounded-full transition-all"
@@ -690,8 +797,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                   !result.success
                     ? "bg-red-500/10"
                     : result.warning
-                    ? "bg-yellow-500/10"
-                    : "bg-green-500/10"
+                      ? "bg-yellow-500/10"
+                      : "bg-green-500/10"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -704,8 +811,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                         !result.success
                           ? "text-red-400"
                           : result.warning
-                          ? "text-yellow-400"
-                          : "text-green-400"
+                            ? "text-yellow-400"
+                            : "text-green-400"
                       }`}
                     >
                       <span>
@@ -730,8 +837,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                               result.confidence >= 70
                                 ? "text-green-500"
                                 : result.confidence >= 50
-                                ? "text-yellow-500"
-                                : "text-red-500"
+                                  ? "text-yellow-500"
+                                  : "text-red-500"
                             }`}
                           >
                             • Confiance: {result.confidence}%

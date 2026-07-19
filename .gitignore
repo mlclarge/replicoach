@@ -36,5 +36,13 @@ Thumbs.db
 # Testing
 coverage
 
+# OCR Cache & Temp Files
+.ocr_cache/
+.pytest_cache/
+__pycache__/
+dev-dist/
+ocr_scan.log
+gemini-code-*.py
+
 # Misc
 *.pem

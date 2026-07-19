@@ -1,0 +1,25 @@
+# ─── Core ────────────────────────────────────────────────────────────────────
+# PDF
+PyMuPDF>=1.23.0
+
+# Image processing
+opencv-python>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# ─── OCR Engine ───────────────────────────────────────────────────────────────
+# CPU version (remplacer paddlepaddle par paddlepaddle-gpu si GPU disponible)
+paddlepaddle>=2.6.0
+paddleocr>=2.7.0
+
+# ─── Post-processing ──────────────────────────────────────────────────────────
+# Fuzzy matching pour correction des noms de personnages
+# Justification : 2-10x plus rapide que fuzzywuzzy, API simple, Cython
+rapidfuzz>=3.0.0
+
+# ─── Dev / Tests ──────────────────────────────────────────────────────────────
+pytest>=7.0.0
+pytest-cov>=4.0.0
+fastapi 
+uvicorn 
+python-multipart

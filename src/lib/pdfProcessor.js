@@ -19,7 +19,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
  * @param {Function} onOCRProgress - Callback de progression
  * @returns {Promise<ExtractionResult>}
  */
-export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
+export async function extractTextFromPDF(
+  file,
+  onOCRProgress = () => {},
+  metadata = {},
+) {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const nativeResult = await extractNativeText(arrayBuffer);
@@ -30,20 +34,17 @@ export async function extractTextFromPDF(file, onOCRProgress = () => {}) {
         text: nativeResult.text,
         confidence: 100,
         usedOCR: false,
-        quality: 'good',
-        warning: null
+        quality: "good",
+        warning: null,
       };
     }
 
-    // Sinon, utiliser l'OCR
-    console.log("Peu de texte natif trouvé, tentative OCR...");
-    const freshBuffer = await file.arrayBuffer();
-    return await extractWithOCR(freshBuffer, onOCRProgress);
-    
+    // Sinon, utiliser l'OCR (on force l'OCR local car on a des métadonnées obligatoires et un post-processing robuste)
+    console.log("Peu de texte natif trouvé, tentative OCR Python...");
+    return await extractWithOCR(file, onOCRProgress, metadata);
   } catch (error) {
-    console.error("Erreur extraction native:", error);
-    const freshBuffer = await file.arrayBuffer();
-    return await extractWithOCR(freshBuffer, onOCRProgress);
+    console.error("Erreur extraction native, bascule vers OCR local:", error);
+    return await extractWithOCR(file, onOCRProgress, metadata);
   }
 }
 
@@ -65,76 +66,71 @@ async function extractNativeText(arrayBuffer) {
 }
 
 /**
- * Extraction avec OCR (Tesseract.js)
- * Retourne le texte avec le score de confiance
+ * Extraction avec OCR (PaddleOCR via API Python locale)
+ * Retourne le texte (markdown) avec le score de confiance
  */
-async function extractWithOCR(arrayBuffer, onProgress) {
-  const Tesseract = await import("tesseract.js");
-
-  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  const numPages = pdf.numPages;
-  let fullText = "";
-  let totalConfidence = 0;
-  let pageCount = 0;
-
-  const worker = await Tesseract.createWorker("fra", 1, {
-    logger: (m) => {
-      if (m.status === "recognizing text") {
-        const pageProgress = m.progress;
-        const totalProgress =
-          (fullText ? 0.5 : 0) + (pageProgress * 0.5) / numPages;
-        onProgress(totalProgress);
-      }
-    },
-  });
-
+async function extractWithOCR(file, onProgress, metadata = {}) {
   try {
-    for (let i = 1; i <= numPages; i++) {
-      const page = await pdf.getPage(i);
+    // On simule une progression très lente car l'OCR en local sur CPU
+    // peut prendre plusieurs minutes par page.
+    let progressValue = 0.01;
+    const progressInterval = setInterval(() => {
+      // Ralentit la barre de progression au fur et à mesure pour ne pas bloquer à 90% trop vite
+      const increment = (0.95 - progressValue) * 0.02;
+      progressValue = Math.min(progressValue + increment, 0.95);
+      onProgress(progressValue);
+    }, 3000);
 
-      const viewport = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement("canvas");
-      const context = canvas.getContext("2d");
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+    const formData = new FormData();
+    formData.append("file", file);
 
-      await page.render({
-        canvasContext: context,
-        viewport: viewport,
-      }).promise;
-
-      const { data } = await worker.recognize(canvas);
-      
-      fullText += data.text + "\n\n";
-      
-      // Accumuler la confiance moyenne
-      if (data.confidence) {
-        totalConfidence += data.confidence;
-        pageCount++;
-      }
-
-      onProgress(i / numPages);
+    // Injecter les métadonnées obligatoires de scan dans la requête
+    if (metadata.characters) {
+      formData.append("characters", metadata.characters);
+    }
+    if (metadata.acts) {
+      formData.append("acts", metadata.acts);
     }
 
-    await worker.terminate();
-    
-    // Calculer la confiance moyenne
-    const avgConfidence = pageCount > 0 ? Math.round(totalConfidence / pageCount) : 0;
-    
-    // Déterminer la qualité et le warning
+    // URL de l'API locale FastAPI (à lancer avec uvicorn)
+    const API_URL = "http://127.0.0.1:8000/api/ocr";
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    clearInterval(progressInterval);
+    onProgress(1.0);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || `Erreur serveur API: ${response.status}`,
+      );
+    }
+
+    const data = await response.json();
+
+    const avgConfidence = data.confidence || 0;
+    // On utilise le markdown généré par le layout analyzer,
+    // car il est déjà structuré et propre.
+    const fullText = data.markdown || "";
+
     const { quality, warning } = evaluateQuality(avgConfidence, fullText);
-    
+
     return {
       text: fullText.trim(),
-      confidence: avgConfidence,
+      confidence: Math.round(avgConfidence),
       usedOCR: true,
       quality,
-      warning
+      warning,
     };
-    
   } catch (error) {
-    await worker.terminate();
-    throw error;
+    console.error("Erreur avec l'API OCR:", error);
+    throw new Error(
+      "Impossible de joindre le service OCR Python. Vérifiez qu'il est bien démarré sur le port 8000.",
+    );
   }
 }
 
@@ -148,41 +144,44 @@ function evaluateQuality(confidence, text) {
   // Vérifications supplémentaires sur le texte
   const textLength = text.trim().length;
   const wordCount = text.trim().split(/\s+/).length;
-  
+
   // Ratio de caractères "bizarres" (indicateur de mauvais OCR)
-  const weirdCharsCount = (text.match(/[^\w\s\u00C0-\u017Fàâäéèêëïîôùûüÿœæç.,;:!?'"()\-–—«»\n]/gi) || []).length;
+  const weirdCharsCount = (
+    text.match(/[^\w\s\u00C0-\u017Fàâäéèêëïîôùûüÿœæç.,;:!?'"()\-–—«»\n]/gi) ||
+    []
+  ).length;
   const weirdCharRatio = textLength > 0 ? weirdCharsCount / textLength : 0;
-  
+
   // Score ajusté
   let adjustedConfidence = confidence;
-  
+
   // Pénaliser si beaucoup de caractères bizarres
   if (weirdCharRatio > 0.1) {
     adjustedConfidence -= 20;
   } else if (weirdCharRatio > 0.05) {
     adjustedConfidence -= 10;
   }
-  
+
   // Pénaliser si très peu de mots
   if (wordCount < 50) {
     adjustedConfidence -= 15;
   }
-  
+
   // Déterminer la qualité
   if (adjustedConfidence >= 70) {
     return {
-      quality: 'good',
-      warning: null
+      quality: "good",
+      warning: null,
     };
   } else if (adjustedConfidence >= 50) {
     return {
-      quality: 'medium',
-      warning: `⚠️ Qualité OCR moyenne (${confidence}%). Vérifiez le texte extrait et corrigez si nécessaire.`
+      quality: "medium",
+      warning: `⚠️ Qualité OCR moyenne (${confidence}%). Vérifiez le texte extrait et corrigez si nécessaire.`,
     };
   } else {
     return {
-      quality: 'poor',
-      warning: `⚠️ Qualité OCR faible (${confidence}%). Le document est peut-être flou ou mal scanné.\n\n💡 Conseil : Demandez au metteur en scène de vous fournir le texte en format .txt ou .docx pour un meilleur résultat.`
+      quality: "poor",
+      warning: `⚠️ Qualité OCR faible (${confidence}%). Le document est peut-être flou ou mal scanné.\n\n💡 Conseil : Demandez au metteur en scène de vous fournir le texte en format .txt ou .docx pour un meilleur résultat.`,
     };
   }
 }

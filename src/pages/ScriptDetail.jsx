@@ -74,6 +74,9 @@ function ScriptDetail() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [newTitle, setNewTitle] = useState("");
 
+  // Révision OCR
+  const [showOCRReview, setShowOCRReview] = useState(false);
+
   // SOUS-ENSEMBLES DE RÉPLIQUES
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null); // { replicaIds: [], name: '' }
@@ -153,6 +156,12 @@ function ScriptDetail() {
 
     return result;
   }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
+
+  // Répliques flaggées OCR à réviser
+  const needsReviewReplicas = useMemo(
+    () => (currentScript?.replicas || []).filter((r) => r.needs_review),
+    [currentScript?.replicas],
+  );
 
   // Handler pour supprimer le script
   const handleDelete = async () => {
@@ -701,7 +710,9 @@ function ScriptDetail() {
                   }`}
                 >
                   <span className="text-lg">👁️</span>
-                  <span className="hidden sm:inline text-sm">{myCharacterId === char.id ? "Mon rôle" : ""}</span>
+                  <span className="hidden sm:inline text-sm">
+                    {myCharacterId === char.id ? "Mon rôle" : ""}
+                  </span>
                 </button>
 
                 {/* Coaching IA par personnage */}
@@ -714,7 +725,8 @@ function ScriptDetail() {
                   title={`Coaching IA pour ${char.name}`}
                   className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
                   style={{
-                    background: "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
+                    background:
+                      "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
                   }}
                 >
                   <span className="text-lg">✨</span>
@@ -824,6 +836,24 @@ function ScriptDetail() {
             📚 Groupes
           </button>
         </div>
+
+        {/* Bannière révision OCR */}
+        {needsReviewReplicas.length > 0 && (
+          <button
+            onClick={() => setShowOCRReview(true)}
+            className="w-full mb-4 py-2 px-4 rounded-lg text-sm font-semibold
+                       bg-amber-50 text-amber-800 border-2 border-amber-400
+                       hover:bg-amber-100 transition flex items-center justify-center gap-2"
+          >
+            <span>⚠️</span>
+            <span>
+              {needsReviewReplicas.length} réplique
+              {needsReviewReplicas.length > 1 ? "s" : ""} à réviser (OCR
+              dégradé)
+            </span>
+            <span className="ml-auto text-amber-600">→ Corriger</span>
+          </button>
+        )}
 
         {/* Indicateur groupe actif */}
         {studyingGroup && (
@@ -968,6 +998,21 @@ function ScriptDetail() {
         onAddReplica={() => setShowAddReplica(true)}
         audioLink={`/script/${id}/audio`}
       />
+
+      {/* Modal révision OCR */}
+      {showOCRReview && (
+        <OCRReviewModal
+          replicas={needsReviewReplicas}
+          characters={currentScript?.characters || []}
+          onSave={async (replicaId, newText) => {
+            await updateReplica(replicaId, {
+              text: newText,
+              needs_review: false,
+            });
+          }}
+          onClose={() => setShowOCRReview(false)}
+        />
+      )}
 
       {/* Modal d'édition de réplique */}
       {editingReplica && (
@@ -1408,6 +1453,134 @@ function FloatingActionMenu({
 }
 
 /**
+ * Modal de révision des répliques OCR dégradées
+ */
+function OCRReviewModal({ replicas, characters, onSave, onClose }) {
+  const [drafts, setDrafts] = useState(() =>
+    Object.fromEntries(replicas.map((r) => [r.id, r.text || ""])),
+  );
+  const [saving, setSaving] = useState({});
+  const [saved, setSaved] = useState({});
+
+  const charMap = useMemo(
+    () => Object.fromEntries((characters || []).map((c) => [c.id, c])),
+    [characters],
+  );
+
+  const handleSave = async (replicaId) => {
+    setSaving((s) => ({ ...s, [replicaId]: true }));
+    try {
+      await onSave(replicaId, drafts[replicaId]);
+      setSaved((s) => ({ ...s, [replicaId]: true }));
+    } finally {
+      setSaving((s) => ({ ...s, [replicaId]: false }));
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-start justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-gray-900 rounded-xl w-full max-w-2xl border border-amber-500/50 my-4">
+        {/* En-tête */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-700">
+          <div>
+            <h2 className="text-white font-bold text-lg">⚠️ Révision OCR</h2>
+            <p className="text-amber-400 text-sm mt-0.5">
+              {replicas.length - Object.keys(saved).length} réplique
+              {replicas.length > 1 ? "s" : ""} avec texte dégradé à corriger
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-white text-2xl leading-none"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Liste */}
+        <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          {replicas.map((replica) => {
+            const char = charMap[replica.character_id];
+            const isDone = saved[replica.id];
+            return (
+              <div
+                key={replica.id}
+                className={`rounded-lg border p-3 transition ${
+                  isDone
+                    ? "border-green-600/50 bg-green-900/20 opacity-60"
+                    : "border-amber-500/40 bg-gray-800"
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <span
+                    className="text-xs font-bold px-2 py-0.5 rounded-full text-white"
+                    style={{ backgroundColor: char?.color || "#6B7280" }}
+                  >
+                    {char?.name || "?"}
+                  </span>
+                  {isDone && (
+                    <span className="text-green-400 text-xs font-semibold">
+                      ✓ Corrigé
+                    </span>
+                  )}
+                </div>
+                {isDone ? (
+                  <p className="text-gray-300 text-sm italic">
+                    {drafts[replica.id]}
+                  </p>
+                ) : (
+                  <>
+                    <textarea
+                      value={drafts[replica.id]}
+                      onChange={(e) =>
+                        setDrafts((d) => ({
+                          ...d,
+                          [replica.id]: e.target.value,
+                        }))
+                      }
+                      rows={3}
+                      className="w-full bg-gray-700 text-white rounded-lg px-3 py-2 text-sm
+                                 border border-gray-600 focus:border-amber-400 focus:outline-none resize-y"
+                      placeholder="Saisissez le texte correct..."
+                    />
+                    <button
+                      onClick={() => handleSave(replica.id)}
+                      disabled={saving[replica.id]}
+                      className="mt-2 px-4 py-1.5 bg-amber-500 hover:bg-amber-600 text-white
+                                 text-sm font-semibold rounded-lg transition disabled:opacity-50"
+                    >
+                      {saving[replica.id] ? "Sauvegarde…" : "✓ Valider"}
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          {replicas.length === 0 && (
+            <p className="text-center text-gray-400 py-8">
+              Aucune réplique à réviser 🎉
+            </p>
+          )}
+        </div>
+
+        {/* Pied */}
+        <div className="p-4 border-t border-gray-700 flex justify-between items-center">
+          <p className="text-gray-400 text-sm">
+            {Object.keys(saved).length}/{replicas.length} corrigées
+          </p>
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm font-semibold transition"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Bulle de réplique draggable (pour le mode édition)
  */
 function SortableReplicaBubble({
@@ -1694,12 +1867,19 @@ function ChatBubble({
           className={`
             px-4 py-3 rounded-2xl relative shadow-lg
             ${isRight ? "rounded-br-md" : "rounded-bl-md"}
+            ${replica.needs_review ? "ring-2 ring-amber-400 ring-offset-1" : ""}
           `}
           style={{
             backgroundColor: hexToRgba(bubbleColor, 0.85),
             border: `2px solid ${hexToRgba(bubbleColor, 0.9)}`,
           }}
         >
+          {/* Badge OCR à réviser */}
+          {replica.needs_review && (
+            <span className="absolute -top-2 -right-2 bg-amber-400 text-amber-900 text-xs font-bold px-1.5 py-0.5 rounded-full shadow">
+              ⚠️ OCR
+            </span>
+          )}
           {/* Triangle de la bulle */}
           <div
             className={`absolute bottom-0 w-3 h-3 ${

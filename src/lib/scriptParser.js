@@ -163,79 +163,183 @@ const MOTS_MASCULINS = [
  * C'est la correction principale pour les PDF dont l'OCR fusionne plusieurs répliques.
  */
 function splitInlineTransitions(text) {
-  const lines = text.split('\n')
-  const result = []
+  const lines = text.split("\n");
+  const result = [];
 
   // Mots français courants en majuscules qui ne sont PAS des personnages
   const COMMON_CAPS = new Set([
-    'MAIS', 'DONC', 'ALORS', 'BIEN', 'VRAI', 'VOILÀ', 'VOILA', 'VOICI',
-    'AVANT', 'APRÈS', 'APRES', 'ENFIN', 'ENCORE', 'BREF', 'TOUT', 'RIEN',
-    'JAMAIS', 'TOUJOURS', 'VITE', 'VRAI', 'FAUX', 'NON', 'OUI', 'LUI',
-    'MOI', 'TOI', 'SOI', 'ELLE', 'EUX', 'ICI', 'LÀ', 'LA', 'LE', 'LES',
-    'DES', 'UNE', 'CAR', 'CAD', 'SVP', 'STP', 'OK', 'HEY', 'HOP', 'AH',
-    'OH', 'EH', 'BEN', 'BON', 'DIEU', 'SUPER', 'STOP', 'HELP', 'AIDE',
-    'SNCF', 'EDF', 'OUI', 'NON', 'NOM', 'AVIS', 'ACTE', 'SCENE', 'SCÈNE',
-    'TABLEAU', 'FIN', 'RIDEAU', 'PAGE', 'NOTE', 'JETTES', 'MERCI', 'PARDON'
-  ])
+    "MAIS",
+    "DONC",
+    "ALORS",
+    "BIEN",
+    "VRAI",
+    "VOILÀ",
+    "VOILA",
+    "VOICI",
+    "AVANT",
+    "APRÈS",
+    "APRES",
+    "ENFIN",
+    "ENCORE",
+    "BREF",
+    "TOUT",
+    "RIEN",
+    "JAMAIS",
+    "TOUJOURS",
+    "VITE",
+    "VRAI",
+    "FAUX",
+    "NON",
+    "OUI",
+    "LUI",
+    "MOI",
+    "TOI",
+    "SOI",
+    "ELLE",
+    "EUX",
+    "ICI",
+    "LÀ",
+    "LA",
+    "LE",
+    "LES",
+    "DES",
+    "UNE",
+    "CAR",
+    "CAD",
+    "SVP",
+    "STP",
+    "OK",
+    "HEY",
+    "HOP",
+    "AH",
+    "OH",
+    "EH",
+    "BEN",
+    "BON",
+    "DIEU",
+    "SUPER",
+    "STOP",
+    "HELP",
+    "AIDE",
+    "SNCF",
+    "EDF",
+    "OUI",
+    "NON",
+    "NOM",
+    "AVIS",
+    "ACTE",
+    "SCENE",
+    "SCÈNE",
+    "TABLEAU",
+    "FIN",
+    "RIDEAU",
+    "PAGE",
+    "NOTE",
+    "JETTES",
+    "MERCI",
+    "PARDON",
+  ]);
 
   for (const line of lines) {
     // Seulement pour les lignes longues (> 80 chars)
     if (line.length < 80) {
-      result.push(line)
-      continue
+      result.push(line);
+      continue;
     }
 
     // Chercher les transitions de personnage au milieu d'une ligne :
     // [espace][NOM_MAJUSCULES_3+_chars][espace?][didascalie?][tiret][espace]
     // Exemple : " JACQUES (désignant son œil) - T'es content"
-    const pattern = /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*[-–—]\s/g
+    const pattern =
+      /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*[-–—]\s/g;
 
-    const splits = [] // positions de début de nom à l'intérieur de la ligne
-    let m
+    const splits = []; // positions de début de nom à l'intérieur de la ligne
+    let m;
     while ((m = pattern.exec(line)) !== null) {
       // Position du début du nom (après l'espace initial dans le match)
-      const namePos = m.index + m[0].search(/[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]/)
-      if (namePos <= 0) continue // ne pas couper en début de ligne
+      const namePos = m.index + m[0].search(/[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]/);
+      if (namePos <= 0) continue; // ne pas couper en début de ligne
 
       // Extraire juste le nom capturé
-      const capturedName = m[1].trim()
-      if (COMMON_CAPS.has(capturedName)) continue // ignorer les mots courants
-      if (capturedName.length < 3) continue
+      const capturedName = m[1].trim();
+      if (COMMON_CAPS.has(capturedName)) continue; // ignorer les mots courants
+      if (capturedName.length < 3) continue;
 
-      splits.push(namePos)
+      splits.push(namePos);
     }
 
     if (splits.length === 0) {
-      result.push(line)
-      continue
+      result.push(line);
+      continue;
     }
 
     // Découper la ligne aux positions identifiées
-    let prev = 0
+    let prev = 0;
     for (const pos of splits) {
-      const part = line.substring(prev, pos).trim()
-      if (part) result.push(part)
-      prev = pos
+      const part = line.substring(prev, pos).trim();
+      if (part) result.push(part);
+      prev = pos;
     }
-    const last = line.substring(prev).trim()
-    if (last) result.push(last)
+    const last = line.substring(prev).trim();
+    if (last) result.push(last);
   }
 
-  return result.join('\n')
+  return result.join("\n");
+}
+
+/**
+ * Détecte si un texte est garbled (OCR de mauvaise qualité).
+ * Heuristiques : mots trop courts, ratio de caractères non-latins élevé.
+ * @param {string} text
+ * @returns {boolean}
+ */
+function isGarbledText(text) {
+  if (!text || text.length < 4) return false;
+  const words = text
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0);
+  if (words.length === 0) return false;
+
+  // Ratio de mots alphabétiques très courts (≤ 2 lettres)
+  const letterOnly = (w) =>
+    w.replace(/[^a-zA-Z\u00C0-\u024F\u0152\u0153\u00C6\u00E6]/g, "");
+  const shortWords = words.filter((w) => letterOnly(w).length <= 2);
+  const shortRatio = shortWords.length / words.length;
+
+  // Longueur moyenne des séquences alphabétiques
+  const totalLetters = words.reduce((s, w) => s + letterOnly(w).length, 0);
+  const avgLetterLen = totalLetters / words.length;
+
+  // Ratio de caractères hors latin étendu (CJK, cyrillique, etc.)
+  const weirdChars = (
+    text.match(/[^\x20-\x7E\u00A0-\u024F\u0300-\u036F\n]/g) || []
+  ).length;
+  const weirdRatio = weirdChars / text.length;
+
+  return (shortRatio > 0.55 && avgLetterLen < 3.5) || weirdRatio > 0.04;
 }
 
 /**
  * Parse un texte de script et extrait les personnages et répliques
  */
-export function parseScript(text, filename = "") {
+export function parseScript(text, filename = "", referenceCharacters = null) {
   const cleanedText = cleanText(text);
   // Pré-traitement : séparer les répliques inline sur une même ligne (artefact OCR PDF)
   const preprocessedText = splitInlineTransitions(cleanedText);
 
   // DEBUG : afficher les premières lignes après pré-traitement
-  const _dbgLines = preprocessedText.split('\n');
-  console.log(`[Parser DEBUG] ${filename}: ${_dbgLines.length} lignes après splitInlineTransitions`);
-  console.log(`[Parser DEBUG] Lignes 0-14:`, _dbgLines.slice(0, 15).map((l, i) => `${i}:"${l.substring(0, 70)}"`).join('\n'));
+  const _dbgLines = preprocessedText.split("\n");
+  console.log(
+    `[Parser DEBUG] ${filename}: ${_dbgLines.length} lignes après splitInlineTransitions`,
+  );
+  console.log(
+    `[Parser DEBUG] Lignes 0-14:`,
+    _dbgLines
+      .slice(0, 15)
+      .map((l, i) => `${i}:"${l.substring(0, 70)}"`)
+      .join("\n"),
+  );
 
   const title = extractTitle(preprocessedText, filename);
 
@@ -251,6 +355,7 @@ export function parseScript(text, filename = "") {
     preprocessedText,
     distribution,
     format,
+    referenceCharacters,
   );
 
   // Assigner couleurs et genre
@@ -265,14 +370,26 @@ export function parseScript(text, filename = "") {
     ...replica,
     textGaps: generateGapsText(replica.text),
     cueWords: generateCueWords(replicas, index),
+    needs_review: isGarbledText(replica.text),
   }));
 
   console.log(
     `[Parser] ${title}: ${coloredCharacters.length} personnages, ${enrichedReplicas.length} répliques`,
   );
-  console.log(`[Parser DEBUG] Personnages détectés:`, coloredCharacters.map(c => c.name).join(', '));
+  console.log(
+    `[Parser DEBUG] Personnages détectés:`,
+    coloredCharacters.map((c) => c.name).join(", "),
+  );
   if (enrichedReplicas.length > 0) {
-    console.log(`[Parser DEBUG] Répliques 1-3:`, enrichedReplicas.slice(0, 3).map((r, i) => `#${i+1} [${r.character}]: "${r.text.substring(0, 50)}"`).join('\n'));
+    console.log(
+      `[Parser DEBUG] Répliques 1-3:`,
+      enrichedReplicas
+        .slice(0, 3)
+        .map(
+          (r, i) => `#${i + 1} [${r.character}]: "${r.text.substring(0, 50)}"`,
+        )
+        .join("\n"),
+    );
   }
 
   return { title, characters: coloredCharacters, replicas: enrichedReplicas };
@@ -506,15 +623,25 @@ function extractDistribution(text, format) {
 /**
  * Extrait les personnages et répliques
  */
-function extractCharactersAndReplicas(text, distribution, format) {
+function extractCharactersAndReplicas(
+  text,
+  distribution,
+  format,
+  referenceCharacters = null,
+) {
   const characters = new Map();
   const replicas = [];
   const knownCharacters = new Set(distribution.keys());
 
   // Pré-remplir les personnages de la distribution
   for (const [charName, actorName] of distribution) {
-    if (!characters.has(charName)) {
-      characters.set(charName, { name: charName, actor: actorName });
+    const charNameUpper = charName.toUpperCase().trim();
+    const isAllowed =
+      !referenceCharacters || referenceCharacters.includes(charNameUpper);
+    if (isAllowed) {
+      if (!characters.has(charName)) {
+        characters.set(charName, { name: charName, actor: actorName });
+      }
     }
   }
 
@@ -533,7 +660,12 @@ function extractCharactersAndReplicas(text, distribution, format) {
     // Essayer de matcher une réplique selon le format
     const match = matchReplicaLine(line, lines, i, knownCharacters, format);
 
-    if (match) {
+    const isMatchAllowed =
+      match &&
+      (!referenceCharacters ||
+        referenceCharacters.includes(match.character.toUpperCase().trim()));
+
+    if (match && isMatchAllowed) {
       // Sauvegarder la réplique précédente
       if (currentCharacter && currentText.trim()) {
         replicas.push({
@@ -559,7 +691,14 @@ function extractCharactersAndReplicas(text, distribution, format) {
       // Vérifier si c'est un changement de personnage inline (format tiret + nom connu)
       // Ex: "JACQUES (désignant son œil) - T'es contente de toi ?"
       const inlineDash = matchInlineDash(line, knownCharacters);
-      if (inlineDash) {
+      const isInlineAllowed =
+        inlineDash &&
+        (!referenceCharacters ||
+          referenceCharacters.includes(
+            inlineDash.character.toUpperCase().trim(),
+          ));
+
+      if (inlineDash && isInlineAllowed) {
         if (currentText.trim()) {
           replicas.push({
             character: currentCharacter,
@@ -623,10 +762,23 @@ function findDialogueStart(lines, format) {
     if (
       format === "dash" &&
       i > 3 &&
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(line) &&
+      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(
+        line,
+      ) &&
       line.length >= 3 &&
       line.length <= 25 &&
-      !['ACTE', 'SCENE', 'SCÈNE', 'TABLEAU', 'FIN', 'RIDEAU', 'PAGE', 'NOTE', 'TOUT', 'BASCULE'].includes(line)
+      ![
+        "ACTE",
+        "SCENE",
+        "SCÈNE",
+        "TABLEAU",
+        "FIN",
+        "RIDEAU",
+        "PAGE",
+        "NOTE",
+        "TOUT",
+        "BASCULE",
+      ].includes(line)
     )
       return i;
     if (
@@ -663,12 +815,14 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
     // Nom seul en majuscules (format mixte OCR page 1 : nom sur sa propre ligne)
     // ex: "LUCIE" ou "JEAN TOURILLE" → personnage sans texte, le texte suit sur la ligne d'après
     if (
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(line) &&
+      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(
+        line,
+      ) &&
       line.length >= 3 &&
       line.length <= 25 &&
-      !COMMON_CAPS_EXCL.has(line.split(' ')[0])
+      !COMMON_CAPS_EXCL.has(line.split(" ")[0])
     ) {
-      return { character: normalizeCharacterName(line), text: '' };
+      return { character: normalizeCharacterName(line), text: "" };
     }
   }
 
@@ -965,12 +1119,45 @@ function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
  * Accepte les personnages connus ET les nouveaux noms qui ne sont pas des mots courants.
  */
 const COMMON_CAPS_EXCL = new Set([
-  'MAIS', 'DONC', 'ALORS', 'BIEN', 'VRAI', 'VOILÀ', 'VOILA', 'VOICI',
-  'AVANT', 'APRÈS', 'APRES', 'ENFIN', 'ENCORE', 'BREF', 'TOUT', 'RIEN',
-  'JAMAIS', 'TOUJOURS', 'VITE', 'FAUX', 'ICI', 'DIEU', 'SUPER', 'STOP',
-  'ACTE', 'SCENE', 'SCÈNE', 'TABLEAU', 'FIN', 'RIDEAU', 'PAGE', 'NOTE',
-  'MERCI', 'PARDON', 'JETTES', 'AIDE', 'SNCF', 'EDF',
-])
+  "MAIS",
+  "DONC",
+  "ALORS",
+  "BIEN",
+  "VRAI",
+  "VOILÀ",
+  "VOILA",
+  "VOICI",
+  "AVANT",
+  "APRÈS",
+  "APRES",
+  "ENFIN",
+  "ENCORE",
+  "BREF",
+  "TOUT",
+  "RIEN",
+  "JAMAIS",
+  "TOUJOURS",
+  "VITE",
+  "FAUX",
+  "ICI",
+  "DIEU",
+  "SUPER",
+  "STOP",
+  "ACTE",
+  "SCENE",
+  "SCÈNE",
+  "TABLEAU",
+  "FIN",
+  "RIDEAU",
+  "PAGE",
+  "NOTE",
+  "MERCI",
+  "PARDON",
+  "JETTES",
+  "AIDE",
+  "SNCF",
+  "EDF",
+]);
 
 function matchInlineDash(line, knownCharacters) {
   const match = line.match(
@@ -979,7 +1166,7 @@ function matchInlineDash(line, knownCharacters) {
   if (!match) return null;
   const charName = normalizeCharacterName(match[1].trim());
   if (COMMON_CAPS_EXCL.has(charName)) return null;
-  const didascalie = match[2] ? `(${match[2]}) ` : '';
+  const didascalie = match[2] ? `(${match[2]}) ` : "";
   return { character: charName, text: didascalie + match[3] };
 }
 
@@ -1070,15 +1257,76 @@ function fallbackParsing(text) {
 
 // Prénoms connus pour corriger les artefacts OCR (ex: FEMMANUELLE → EMMANUELLE)
 const ALL_PRENOMS_UPPER = [
-  'MARIE','JEANNE','ANNE','CATHERINE','FRANÇOISE','LOUISE','CLAIRE','SOPHIE','JULIE',
-  'EMMA','LÉA','LEA','MANON','CHLOÉ','CHLOE','CAMILLE','SARAH','LAURA','AUDREY',
-  'VALÉRIE','VALERIE','FABIENNE','COLETTE','SUZANNE','MONIQUE','NICOLE','SYLVIE',
-  'NATHALIE','ISABELLE','CHRISTINE','PATRICIA','MARTINE','SANDRINE','VÉRONIQUE',
-  'VERONIQUE','CÉLINE','CELINE','ROSETTE','LUCIE','CORINNE','EMMANUELLE','ÉLODIE',
-  'ELODIE','ALICE','CHARLOTTE','ÉLISE','ELISE','JEAN','PIERRE','MICHEL','JACQUES',
-  'LOUIS','HENRI','PAUL','ANDRÉ','ANDRE','MAURICE','CHRISTOPHE','PHILIPPE','ALAIN',
-  'BERNARD','FRANCOIS','RICHARD','ROBERT','DANIEL','DAVID','THOMAS','NICOLAS','JULIEN'
-]
+  "MARIE",
+  "JEANNE",
+  "ANNE",
+  "CATHERINE",
+  "FRANÇOISE",
+  "LOUISE",
+  "CLAIRE",
+  "SOPHIE",
+  "JULIE",
+  "EMMA",
+  "LÉA",
+  "LEA",
+  "MANON",
+  "CHLOÉ",
+  "CHLOE",
+  "CAMILLE",
+  "SARAH",
+  "LAURA",
+  "AUDREY",
+  "VALÉRIE",
+  "VALERIE",
+  "FABIENNE",
+  "COLETTE",
+  "SUZANNE",
+  "MONIQUE",
+  "NICOLE",
+  "SYLVIE",
+  "NATHALIE",
+  "ISABELLE",
+  "CHRISTINE",
+  "PATRICIA",
+  "MARTINE",
+  "SANDRINE",
+  "VÉRONIQUE",
+  "VERONIQUE",
+  "CÉLINE",
+  "CELINE",
+  "ROSETTE",
+  "LUCIE",
+  "CORINNE",
+  "EMMANUELLE",
+  "ÉLODIE",
+  "ELODIE",
+  "ALICE",
+  "CHARLOTTE",
+  "ÉLISE",
+  "ELISE",
+  "JEAN",
+  "PIERRE",
+  "MICHEL",
+  "JACQUES",
+  "LOUIS",
+  "HENRI",
+  "PAUL",
+  "ANDRÉ",
+  "ANDRE",
+  "MAURICE",
+  "CHRISTOPHE",
+  "PHILIPPE",
+  "ALAIN",
+  "BERNARD",
+  "FRANCOIS",
+  "RICHARD",
+  "ROBERT",
+  "DANIEL",
+  "DAVID",
+  "THOMAS",
+  "NICOLAS",
+  "JULIEN",
+];
 
 /**
  * Normalise un nom de personnage
@@ -1087,17 +1335,25 @@ function normalizeCharacterName(name) {
   let normalized = name
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, ' ')
-    .replace(/[:\.\-]+$/, '')
+    .replace(/\s+/g, " ")
+    .replace(/[:\.\-]+$/, "")
     .trim();
   // Normaliser les variations de ponctuation après Pr/Dr
-  normalized = normalized.replace(/^(LE\s+(?:PR|DR))[,.]?\s+/i, '$1. ');
+  normalized = normalized.replace(/^(LE\s+(?:PR|DR))[,.]?\s+/i, "$1. ");
   // Artefact OCR : lettre isolée + espace avant nom (ex: "F EMMANUELLE" → "EMMANUELLE")
-  normalized = normalized.replace(/^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ])\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3})/, '$2');
+  normalized = normalized.replace(
+    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ])\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3})/,
+    "$2",
+  );
   // Artefact OCR : lettre isolée fusionnée sans espace (ex: "FEMMANUELLE" → "EMMANUELLE")
   if (/^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{5,}$/.test(normalized)) {
     const withoutFirst = normalized.slice(1);
-    if (ALL_PRENOMS_UPPER.some(p => withoutFirst === p || (withoutFirst.startsWith(p) && p.length >= 4))) {
+    if (
+      ALL_PRENOMS_UPPER.some(
+        (p) =>
+          withoutFirst === p || (withoutFirst.startsWith(p) && p.length >= 4),
+      )
+    ) {
       normalized = withoutFirst;
     }
   }
