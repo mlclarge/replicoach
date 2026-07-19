@@ -177,7 +177,7 @@ class PaddleOCREngine:
                 enable_mkldnn=False,
                 det_limit_side_len=2048,
                 det_limit_type='max',
-                ir_optim=True,
+                ir_optim=False,
             )
         except Exception as exc:
             raise OCREngineError(
