@@ -92,8 +92,9 @@ async function extractWithOCR(file, onProgress, metadata = {}) {
       formData.append("acts", metadata.acts);
     }
 
-    // URL de l'API locale FastAPI (à lancer avec uvicorn)
-    const API_URL = "http://127.0.0.1:8000/api/ocr";
+    // URL de l'API OCR (utilise l'URL de Render en prod, ou localhost si VITE_API_URL est défini localement)
+    const API_URL =
+      import.meta.env.VITE_API_URL || "https://replicoach.onrender.com/api/ocr";
 
     const response = await fetch(API_URL, {
       method: "POST",
