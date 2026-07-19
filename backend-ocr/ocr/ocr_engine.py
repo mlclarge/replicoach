@@ -36,12 +36,16 @@ from .models import BoundingBox, RawTextBlock
 logger = logging.getLogger("ocr_pipeline.engine")
 
 
+# Singleton global pour PaddleOCR afin d'éviter les rechargements et l'explosion de la RAM
+_PADDLE_OCR_INSTANCE = None
+
+
 class PaddleOCREngine:
     """
     Encapsulation du moteur PaddleOCR.
 
-    Lazy-loading : PaddleOCR est initialisé à la première utilisation
-    (chargement des modèles ~3-10 s la première fois).
+    Lazy-loading & Singleton : PaddleOCR est initialisé une seule fois pour tout le
+    cycle de vie du serveur, évitant l'explosion de la RAM et les fuites mémoire.
 
     Usage::
 
@@ -150,14 +154,14 @@ class PaddleOCREngine:
     # ── Privé ─────────────────────────────────────────────────────────────────
 
     def _ensure_loaded(self) -> None:
-        """Initialise PaddleOCR à la première utilisation (lazy loading)."""
-        if self._engine is not None:
+        """Initialise PaddleOCR une seule fois (Singleton) et le réutilise."""
+        global _PADDLE_OCR_INSTANCE
+        if _PADDLE_OCR_INSTANCE is not None:
+            self._engine = _PADDLE_OCR_INSTANCE
             return
 
         logger.info(
-            "Chargement PaddleOCR "
-            f"(lang={self._cfg.language}, device={self._cfg.device}, "
-            f"textline_ori={self._cfg.use_textline_orientation})…"
+            "Chargement de l'instance unique globale PaddleOCR (Singleton)..."
         )
         try:
             from paddleocr import PaddleOCR
@@ -171,20 +175,21 @@ class PaddleOCREngine:
             import warnings
             warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-            self._engine = PaddleOCR(
+            # Instanciation unique et optimisée de PaddleOCR (ir_optim retiré pour compatibilité)
+            _PADDLE_OCR_INSTANCE = PaddleOCR(
                 lang='fr',
                 use_angle_cls=False,
                 enable_mkldnn=False,
                 det_limit_side_len=2048,
                 det_limit_type='max',
-                ir_optim=False,
             )
+            self._engine = _PADDLE_OCR_INSTANCE
         except Exception as exc:
             raise OCREngineError(
-                f"Erreur d'initialisation PaddleOCR : {exc}"
+                f"Erreur d'initialisation de l'instance unique PaddleOCR : {exc}"
             ) from exc
 
-        logger.info("PaddleOCR chargé avec succès.")
+        logger.info("PaddleOCR (Singleton) chargé avec succès.")
 
     @staticmethod
     def _to_bgr(image: np.ndarray) -> np.ndarray:
