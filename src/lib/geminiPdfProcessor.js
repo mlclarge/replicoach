@@ -115,15 +115,24 @@ Règles de parsing strictes à respecter :
     }
 
     // Nettoyer d'éventuels résidus markdown de code blocks (```json) bien que demandés exclus
-    let jsonText = content.trim();
-    if (jsonText.startsWith("```")) {
-      jsonText = jsonText
-        .replace(/^```(?:json)?/, "")
-        .replace(/```$/, "")
-        .trim();
+    let cleanText = content
+      .replace(/```json/gi, "")
+      .replace(/```/g, "")
+      .trim();
+    const firstBrace = cleanText.indexOf("{");
+    const firstBracket = cleanText.indexOf("[");
+    const firstIndex = Math.min(
+      firstBrace !== -1 ? firstBrace : Infinity,
+      firstBracket !== -1 ? firstBracket : Infinity,
+    );
+    const lastBrace = cleanText.lastIndexOf("}");
+    const lastBracket = cleanText.lastIndexOf("]");
+    const lastIndex = Math.max(lastBrace, lastBracket);
+    if (firstIndex !== Infinity && lastIndex !== -1) {
+      cleanText = cleanText.substring(firstIndex, lastIndex + 1);
     }
 
-    const parsedData = JSON.parse(jsonText);
+    const parsedData = JSON.parse(cleanText);
 
     if (!parsedData.title || !parsedData.characters || !parsedData.replicas) {
       throw new Error("Format JSON retourné incomplet ou invalide");
