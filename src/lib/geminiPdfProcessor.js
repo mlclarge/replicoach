@@ -94,6 +94,9 @@ Règles de parsing strictes à respecter :
             ],
           },
         ],
+        generationConfig: {
+          maxOutputTokens: 8192,
+        },
       }),
     });
 
