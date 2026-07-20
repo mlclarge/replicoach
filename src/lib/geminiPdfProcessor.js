@@ -70,32 +70,32 @@ Règles de parsing strictes à respecter :
       throw new Error("Clé API Gemini non configurée dans l'environnement");
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inlineData: {
-                    mimeType: "application/pdf",
-                    data: pdfBase64,
-                  },
-                },
-                {
-                  text: prompt,
-                },
-              ],
-            },
-          ],
-        }),
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    console.log("Appel Gemini sur :", url);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                inlineData: {
+                  mimeType: "application/pdf",
+                  data: pdfBase64,
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ],
+      }),
+    });
 
     if (onProgress) onProgress(0.8); // Réponse reçue, traitement
 
