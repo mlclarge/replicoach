@@ -334,6 +334,73 @@ function getSimilarity(s1, s2) {
   );
 }
 
+export class CharacterResolver {
+  constructor(refs) {
+    this.mainNames = [];
+    this.aliasMap = new Map();
+    this.refListEmpty = !refs || refs.length === 0;
+
+    if (!this.refListEmpty) {
+      for (const charStr of refs) {
+        const match = charStr.match(/^(.+?)(?:\s*\((.+?)\))?$/);
+        if (match) {
+          const mainName = match[1].trim().toUpperCase();
+          this.mainNames.push(mainName);
+          this.aliasMap.set(mainName, mainName);
+
+          if (match[2]) {
+            const aliases = match[2]
+              .split(",")
+              .map((a) => a.trim().toUpperCase());
+            for (const alias of aliases) {
+              this.aliasMap.set(alias, mainName);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  resolve(name) {
+    if (!name) return null;
+    const cleanName = name.trim().toUpperCase();
+    const excludedIfNotListed = ["CQ", "TOUS", "VOIX"];
+
+    if (this.refListEmpty) {
+      if (excludedIfNotListed.includes(cleanName)) return null;
+      if (cleanName.length < 3 && cleanName.length > 0) {
+        // Si pas de liste de ref, on jette quand même le bruit < 3 lettres, sauf si c'est normal ?
+        // Les initiales "C." etc sont déjà normalisées sans le ".".
+        // Mais dans le doute, appliquons la règle demandée si < 3.
+        if (cleanName.length < 3) return null;
+      }
+      return cleanName;
+    }
+
+    if (this.aliasMap.has(cleanName)) {
+      return this.aliasMap.get(cleanName);
+    }
+
+    let bestMatch = null;
+    let bestScore = 0.75;
+
+    for (const mainName of this.mainNames) {
+      const score = getSimilarity(cleanName, mainName);
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = mainName;
+      }
+    }
+
+    if (bestMatch) return bestMatch;
+
+    if (cleanName.length < 3) return null;
+    if (excludedIfNotListed.includes(cleanName)) return null;
+
+    return cleanName;
+  }
+}
+
 /**
  * Parse un texte de script et extrait les personnages et répliques
  */
@@ -645,73 +712,6 @@ function extractCharactersAndReplicas(
   const characters = new Map();
   const replicas = [];
   const knownCharacters = new Set(distribution.keys());
-
-  class CharacterResolver {
-    constructor(refs) {
-      this.mainNames = [];
-      this.aliasMap = new Map();
-      this.refListEmpty = !refs || refs.length === 0;
-
-      if (!this.refListEmpty) {
-        for (const charStr of refs) {
-          const match = charStr.match(/^(.+?)(?:\s*\((.+?)\))?$/);
-          if (match) {
-            const mainName = match[1].trim().toUpperCase();
-            this.mainNames.push(mainName);
-            this.aliasMap.set(mainName, mainName);
-
-            if (match[2]) {
-              const aliases = match[2]
-                .split(",")
-                .map((a) => a.trim().toUpperCase());
-              for (const alias of aliases) {
-                this.aliasMap.set(alias, mainName);
-              }
-            }
-          }
-        }
-      }
-    }
-
-    resolve(name) {
-      if (!name) return null;
-      const cleanName = name.trim().toUpperCase();
-      const excludedIfNotListed = ["CQ", "TOUS", "VOIX"];
-
-      if (this.refListEmpty) {
-        if (excludedIfNotListed.includes(cleanName)) return null;
-        if (cleanName.length < 3 && cleanName.length > 0) {
-          // Si pas de liste de ref, on jette quand même le bruit < 3 lettres, sauf si c'est normal ?
-          // Les initiales "C." etc sont déjà normalisées sans le ".".
-          // Mais dans le doute, appliquons la règle demandée si < 3.
-          if (cleanName.length < 3) return null;
-        }
-        return cleanName;
-      }
-
-      if (this.aliasMap.has(cleanName)) {
-        return this.aliasMap.get(cleanName);
-      }
-
-      let bestMatch = null;
-      let bestScore = 0.75;
-
-      for (const mainName of this.mainNames) {
-        const score = getSimilarity(cleanName, mainName);
-        if (score > bestScore) {
-          bestScore = score;
-          bestMatch = mainName;
-        }
-      }
-
-      if (bestMatch) return bestMatch;
-
-      if (cleanName.length < 3) return null;
-      if (excludedIfNotListed.includes(cleanName)) return null;
-
-      return cleanName;
-    }
-  }
 
   const resolver = new CharacterResolver(referenceCharacters);
 

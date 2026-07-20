@@ -11,7 +11,14 @@ import {
   isTextFile,
   extractTextFromTxt,
 } from "../lib/docProcessor";
-import { parseScript } from "../lib/scriptParser";
+import {
+  parseScript,
+  CharacterResolver,
+  generateGapsText,
+  generateCueWords,
+  detectGender,
+} from "../lib/scriptParser";
+import { processWithGemini } from "../lib/geminiPdfProcessor";
 import Loader from "../components/ui/Loader";
 
 // Types de fichiers acceptés
@@ -58,22 +65,48 @@ function Upload() {
   const [pastedText, setPastedText] = useState("");
   const [pastedTitle, setPastedTitle] = useState("");
 
+  // Option de scan : 'classic' (classique local) ou 'premium' (IA Gemini)
+  const [scanMode, setScanMode] = useState("classic");
+
   // États pour les métadonnées de personnages (V1 Post-OCR)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userCharacters, setUserCharacters] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
-  const onDrop = useCallback((acceptedFiles) => {
-    if (acceptedFiles.length > 0) {
-      const file = acceptedFiles[0];
-      console.log("Fichier détecté, ouverture modale...", file);
-      setSelectedFile(file);
-      setIsModalOpen(true);
-      setError(null);
-      setResults([]);
-      setShowResults(false);
-    }
-  }, []);
+  const onDrop = useCallback(
+    (acceptedFiles) => {
+      if (acceptedFiles.length > 0) {
+        const file = acceptedFiles[0];
+        setSelectedFile(file);
+        setError(null);
+        setResults([]);
+        setShowResults(false);
+
+        if (scanMode === "premium") {
+          const ext = file.name.toLowerCase().split(".").pop();
+          if (ext !== "pdf") {
+            setError(
+              "Le scan premium prend uniquement en charge les fichiers PDF pour le moment.",
+            );
+            return;
+          }
+          console.log(
+            "Fichier détecté, démarrage Scan Premium immédiat...",
+            file,
+          );
+          setFiles([file]);
+          handleProcessPremium(file);
+        } else {
+          console.log(
+            "Fichier détecté, ouverture modale (Scan Classique)...",
+            file,
+          );
+          setIsModalOpen(true);
+        }
+      }
+    },
+    [scanMode],
+  );
 
   const handleCharSubmit = async (e) => {
     e.preventDefault();
@@ -333,6 +366,170 @@ function Upload() {
     setProcessing(false);
   };
 
+  const handleProcessPremium = async (fileToProcess) => {
+    if (!fileToProcess || !user) return;
+
+    setProcessing(true);
+    setError(null);
+    setResults([]);
+    setCurrentFileIndex(1);
+    setCurrentFileName(fileToProcess.name);
+
+    const result = {
+      filename: fileToProcess.name,
+      success: false,
+      error: null,
+      title: "",
+      warning: null,
+      quality: "premium",
+      usedOCR: true,
+      confidence: 100,
+    };
+
+    try {
+      // Étape 1 : Analyse par Gemini
+      setProgress({
+        step: "Analyse intelligente par l'IA Gemini 2.5-Flash...",
+        percent: 20,
+      });
+
+      const parsedData = await processWithGemini(fileToProcess, (pct) => {
+        setProgress({
+          step: "Analyse intelligente par l'IA Gemini 2.5-Flash...",
+          percent: 20 + pct * 40, // De 20% à 60%
+        });
+      });
+
+      result.title = parsedData.title;
+
+      // Étape 2 : Harmonisation des personnages via le CharacterResolver
+      setProgress({
+        step: "Harmonisation des personnages...",
+        percent: 65,
+      });
+
+      const resolver = new CharacterResolver(
+        parsedData.characters.map((c) => c.name),
+      );
+      const CHARACTER_COLORS = [
+        "#8B1538",
+        "#2563EB",
+        "#059669",
+        "#D97706",
+        "#7C3AED",
+        "#DC2626",
+        "#0891B2",
+        "#4F46E5",
+        "#DB2777",
+        "#65A30D",
+      ];
+
+      const resolvedCharacters = parsedData.characters.map((char, index) => {
+        const resolvedName = resolver.resolve(char.name) || char.name;
+        return {
+          name: resolvedName,
+          color: CHARACTER_COLORS[index % CHARACTER_COLORS.length],
+          gender: detectGender(resolvedName, new Map()),
+        };
+      });
+
+      const resolvedReplicas = parsedData.replicas.map((replica) => {
+        const resolvedChar =
+          resolver.resolve(replica.character) || replica.character;
+        return {
+          character: resolvedChar,
+          text: replica.text.trim(),
+        };
+      });
+
+      const enrichedReplicas = resolvedReplicas.map((replica, index) => ({
+        ...replica,
+        textGaps: generateGapsText(replica.text),
+        cueWords: generateCueWords(resolvedReplicas, index),
+      }));
+
+      // Étape 3 : Upload optionnel du fichier vers Supabase Storage
+      setProgress({
+        step: "Upload du fichier...",
+        percent: 75,
+      });
+      let filePath = null;
+      try {
+        filePath = await uploadFile(fileToProcess, user.id);
+      } catch (storageError) {
+        console.warn("Échec d'upload storage ignoré :", storageError);
+      }
+
+      // Étape 4 : Enregistrement en base de données
+      setProgress({
+        step: "Création du script...",
+        percent: 80,
+      });
+      // On regroupe le full_text en une chaîne propre
+      const fullText = enrichedReplicas
+        .map((r) => `${r.character} : ${r.text}`)
+        .join("\n");
+
+      const script = await createScript({
+        user_id: user.id,
+        title: parsedData.title,
+        full_text: fullText,
+        original_filename: fileToProcess.name,
+        pdf_url: filePath,
+      });
+
+      setProgress({
+        step: "Création des personnages...",
+        percent: 85,
+      });
+      const characterMap = {};
+
+      for (const char of resolvedCharacters) {
+        const created = await addCharacter(script.id, {
+          name: char.name,
+          color: char.color,
+        });
+        characterMap[char.name] = created.id;
+      }
+
+      setProgress({
+        step: "Création des répliques...",
+        percent: 90,
+      });
+
+      const replicasToInsert = enrichedReplicas.map((rep, index) => ({
+        script_id: script.id,
+        character_id: characterMap[rep.character],
+        order_index: index,
+        text: rep.text,
+        text_gaps: rep.textGaps,
+        cue_words: rep.cueWords,
+      }));
+
+      if (replicasToInsert.length > 0) {
+        await addReplicas(replicasToInsert);
+      }
+
+      result.success = true;
+      result.charactersCount = resolvedCharacters.length;
+      result.replicasCount = enrichedReplicas.length;
+
+      setProgress({ step: "Terminé !", percent: 100 });
+      setResults([result]);
+      setShowResults(true);
+
+      // Rafraîchir les scripts
+      fetchScripts(user.id);
+    } catch (err) {
+      console.error(`Erreur Scan Premium ${fileToProcess.name}:`, err);
+      result.error = err.message;
+      setResults([result]);
+      setShowResults(true);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handleReset = () => {
     setFiles([]);
     setResults([]);
@@ -577,6 +774,50 @@ function Upload() {
       {/* Zone de drop (onglet fichier) */}
       {!processing && !showResults && activeTab === "file" && (
         <>
+          {/* Sélection du mode de scan (Classique / Premium) */}
+          <div className="grid grid-cols-2 gap-3 mb-6 p-1.5 bg-gray-800/80 rounded-2xl border border-gray-700/50">
+            <button
+              type="button"
+              onClick={() => setScanMode("classic")}
+              className={`flex flex-col items-center justify-center py-3.5 px-4 rounded-xl transition-all ${
+                scanMode === "classic"
+                  ? "bg-gray-900 border border-gold-500/30 text-white shadow-lg shadow-black/40"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📕</span>
+                <span className="font-semibold text-sm">Scan Classique</span>
+              </div>
+              <span className="text-[10px] text-gray-500 mt-1">
+                Gratuit • Saisie des personnages
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setScanMode("premium")}
+              className={`flex flex-col items-center justify-center py-3.5 px-4 rounded-xl transition-all ${
+                scanMode === "premium"
+                  ? "bg-gradient-to-br from-gold-500/10 via-amber-500/5 to-transparent border border-gold-500/50 text-gold-400 shadow-lg shadow-gold-500/5"
+                  : "text-gray-400 hover:text-gold-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">✨</span>
+                <span className="font-semibold text-sm flex items-center gap-1.5">
+                  Scan Express{" "}
+                  <span className="bg-gold-500 text-black text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                    Premium IA
+                  </span>
+                </span>
+              </div>
+              <span className="text-[10px] text-amber-500/80 mt-1">
+                Détection automatique ultra-rapide
+              </span>
+            </button>
+          </div>
+
           <div
             {...getRootProps()}
             className={`
