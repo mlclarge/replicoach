@@ -58,14 +58,36 @@ function Upload() {
   const [pastedText, setPastedText] = useState("");
   const [pastedTitle, setPastedTitle] = useState("");
 
+  // États pour les métadonnées de personnages (V1 Post-OCR)
+  const [showCharModal, setShowCharModal] = useState(false);
+  const [userCharacters, setUserCharacters] = useState("");
+  const [pendingFiles, setPendingFiles] = useState([]);
+
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
-      setFiles(acceptedFiles);
+      setPendingFiles(acceptedFiles);
+      setShowCharModal(true);
       setError(null);
       setResults([]);
       setShowResults(false);
     }
   }, []);
+
+  const handleCharSubmit = async (e) => {
+    e.preventDefault();
+    if (!userCharacters.trim()) return;
+    const filesToProcess = pendingFiles;
+    setFiles(filesToProcess);
+    setShowCharModal(false);
+
+    // Découper la liste de personnages de référence
+    const referenceList = userCharacters
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean);
+
+    await handleProcess(filesToProcess, referenceList);
+  };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -78,12 +100,12 @@ function Upload() {
    * Extrait le texte selon le type de fichier
    * Retourne { text, confidence, usedOCR, quality, warning }
    */
-  const extractText = async (file, onProgress) => {
+  const extractText = async (file, onProgress, referenceList = null) => {
     const extension = file.name.toLowerCase().split(".").pop();
 
     if (extension === "pdf") {
       // extractTextFromPDF retourne maintenant un objet avec métadonnées
-      return await extractTextFromPDF(file, onProgress);
+      return await extractTextFromPDF(file, onProgress, referenceList);
     } else if (extension === "docx" || extension === "doc") {
       const text = await extractTextFromWord(file, onProgress);
       return {
@@ -127,7 +149,12 @@ function Upload() {
     }
   };
 
-  const processOneFile = async (file, fileIndex, totalFiles) => {
+  const processOneFile = async (
+    file,
+    fileIndex,
+    totalFiles,
+    referenceList = null,
+  ) => {
     const result = {
       filename: file.name,
       success: false,
@@ -152,16 +179,20 @@ function Upload() {
         percent: basePercent + filePercent * 0.2,
       });
 
-      const extraction = await extractText(file, (extractProgress) => {
-        setProgress({
-          step:
-            extension === "pdf" ? `OCR en cours...` : `Lecture du fichier...`,
-          percent:
-            basePercent +
-            filePercent * 0.2 +
-            extractProgress * filePercent * 0.3,
-        });
-      });
+      const extraction = await extractText(
+        file,
+        (extractProgress) => {
+          setProgress({
+            step:
+              extension === "pdf" ? `OCR en cours...` : `Lecture du fichier...`,
+            percent:
+              basePercent +
+              filePercent * 0.2 +
+              extractProgress * filePercent * 0.3,
+          });
+        },
+        referenceList,
+      );
 
       // Récupérer le texte et les métadonnées de qualité
       const text = extraction.text;
@@ -178,7 +209,12 @@ function Upload() {
         step: "Analyse du script...",
         percent: basePercent + filePercent * 0.5,
       });
-      const { title, characters, replicas } = parseScript(text, file.name);
+
+      const { title, characters, replicas } = parseScript(
+        text,
+        file.name,
+        referenceList,
+      );
       result.title = title;
 
       setProgress({
@@ -242,8 +278,11 @@ function Upload() {
     return result;
   };
 
-  const handleProcess = async () => {
-    if (files.length === 0 || !user) return;
+  const handleProcess = async (
+    filesToProcess = files,
+    referenceList = null,
+  ) => {
+    if (filesToProcess.length === 0 || !user) return;
 
     setProcessing(true);
     setError(null);
@@ -252,9 +291,23 @@ function Upload() {
 
     const allResults = [];
 
-    for (let i = 0; i < files.length; i++) {
+    const refList =
+      referenceList ||
+      (userCharacters
+        ? userCharacters
+            .split(",")
+            .map((c) => c.trim().toUpperCase())
+            .filter(Boolean)
+        : null);
+
+    for (let i = 0; i < filesToProcess.length; i++) {
       setCurrentFileIndex(i + 1);
-      const result = await processOneFile(files[i], i, files.length);
+      const result = await processOneFile(
+        filesToProcess[i],
+        i,
+        filesToProcess.length,
+        refList,
+      );
       allResults.push(result);
     }
 
@@ -420,6 +473,57 @@ function Upload() {
 
   return (
     <div className="p-4 max-w-2xl mx-auto">
+      {/* Modale de saisie des personnages (V1 Post-OCR) */}
+      {showCharModal && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 border border-gold-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <h2 className="text-xl font-display text-gold-500 mb-4 flex items-center gap-2">
+              🎭 Personnages de la pièce
+            </h2>
+            <p className="text-gray-400 text-sm mb-6">
+              Saisissez la liste officielle des personnages pour nettoyer
+              automatiquement les erreurs du scan.
+            </p>
+            <form onSubmit={handleCharSubmit} className="space-y-4">
+              <div>
+                <label className="block text-gray-300 text-sm font-semibold mb-2">
+                  Noms des personnages *
+                </label>
+                <textarea
+                  value={userCharacters}
+                  onChange={(e) => setUserCharacters(e.target.value)}
+                  placeholder="Ex: JACQUES, LUCIE, JEAN, CORINNE"
+                  rows={4}
+                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors font-mono text-sm resize-none"
+                  required
+                  autoFocus
+                />
+                <p className="text-gray-500 text-xs mt-2 italic">
+                  Séparez les noms par des virgules.
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowCharModal(false)}
+                  className="btn-secondary flex-1 py-3 rounded-xl font-medium"
+                >
+                  Annuler
+                </button>
+                <button
+                  type="submit"
+                  disabled={!userCharacters.trim()}
+                  className="btn-gold flex-1 py-3 rounded-xl font-semibold disabled:opacity-50"
+                >
+                  Lancer le scan
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <h1 className="text-2xl font-display text-gold-500 mb-6">
         📄 Importer des textes
       </h1>
@@ -690,8 +794,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                   !result.success
                     ? "bg-red-500/10"
                     : result.warning
-                    ? "bg-yellow-500/10"
-                    : "bg-green-500/10"
+                      ? "bg-yellow-500/10"
+                      : "bg-green-500/10"
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -704,8 +808,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                         !result.success
                           ? "text-red-400"
                           : result.warning
-                          ? "text-yellow-400"
-                          : "text-green-400"
+                            ? "text-yellow-400"
+                            : "text-green-400"
                       }`}
                     >
                       <span>
@@ -730,8 +834,8 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
                               result.confidence >= 70
                                 ? "text-green-500"
                                 : result.confidence >= 50
-                                ? "text-yellow-500"
-                                : "text-red-500"
+                                  ? "text-yellow-500"
+                                  : "text-red-500"
                             }`}
                           >
                             • Confiance: {result.confidence}%
