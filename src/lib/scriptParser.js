@@ -646,43 +646,80 @@ function extractCharactersAndReplicas(
   const replicas = [];
   const knownCharacters = new Set(distribution.keys());
 
-  // Prétraitement de la liste de référence (nettoyage et passage en majuscules)
-  const refList = referenceCharacters
-    ? referenceCharacters.map((name) => name.trim().toUpperCase())
-    : null;
+  class CharacterResolver {
+    constructor(refs) {
+      this.mainNames = [];
+      this.aliasMap = new Map();
+      this.refListEmpty = !refs || refs.length === 0;
+
+      if (!this.refListEmpty) {
+        for (const charStr of refs) {
+          const match = charStr.match(/^(.+?)(?:\s*\((.+?)\))?$/);
+          if (match) {
+            const mainName = match[1].trim().toUpperCase();
+            this.mainNames.push(mainName);
+            this.aliasMap.set(mainName, mainName);
+
+            if (match[2]) {
+              const aliases = match[2]
+                .split(",")
+                .map((a) => a.trim().toUpperCase());
+              for (const alias of aliases) {
+                this.aliasMap.set(alias, mainName);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    resolve(name) {
+      if (!name) return null;
+      const cleanName = name.trim().toUpperCase();
+      const excludedIfNotListed = ["CQ", "TOUS", "VOIX"];
+
+      if (this.refListEmpty) {
+        if (excludedIfNotListed.includes(cleanName)) return null;
+        if (cleanName.length < 3 && cleanName.length > 0) {
+          // Si pas de liste de ref, on jette quand même le bruit < 3 lettres, sauf si c'est normal ?
+          // Les initiales "C." etc sont déjà normalisées sans le ".".
+          // Mais dans le doute, appliquons la règle demandée si < 3.
+          if (cleanName.length < 3) return null;
+        }
+        return cleanName;
+      }
+
+      if (this.aliasMap.has(cleanName)) {
+        return this.aliasMap.get(cleanName);
+      }
+
+      let bestMatch = null;
+      let bestScore = 0.75;
+
+      for (const mainName of this.mainNames) {
+        const score = getSimilarity(cleanName, mainName);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = mainName;
+        }
+      }
+
+      if (bestMatch) return bestMatch;
+
+      if (cleanName.length < 3) return null;
+      if (excludedIfNotListed.includes(cleanName)) return null;
+
+      return cleanName;
+    }
+  }
+
+  const resolver = new CharacterResolver(referenceCharacters);
 
   /**
    * Helper pour corriger un nom de personnage via Fuzzy Matching
    */
   const getCorrectedName = (rawName) => {
-    const name = rawName.trim().toUpperCase();
-    if (!name) return null;
-
-    // 1. Filtrage du bruit : 1 lettre seule (ex: "R", "A") -> ignoré si pas dans la liste officielle
-    if (name.length === 1) {
-      if (!refList || !refList.includes(name)) {
-        return null;
-      }
-    }
-
-    if (!refList) return name;
-
-    // 2. Recherche exacte
-    if (refList.includes(name)) return name;
-
-    // 3. Fuzzy matching (seuil de 70% de similarité)
-    let bestMatch = null;
-    let bestScore = 0.7; // Seuil minimum
-
-    for (const ref of refList) {
-      const score = getSimilarity(name, ref);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = ref;
-      }
-    }
-
-    return bestMatch || name; // Retourne le match ou le nom original si pas assez proche
+    return resolver.resolve(rawName);
   };
 
   /**
