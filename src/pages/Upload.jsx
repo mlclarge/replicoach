@@ -19,6 +19,7 @@ import {
   detectGender,
 } from "../lib/scriptParser";
 import { processWithGemini } from "../lib/geminiPdfProcessor";
+import { processWithPaddleOCR } from "../lib/paddleOcrService";
 import Loader from "../components/ui/Loader";
 
 // Types de fichiers acceptés
@@ -387,15 +388,15 @@ function Upload() {
     };
 
     try {
-      // Étape 1 : Analyse par Gemini
+      // Étape 1 : Analyse par PaddleOCR
       setProgress({
-        step: "Analyse intelligente par l'IA Gemini 2.5-Flash...",
+        step: "Analyse intelligente par le moteur Premium OCR...",
         percent: 20,
       });
 
-      const parsedData = await processWithGemini(fileToProcess, (pct) => {
+      const parsedData = await processWithPaddleOCR(fileToProcess, (pct) => {
         setProgress({
-          step: "Analyse intelligente par l'IA Gemini 2.5-Flash...",
+          step: "Analyse intelligente par le moteur Premium OCR...",
           percent: 20 + pct * 40, // De 20% à 60%
         });
       });

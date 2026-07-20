@@ -1,0 +1,23 @@
+# ─── Core ────────────────────────────────────────────────────────────────────
+# PDF
+PyMuPDF>=1.23.0
+
+# Image processing
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+Pillow>=10.0.0
+
+# ─── OCR Engine ───────────────────────────────────────────────────────────────
+# CPU version
+paddlepaddle>=2.6.0
+paddleocr>=2.7.0
+
+# ─── Post-processing ──────────────────────────────────────────────────────────
+# Fuzzy matching pour correction des noms de personnages
+rapidfuzz>=3.0.0
+
+# ─── API & Delivery ──────────────────────────────────────────────────────────
+fastapi>=0.100.0
+uvicorn>=0.22.0
+python-multipart>=0.0.6
+gunicorn>=21.2.0
