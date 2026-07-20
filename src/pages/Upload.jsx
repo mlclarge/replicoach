@@ -223,7 +223,12 @@ function Upload() {
         step: "Upload du fichier...",
         percent: basePercent + filePercent * 0.6,
       });
-      const filePath = await uploadFile(file, user.id);
+      let filePath = null;
+      try {
+        filePath = await uploadFile(file, user.id);
+      } catch (storageError) {
+        console.warn("Échec d'upload storage ignoré :", storageError);
+      }
 
       setProgress({
         step: "Sauvegarde...",
