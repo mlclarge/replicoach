@@ -95,7 +95,6 @@ Règles de parsing strictes à respecter :
           ],
           generationConfig: {
             temperature: 0.1,
-            responseMimeType: "application/json",
           },
         }),
       },
