@@ -59,14 +59,15 @@ function Upload() {
   const [pastedTitle, setPastedTitle] = useState("");
 
   // États pour les métadonnées de personnages (V1 Post-OCR)
-  const [showCharModal, setShowCharModal] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [userCharacters, setUserCharacters] = useState("");
-  const [pendingFiles, setPendingFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
-      setPendingFiles(acceptedFiles);
-      setShowCharModal(true);
+      const file = acceptedFiles[0];
+      setSelectedFile(file);
+      setIsModalOpen(true);
       setError(null);
       setResults([]);
       setShowResults(false);
@@ -75,10 +76,10 @@ function Upload() {
 
   const handleCharSubmit = async (e) => {
     e.preventDefault();
-    if (!userCharacters.trim()) return;
-    const filesToProcess = pendingFiles;
-    setFiles(filesToProcess);
-    setShowCharModal(false);
+    if (!userCharacters.trim() || !selectedFile) return;
+    const fileToProcess = selectedFile;
+    setFiles([fileToProcess]);
+    setIsModalOpen(false);
 
     // Découper la liste de personnages de référence
     const referenceList = userCharacters
@@ -86,7 +87,7 @@ function Upload() {
       .map((c) => c.trim().toUpperCase())
       .filter(Boolean);
 
-    await handleProcess(filesToProcess, referenceList);
+    await handleProcess([fileToProcess], referenceList);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -474,7 +475,7 @@ function Upload() {
   return (
     <div className="p-4 max-w-2xl mx-auto">
       {/* Modale de saisie des personnages (V1 Post-OCR) */}
-      {showCharModal && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-gray-900 border border-gold-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
             <h2 className="text-xl font-display text-gold-500 mb-4 flex items-center gap-2">
@@ -506,7 +507,7 @@ function Upload() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowCharModal(false)}
+                  onClick={() => setIsModalOpen(false)}
                   className="btn-secondary flex-1 py-3 rounded-xl font-medium"
                 >
                   Annuler
