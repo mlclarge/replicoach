@@ -79,14 +79,23 @@ function Upload() {
     e.preventDefault();
     if (!userCharacters.trim() || !selectedFile) return;
     const fileToProcess = selectedFile;
-    setFiles([fileToProcess]);
-    setIsModalOpen(false);
 
     // Découper la liste de personnages de référence
     const referenceList = userCharacters
       .split(",")
       .map((c) => c.trim().toUpperCase())
       .filter(Boolean);
+
+    // Mouchard temporaire requis au moment exact de la soumission de la modale
+    console.log(
+      "Démarrage du traitement de l'OCR pour le fichier :",
+      selectedFile,
+      "avec les personnages :",
+      referenceList,
+    );
+
+    setFiles([fileToProcess]);
+    setIsModalOpen(false);
 
     await handleProcess([fileToProcess], referenceList);
   };
@@ -332,6 +341,8 @@ function Upload() {
     setPastedText("");
     setPastedTitle("");
     setActiveTab("file");
+    setSelectedFile(null);
+    setUserCharacters("");
   };
 
   const successCount = results.filter((r) => r.success).length;
