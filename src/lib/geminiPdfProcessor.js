@@ -71,7 +71,7 @@ Règles de parsing strictes à respecter :
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
@@ -93,9 +93,6 @@ Règles de parsing strictes à respecter :
               ],
             },
           ],
-          generationConfig: {
-            temperature: 0.1,
-          },
         }),
       },
     );
