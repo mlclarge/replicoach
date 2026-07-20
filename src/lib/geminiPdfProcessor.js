@@ -63,7 +63,8 @@ Règles de parsing strictes à respecter :
 3. Résous les alias ou abréviations : si un personnage est parfois écrit sous forme courte (ex: "QQ", "QUER.", "QUERROCHOT"), associe toutes ses répliques à son nom principal unique (ex: "QUERROCHOT").
 4. Pour chaque réplique, le champ "character" doit correspondre exactement à l'une des entrées de la liste "characters".
 5. Si des bruits de fond ou des indications génériques non parlées comme "CQ", "VOIX" ou "TOUS" apparaissent, filtre-les ou attribue-les seulement s'ils parlent réellement dans une réplique d'ensemble.
-6. Ne retourne RIEN d'autre que du JSON. Pas de markdown, pas de blocs de code (comme \`\`\`json), pas de commentaires d'explications. Juste l'objet JSON.`;
+6. Ne retourne RIEN d'autre que du JSON. Pas de markdown, pas de blocs de code (comme \`\`\`json), pas de commentaires d'explications. Juste l'objet JSON.
+7. Tu dois IMPÉRATIVEMENT renvoyer un JSON valide. Veille à bien échapper tous les guillemets et caractères spéciaux à l'intérieur des chaînes de texte.`;
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -96,6 +97,7 @@ Règles de parsing strictes à respecter :
         ],
         generationConfig: {
           maxOutputTokens: 8192,
+          responseMimeType: "application/json",
         },
       }),
     });
