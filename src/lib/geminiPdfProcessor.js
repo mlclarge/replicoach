@@ -2,8 +2,6 @@
  * Service de traitement des PDF via Google Gemini (Scan Premium)
  */
 
-const API_ENDPOINT = "/api/gemini-pdf-proxy";
-
 /**
  * Convertit un fichier en chaîne Base64
  * @param {File} file - Le fichier à convertir
@@ -67,33 +65,58 @@ Règles de parsing strictes à respecter :
 5. Si des bruits de fond ou des indications génériques non parlées comme "CQ", "VOIX" ou "TOUS" apparaissent, filtre-les ou attribue-les seulement s'ils parlent réellement dans une réplique d'ensemble.
 6. Ne retourne RIEN d'autre que du JSON. Pas de markdown, pas de blocs de code (comme \`\`\`json), pas de commentaires d'explications. Juste l'objet JSON.`;
 
-    const response = await fetch(API_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Clé API Gemini non configurée dans l'environnement");
+    }
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  inlineData: {
+                    mimeType: "application/pdf",
+                    data: pdfBase64,
+                  },
+                },
+                {
+                  text: prompt,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
+        }),
       },
-      body: JSON.stringify({
-        pdfBase64,
-        prompt,
-      }),
-    });
+    );
 
     if (onProgress) onProgress(0.8); // Réponse reçue, traitement
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(
-        `Erreur service Gemini: ${errorData.error || response.statusText}`,
-      );
+      const errorMessage = errorData.error?.message || response.statusText;
+      throw new Error(`Erreur service Gemini: ${errorMessage}`);
     }
 
     const data = await response.json();
-    if (!data.content) {
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!content) {
       throw new Error("L'API Gemini n'a retourné aucun contenu");
     }
 
     // Nettoyer d'éventuels résidus markdown de code blocks (```json) bien que demandés exclus
-    let jsonText = data.content.trim();
+    let jsonText = content.trim();
     if (jsonText.startsWith("```")) {
       jsonText = jsonText
         .replace(/^```(?:json)?/, "")
