@@ -135,6 +135,8 @@ IMPORTANT : Tu dois impérativement échapper tous les guillemets doubles à l'i
       cleanText = cleanText.substring(firstIndex, lastIndex + 1);
     }
 
+    cleanText = cleanText.replace(/}\s*{/g, "},{");
+
     let jsonResult;
     try {
       jsonResult = JSON.parse(cleanText);
