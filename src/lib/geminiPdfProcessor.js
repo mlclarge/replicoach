@@ -64,7 +64,8 @@ Règles de parsing strictes à respecter :
 4. Pour chaque réplique, le champ "character" doit correspondre exactement à l'une des entrées de la liste "characters".
 5. Si des bruits de fond ou des indications génériques non parlées comme "CQ", "VOIX" ou "TOUS" apparaissent, filtre-les ou attribue-les seulement s'ils parlent réellement dans une réplique d'ensemble.
 6. Ne retourne RIEN d'autre que du JSON. Pas de markdown, pas de blocs de code (comme \`\`\`json), pas de commentaires d'explications. Juste l'objet JSON.
-7. Tu dois IMPÉRATIVEMENT renvoyer un JSON valide. Veille à bien échapper tous les guillemets et caractères spéciaux à l'intérieur des chaînes de texte.`;
+7. Tu dois IMPÉRATIVEMENT renvoyer un JSON valide. Veille à bien échapper tous les guillemets et caractères spéciaux à l'intérieur des chaînes de texte.
+IMPORTANT : Tu dois impérativement échapper tous les guillemets doubles à l'intérieur des chaînes de caractères avec un antislash (\"). Préfère l'utilisation de guillemets simples (') à l'intérieur du texte.`;
 
     const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -134,7 +135,19 @@ Règles de parsing strictes à respecter :
       cleanText = cleanText.substring(firstIndex, lastIndex + 1);
     }
 
-    const parsedData = JSON.parse(cleanText);
+    let jsonResult;
+    try {
+      jsonResult = JSON.parse(cleanText);
+    } catch (error) {
+      console.error(
+        "🚨 Erreur de parsing JSON. Voici le texte brut généré par Gemini qui a causé l'erreur :",
+      );
+      console.log(cleanText);
+      throw new Error(
+        "Erreur de syntaxe JSON renvoyée par l'IA. Vérifiez la console pour voir le texte brut.",
+      );
+    }
+    const parsedData = jsonResult;
 
     if (!parsedData.title || !parsedData.characters || !parsedData.replicas) {
       throw new Error("Format JSON retourné incomplet ou invalide");
