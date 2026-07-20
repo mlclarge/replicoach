@@ -119,7 +119,7 @@ async function extractWithOCR(
         viewport: viewport,
       }).promise;
 
-      // Sécurité : ignorer les images trop petites pour éviter le crash de Tesseract
+      // Sécurité : ignorer les images trop petites pour éviter le crash de Tesseract et accélérer l'analyse
       if (canvas.width < 20 || canvas.height < 20) {
         console.warn(
           `Page ${i} ignorée pour l'OCR : image trop petite (${canvas.width}x${canvas.height})`,
