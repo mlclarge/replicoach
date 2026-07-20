@@ -70,7 +70,7 @@ Règles de parsing strictes à respecter :
       throw new Error("Clé API Gemini non configurée dans l'environnement");
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
     console.log("Appel Gemini sur :", url);
 
     const response = await fetch(url, {
