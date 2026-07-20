@@ -139,6 +139,25 @@ IMPORTANT : Tu dois impérativement échapper tous les guillemets doubles à l'i
 
     let jsonResult;
     try {
+      // Supprimer les espaces de fin pour vérifier la terminaison
+      let trimmedText = cleanText.trim();
+      // Si le JSON ne se termine pas proprement par la fermeture de l'objet principal
+      if (!trimmedText.endsWith("}")) {
+        // Trouver la dernière accolade fermante valide (fin d'une réplique)
+        const lastBrace = trimmedText.lastIndexOf("}");
+        if (lastBrace !== -1) {
+          trimmedText = trimmedText.substring(0, lastBrace + 1);
+        }
+      }
+      // Si on a fini sur une réplique mais que le tableau/objet n'est pas fermé
+      if (
+        trimmedText.endsWith("}") &&
+        !trimmedText.replace(/\s/g, "").endsWith("]}")
+      ) {
+        trimmedText += "]}"; // Force la fermeture du tableau de répliques et de l'objet principal
+      }
+      cleanText = trimmedText;
+
       jsonResult = JSON.parse(cleanText);
     } catch (error) {
       console.error(
