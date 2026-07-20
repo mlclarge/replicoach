@@ -66,6 +66,7 @@ function Upload() {
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length > 0) {
       const file = acceptedFiles[0];
+      console.log("Fichier détecté, ouverture modale...", file);
       setSelectedFile(file);
       setIsModalOpen(true);
       setError(null);
@@ -331,6 +332,8 @@ function Upload() {
   const successCount = results.filter((r) => r.success).length;
   const errorCount = results.filter((r) => !r.success).length;
   const warningCount = results.filter((r) => r.success && r.warning).length;
+
+  console.log("État isModalOpen actuel :", isModalOpen);
 
   // Page d'accès refusé pour les non-admins
   if (!isAdmin) {
