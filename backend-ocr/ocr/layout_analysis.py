@@ -55,8 +55,8 @@ _RE_INLINE_STAGE = re.compile(r"\s*\(.*?\)\s*$")   # didascalie en fin de ligne
 # Format "PERSONNAGE [(stage)] - réplique" sur une seule ligne
 # Exemples : "JACQUES (gémissant) - Mais qu'est-ce...", "LUCIE - Enfin chéri...", "QQ. - ..."
 _RE_CHAR_DIALOGUE = re.compile(
-    r"^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ-]*\s*\.?\s*"
-    r"(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ-]*\s*\.?\s*){0,2})"
+    r"^([A-Za-zÀ-ÿœæŒÆ][A-Za-zÀ-ÿœæŒÆ-]*\s*\.?\s*"
+    r"(?:\s+[A-Za-zÀ-ÿœæŒÆ][A-Za-zÀ-ÿœæŒÆ-]*\s*\.?\s*){0,2})"
     r"(?:\s*\([^)]*\))*"   # zéro ou plusieurs stages entre ()
     r"\s*(?:[-\u2013\u2014]\s+|:\s*)"  # tiret séparateur ou deux-points
     r"(.+)$",
@@ -182,11 +182,15 @@ class LineClassifier:
         # le nom + la réplique sur la même ligne.
         char_name = self._try_detect_inline_char_dialogue(text)
         if char_name is not None:
+            if char_name == "__REJECTED_CHAR__":
+                return ElementType.STAGE_DIRECTION, text, None
             return ElementType.DIALOGUE, text, char_name
 
         # ── Nom de personnage seul ────────────────────────────────────────────
         char_name = self._try_detect_character(text)
         if char_name is not None:
+            if char_name == "__REJECTED_CHAR__":
+                return ElementType.STAGE_DIRECTION, text, None
             return ElementType.CHARACTER, text, char_name
 
         # ── Dialogue (par défaut) ─────────────────────────────────────────────
@@ -208,13 +212,13 @@ class LineClassifier:
         # Nettoyage robuste de tous les points abréviaitfs et espaces (ex: "QQ ." ou "QQ." -> "QQ")
         candidate = m.group(1).replace(".", "").strip()
 
-        # Si l'on a une liste connue de personnages, s'appuyer dessus de manière dynamique et insensible à la casse
+        # 1. Correspondance exacte rapide insensible à la casse d'abord
         if self._corrector and self._corrector._known_chars:
             for known in self._corrector._known_chars:
                 if candidate.lower().strip() == known.lower().strip():
                     return known
 
-        # Sinon, logique générique
+        # 2. Sinon, logique générique
         letters = _RE_LETTERS.findall(candidate)
         if len(letters) < 2:
             return None
@@ -224,7 +228,21 @@ class LineClassifier:
         if len(uppers) / len(letters) < self._cfg.character_caps_min_ratio:
             return None
 
-        # Correction fuzzy si corrector disponible
+        # 3. Validation Whitelist bloquante stricte car la ligne a la forme d'un personnage inline
+        if self._corrector and self._corrector._known_chars:
+            from rapidfuzz import fuzz
+            matched_known = None
+            for known in self._corrector._known_chars:
+                if fuzz.ratio(candidate.lower().strip(), known.lower().strip()) > 80:
+                    matched_known = known
+                    break
+            
+            if matched_known is not None:
+                return matched_known
+            else:
+                return "__REJECTED_CHAR__"
+
+        # Correction fuzzy si corrector disponible (cas sans whitelist)
         if self._corrector:
             corrected, _ = self._corrector.correct_character_name(candidate)
             return corrected
@@ -263,7 +281,7 @@ class LineClassifier:
         if not candidate or candidate.upper() in ["ET", "OU", "LE", "LA", "LES", "UN", "UNE", "DES"]:
             return None
 
-        # Vérification dynamique par rapport aux personnages connus d'abord (insensible à la casse)
+        # 1. Correspondance exacte rapide insensible à la casse d'abord
         if self._corrector and self._corrector._known_chars:
             for known in self._corrector._known_chars:
                 if candidate.lower().strip() == known.lower().strip():
@@ -284,7 +302,21 @@ class LineClassifier:
         if ratio < self._cfg.character_caps_min_ratio:
             return None
 
-        # Tentative de correction fuzzy (via dictionnaire connu si fourni)
+        # 3. Validation Whitelist bloquante stricte car la ligne a la forme d'un personnage
+        if self._corrector and self._corrector._known_chars:
+            from rapidfuzz import fuzz
+            matched_known = None
+            for known in self._corrector._known_chars:
+                if fuzz.ratio(candidate.lower().strip(), known.lower().strip()) > 80:
+                    matched_known = known
+                    break
+            
+            if matched_known is not None:
+                return matched_known
+            else:
+                return "__REJECTED_CHAR__"
+
+        # Tentative de correction fuzzy (via dictionnaire connu si fourni, cas sans whitelist d'utilisateur)
         if self._corrector:
             corrected, _ = self._corrector.correct_character_name(candidate)
             return corrected

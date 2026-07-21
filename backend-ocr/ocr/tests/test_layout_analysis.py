@@ -407,9 +407,14 @@ class TestAdvancedOptimizations(unittest.TestCase):
         elems = script.all_elements
         dialogues = [e for e in elems if e.element_type == ElementType.DIALOGUE]
         
-        # Seule la réplique de William FARELL doit être conservée
+        # Seule la réplique de William FARELL est un dialogue
         self.assertEqual(len(dialogues), 1)
         self.assertEqual(dialogues[0].character, "William FARELL")
+        
+        # FETE DU VILLAGE retombe dans le flux de texte classique comme didascalie
+        stage_dirs = [e for e in elems if e.element_type == ElementType.STAGE_DIRECTION]
+        self.assertEqual(len(stage_dirs), 1)
+        self.assertEqual(stage_dirs[0].text, "FETE DU VILLAGE (MUSIQUE + LUMIERE)")
 
 
 if __name__ == "__main__":
