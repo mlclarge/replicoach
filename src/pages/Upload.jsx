@@ -393,12 +393,16 @@ function Upload() {
         percent: 20,
       });
 
-      const parsedData = await processWithPaddleOCR(fileToProcess, (pct) => {
-        setProgress({
-          step: "Analyse intelligente par le moteur Premium OCR...",
-          percent: 20 + pct * 40, // De 20% à 60%
-        });
-      });
+      const parsedData = await processWithPaddleOCR(
+        fileToProcess,
+        (pct, message) => {
+          setProgress({
+            step:
+              message || "Analyse intelligente par le moteur Premium OCR...",
+            percent: 20 + pct * 40, // De 20% à 60%
+          });
+        },
+      );
 
       result.title = parsedData.title;
 
