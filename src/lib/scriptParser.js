@@ -1,3 +1,8 @@
+import {
+  detectKnownSpeakerCue,
+  resolveAgainstKnownList,
+} from "./characterListValidator.js";
+
 /**
  * Parser de scripts théâtraux - Version 3.1
  * CORRECTION: Encodage UTF-8 + nettoyage espaces début de ligne
@@ -749,16 +754,34 @@ function extractCharactersAndReplicas(
   // Trouver où commence le dialogue
   const dialogueStart = findDialogueStart(lines, format);
 
+  const hasReferenceList =
+    referenceCharacters && referenceCharacters.length > 0;
+
   for (let i = dialogueStart; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
     if (/^Page \d+/i.test(line) || /^\d+\s*\/\s*\d+$/.test(line)) continue;
 
-    // Essayer de matcher une réplique selon le format
-    const match = matchReplicaLine(line, lines, i, knownCharacters, format);
+    let match = null;
+    let isFromReferenceList = false;
+
+    if (hasReferenceList) {
+      const knownCue = detectKnownSpeakerCue(line, referenceCharacters);
+      if (knownCue) {
+        match = {
+          character: knownCue.character,
+          text: knownCue.text,
+        };
+        isFromReferenceList = true;
+      }
+    } else {
+      match = matchReplicaLine(line, lines, i, knownCharacters, format);
+    }
 
     if (match) {
-      const correctedNames = splitJointNames(match.character);
+      const correctedNames = isFromReferenceList
+        ? [match.character]
+        : splitJointNames(match.character);
 
       if (correctedNames.length > 0) {
         // Sauvegarder la réplique précédente
@@ -769,8 +792,6 @@ function extractCharactersAndReplicas(
           });
         }
 
-        // Pour l'instant, on prend le premier personnage si plusieurs (JACQUES ET JEAN -> JACQUES)
-        // ou on pourrait dupliquer la réplique. Ici on reste simple.
         currentCharacter = correctedNames[0];
         currentText = match.text;
 
@@ -786,31 +807,55 @@ function extractCharactersAndReplicas(
         i += match.skipLines;
       }
     } else if (currentCharacter) {
-      // Vérifier si c'est un changement de personnage inline (format tiret + nom connu)
-      // Ex: "JACQUES (désignant son œil) - T'es contente de toi ?"
-      const inlineDash = matchInlineDash(line, knownCharacters);
-      if (inlineDash) {
-        const correctedNames = splitJointNames(inlineDash.character);
-        if (correctedNames.length > 0) {
-          if (currentText.trim()) {
-            replicas.push({
-              character: currentCharacter,
-              text: cleanReplicaText(currentText),
-            });
-          }
-          currentCharacter = correctedNames[0];
-          currentText = inlineDash.text;
-          if (!characters.has(currentCharacter)) {
-            characters.set(currentCharacter, { name: currentCharacter });
-            knownCharacters.add(currentCharacter);
+      if (hasReferenceList) {
+        const inlineDash = matchInlineDash(line, knownCharacters);
+        if (inlineDash) {
+          const resolvedDashChar = resolveAgainstKnownList(
+            inlineDash.character,
+            referenceCharacters,
+          );
+          if (resolvedDashChar) {
+            if (currentText.trim()) {
+              replicas.push({
+                character: currentCharacter,
+                text: cleanReplicaText(currentText),
+              });
+            }
+            currentCharacter = resolvedDashChar;
+            currentText = inlineDash.text;
+            if (!characters.has(currentCharacter)) {
+              characters.set(currentCharacter, { name: currentCharacter });
+              knownCharacters.add(currentCharacter);
+            }
+          } else {
+            currentText += " " + line;
           }
         } else {
-          // Si nom rejeté, on traite comme une suite de texte
           currentText += " " + line;
         }
       } else {
-        // Suite de la réplique
-        currentText += " " + line;
+        const inlineDash = matchInlineDash(line, knownCharacters);
+        if (inlineDash) {
+          const correctedNames = splitJointNames(inlineDash.character);
+          if (correctedNames.length > 0) {
+            if (currentText.trim()) {
+              replicas.push({
+                character: currentCharacter,
+                text: cleanReplicaText(currentText),
+              });
+            }
+            currentCharacter = correctedNames[0];
+            currentText = inlineDash.text;
+            if (!characters.has(currentCharacter)) {
+              characters.set(currentCharacter, { name: currentCharacter });
+              knownCharacters.add(currentCharacter);
+            }
+          } else {
+            currentText += " " + line;
+          }
+        } else {
+          currentText += " " + line;
+        }
       }
     }
   }
