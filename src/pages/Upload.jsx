@@ -18,7 +18,6 @@ import {
   generateCueWords,
   detectGender,
 } from "../lib/scriptParser";
-import { processWithGemini } from "../lib/geminiPdfProcessor";
 import { processWithPaddleOCR } from "../lib/paddleOcrService";
 import Loader from "../components/ui/Loader";
 

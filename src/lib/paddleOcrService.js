@@ -19,6 +19,16 @@ export async function processWithPaddleOCR(file, onProgress) {
     const formData = new FormData();
     formData.append("file", file);
 
+    const hasEnvUrl = !!(
+      import.meta.env.VITE_BACKEND_OCR_URL || import.meta.env.VITE_API_URL
+    );
+    if (!hasEnvUrl) {
+      console.warn(
+        "⚠️ [PaddleOCR] Ni VITE_BACKEND_OCR_URL ni VITE_API_URL ne sont définies dans l'environnement. " +
+          "Utilisation du fallback local : http://127.0.0.1:8000/api/ocr",
+      );
+    }
+
     const backendUrl =
       import.meta.env.VITE_BACKEND_OCR_URL ||
       import.meta.env.VITE_API_URL ||
@@ -31,7 +41,7 @@ export async function processWithPaddleOCR(file, onProgress) {
       url = url.replace(/\/$/, "") + "/api/extract-premium";
     }
 
-    console.log("Appel PaddleOCR Premium sur :", url);
+    console.log("🚀 [PaddleOCR] Appel du service premium sur :", url);
 
     if (onProgress) onProgress(0.3);
 
