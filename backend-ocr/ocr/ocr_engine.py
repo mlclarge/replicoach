@@ -179,7 +179,8 @@ class PaddleOCREngine:
             _PADDLE_OCR_INSTANCE = PaddleOCR(
                 lang='fr',
                 use_angle_cls=False,
-                enable_mkldnn=False,
+                enable_mkldnn=True,
+                cpu_threads=2,
                 det_limit_side_len=2048,
                 det_limit_type='max',
             )

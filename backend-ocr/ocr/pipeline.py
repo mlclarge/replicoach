@@ -171,6 +171,18 @@ class OCRPipeline:
             page_results.append(page_result)
             self._save_page_cache(pdf_path, page_num, page_result)
 
+            # Libération explicite de la mémoire pour éviter les crashs OOM
+            if "image" in locals():
+                del image
+            if "pre" in locals():
+                del pre
+            if "blocks" in locals():
+                del blocks
+            if "page_result" in locals():
+                del page_result
+            import gc
+            gc.collect()
+
         # ── Étape 6 : analyse de structure ────────────────────────────────
         logger.info("Analyse de structure…")
         script = self._analyzer.build_script(page_results, title=title)

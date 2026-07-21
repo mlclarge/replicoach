@@ -203,6 +203,11 @@ class PDFReader:
                         if grayscale
                         else arr.reshape(pix.height, pix.width, 3)
                     )
+                    # Libération mémoire stricte du pixmap
+                    del pix
+                    import gc
+                    gc.collect()
+                    
                     yield idx + 1, arr
                 except Exception as exc:
                     logger.warning(f"Page {idx + 1} : rendu impossible ({exc}), ignorée.")

@@ -74,8 +74,8 @@ class OCREngineConfig:
     text_det_box_thresh: float = 0.5
     text_det_unclip_ratio: float = 1.8
     text_recognition_batch_size: int = 6
-    cpu_threads: int = 4
-    enable_mkldnn: bool = False           # Désactivé : bug oneDNN sur Windows
+    cpu_threads: int = 2
+    enable_mkldnn: bool = True
 
 
 @dataclass
@@ -124,8 +124,8 @@ class LayoutConfig:
 class PerformanceConfig:
     """Paramètres de performance et de reprise."""
 
-    dpi: int = 300                          # Résolution de rendu (minimum recommandé)
-    max_dpi: int = 600                      # Plafond configurable
+    dpi: int = 150                          # Résolution de rendu (minimum recommandé)
+    max_dpi: int = 150                      # Plafond configurable (150 DPI max demandé pour limiter la RAM)
     num_threads: int = 4
     enable_cache: bool = True               # Cache par page (reprise après coupure)
     cache_dir: Optional[Path] = None        # Défaut : .ocr_cache/ à côté du script
@@ -168,7 +168,7 @@ class OCRConfig:
     def for_theater_play(
         cls,
         character_names: Optional[List[str]] = None,
-        dpi: int = 200,
+        dpi: int = 150,
         use_gpu: bool = False,
     ) -> "OCRConfig":
         """
@@ -177,10 +177,10 @@ class OCRConfig:
         Active : CLAHE, deskew, sharpen (léger).
         Désactive : denoise (lent, inutile pour PP-OCRv6),
                     binarisation adaptive (nuit à PP-OCRv6 qui préfère niveaux de gris).
-        DPI 200 : suffisant pour PP-OCRv6 PP-OCRv6 (vs 300 = 2x plus lent sans gain).
+        DPI 150 : suffisant pour PP-OCRv6 (vs 300 = 2x plus lent sans gain).
 
         :param character_names: liste des noms de personnages connus
-        :param dpi: résolution de rendu (300 = bon compromis qualité/vitesse)
+        :param dpi: résolution de rendu (150 = bon compromis qualité/vitesse)
         :param use_gpu: True si GPU PaddlePaddle disponible
         """
         cfg = cls()

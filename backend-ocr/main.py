@@ -112,6 +112,10 @@ async def perform_ocr(
             with open(json_path, "r", encoding="utf-8") as f:
                 json_data = json.load(f)
 
+        # Forcer gc.collect() avant de renvoyer la réponse
+        import gc
+        gc.collect()
+
         return {
             "markdown": markdown_text,
             "json": json_data,
@@ -125,6 +129,8 @@ async def perform_ocr(
         if os.path.exists(tmp_pdf_path):
             os.remove(tmp_pdf_path)
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        import gc
+        gc.collect()
 
 @app.post("/api/extract-premium")
 async def extract_premium(
@@ -188,6 +194,10 @@ async def extract_premium(
                     "text": elem.text
                 })
 
+        # Forcer gc.collect() avant de renvoyer la réponse
+        import gc
+        gc.collect()
+
         return {
             "title": result.script.title or title or file.filename.rsplit('.', 1)[0],
             "characters": detected_chars,
@@ -201,6 +211,8 @@ async def extract_premium(
         if os.path.exists(tmp_pdf_path):
             os.remove(tmp_pdf_path)
         shutil.rmtree(tmp_dir, ignore_errors=True)
+        import gc
+        gc.collect()
 
 @app.get("/api/health")
 def health_check():

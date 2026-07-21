@@ -5,6 +5,11 @@ FROM python:3.10-slim
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Limiter la surconsommation de threads par OpenCV et OpenBLAS/Paddle sur Render
+ENV OMP_NUM_THREADS=1
+ENV MKL_NUM_THREADS=1
+ENV OPENBLAS_NUM_THREADS=1
+
 # Répertoire de travail
 WORKDIR /app
 
