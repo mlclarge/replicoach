@@ -379,6 +379,38 @@ class TestAdvancedOptimizations(unittest.TestCase):
         self.assertEqual(len(jacques_replies), 5) # 3 de base + 1 typo + 1 collective
         self.assertEqual(len(lucie_replies), 4) # 3 de base + 1 collective
 
+    def test_case_sensitivity_and_strict_filtering(self):
+        """
+        Teste que la détection accepte la casse mixte (William FARELL)
+        et que le filtrage strict élimine les faux positifs (FETE DU VILLAGE).
+        """
+        blocks = [
+            _block("William FARELL: Bonjour... Alors Ça gaze ou j'vous tase ?", 50, 100),
+            _block("FETE DU VILLAGE (MUSIQUE + LUMIERE)", 50, 200),
+        ]
+        page = _page(blocks)
+        
+        layout_cfg = LayoutConfig()
+        corr_cfg = CorrectionConfig(
+            character_names=["JOHN", "CHARLIE", "SAM", "JEFF PATERSON", "William FARELL", "MARY", "LOLA", "NOLAN", "JULIA", "JACKIE"]
+        )
+        analyzer = LayoutAnalyzer(layout_cfg, corr_cfg)
+        script = analyzer.build_script([page])
+
+        # "William FARELL" doit être présent dans les personnages avec sa casse originale
+        self.assertIn("William FARELL", script.characters)
+        
+        # "FETE DU VILLAGE" ne doit PAS être présent dans le script final car non fourni dans la liste utilisateur
+        self.assertNotIn("FETE DU VILLAGE", script.characters)
+        
+        # Vérification des éléments de dialogue
+        elems = script.all_elements
+        dialogues = [e for e in elems if e.element_type == ElementType.DIALOGUE]
+        
+        # Seule la réplique de William FARELL doit être conservée
+        self.assertEqual(len(dialogues), 1)
+        self.assertEqual(dialogues[0].character, "William FARELL")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

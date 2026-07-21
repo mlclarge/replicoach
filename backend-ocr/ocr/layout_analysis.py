@@ -58,9 +58,9 @@ _RE_CHAR_DIALOGUE = re.compile(
     r"^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ-]*\s*\.?\s*"
     r"(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆ-]*\s*\.?\s*){0,2})"
     r"(?:\s*\([^)]*\))*"   # zéro ou plusieurs stages entre ()
-    r"\s*[-\u2013\u2014]\s+"  # tiret séparateur (ASCII, en-dash, em-dash)
+    r"\s*(?:[-\u2013\u2014]\s+|:\s*)"  # tiret séparateur ou deux-points
     r"(.+)$",
-    re.DOTALL,
+    re.DOTALL | re.IGNORECASE,
 )
 
 
@@ -208,20 +208,28 @@ class LineClassifier:
         # Nettoyage robuste de tous les points abréviaitfs et espaces (ex: "QQ ." ou "QQ." -> "QQ")
         candidate = m.group(1).replace(".", "").strip()
 
-        # Vérifier que le candidat est bien majoritairement en majuscules
+        # Si l'on a une liste connue de personnages, s'appuyer dessus de manière dynamique et insensible à la casse
+        if self._corrector and self._corrector._known_chars:
+            for known in self._corrector._known_chars:
+                if candidate.lower().strip() == known.lower().strip():
+                    return known
+
+        # Sinon, logique générique
         letters = _RE_LETTERS.findall(candidate)
         if len(letters) < 2:
             return None
+            
+        # On applique la vérification du ratio de majuscules si le nom n'est pas dans la liste connue
         uppers = _RE_UPPER_LETTERS.findall(candidate)
         if len(uppers) / len(letters) < self._cfg.character_caps_min_ratio:
             return None
 
         # Correction fuzzy si corrector disponible
         if self._corrector:
-            corrected, _ = self._corrector.correct_character_name(candidate.upper())
+            corrected, _ = self._corrector.correct_character_name(candidate)
             return corrected
 
-        return candidate.upper()
+        return candidate
 
     def _try_detect_character(self, text: str) -> Optional[str]:
         """
@@ -242,20 +250,6 @@ class LineClassifier:
         if not core:
             return None
 
-        words = core.split()
-        if len(words) > self._cfg.character_max_words:
-            return None
-
-        letters = _RE_LETTERS.findall(core)
-        if len(letters) < 2:
-            return None
-
-        uppers = _RE_UPPER_LETTERS.findall(core)
-        ratio = len(uppers) / len(letters)
-
-        if ratio < self._cfg.character_caps_min_ratio:
-            return None
-
         # Nettoyage des ponctuations de fin de nom courantes (point, deux-points, point-virgule, tirets)
         core_cleaned = core.strip().rstrip(". :;-—–_")
         
@@ -266,10 +260,29 @@ class LineClassifier:
         candidate = core_cleaned.strip().strip("-—–_")
         
         # Si après nettoyage il ne reste rien ou c'est un mot de liaison seul (très improbable comme personnage)
-        if not candidate or candidate in ["ET", "OU", "LE", "LA", "LES", "UN", "UNE", "DES"]:
+        if not candidate or candidate.upper() in ["ET", "OU", "LE", "LA", "LES", "UN", "UNE", "DES"]:
             return None
-            
-        candidate = candidate.upper()
+
+        # Vérification dynamique par rapport aux personnages connus d'abord (insensible à la casse)
+        if self._corrector and self._corrector._known_chars:
+            for known in self._corrector._known_chars:
+                if candidate.lower().strip() == known.lower().strip():
+                    return known
+
+        # Validation par nombre de mots et lettres
+        words = candidate.split()
+        if len(words) > self._cfg.character_max_words:
+            return None
+
+        letters = _RE_LETTERS.findall(candidate)
+        if len(letters) < 2:
+            return None
+
+        # On applique la vérification du ratio de majuscules si le nom n'est pas dans la liste connue
+        uppers = _RE_UPPER_LETTERS.findall(candidate)
+        ratio = len(uppers) / len(letters)
+        if ratio < self._cfg.character_caps_min_ratio:
+            return None
 
         # Tentative de correction fuzzy (via dictionnaire connu si fourni)
         if self._corrector:
@@ -623,7 +636,7 @@ class LayoutAnalyzer:
         log_debug_ocr(f"\n=================== NOUVEAU SCAN OCR ({time.strftime('%Y-%m-%d %H:%M:%S')}) ===================")
         log_debug_ocr(f"[DEBUG OCR] Liste stricte et obligatoire des comédiens de référence : {reference_chars}")
 
-        # 1. Collecter tous les personnages bruts détectés dans le script
+        # 1. Collecter tous les personnages bruts d'abord
         all_detected_chars = {
             e.character 
             for e in script.all_elements 
@@ -632,8 +645,9 @@ class LayoutAnalyzer:
 
         replacements = {}
 
-        # 2. Associer chaque personnage détecté à l'un des comédiens de la liste obligatoire de référence
+        # 2. Associer chaque personnage détecté à l'un des comédiens de la liste de référence (filtrage strict insensible à la casse / .strip())
         for raw_char in all_detected_chars:
+            raw_char_clean = raw_char.lower().strip()
             raw_char_up = raw_char.upper().strip()
             
             # Étape 0 : Correspondance via la table d'abréviations/alias explicites de l'utilisateur (priorité maximale !)
@@ -643,38 +657,58 @@ class LayoutAnalyzer:
                 replacements[raw_char] = resolved_name
                 continue
             
-            # Match exact direct
-            if raw_char_up in reference_chars:
-                replacements[raw_char] = raw_char_up
+            # Match exact direct insensible à la casse
+            matched_ref = None
+            for ref in reference_chars:
+                if ref.lower().strip() == raw_char_clean:
+                    matched_ref = ref
+                    break
+            
+            if matched_ref:
+                replacements[raw_char] = matched_ref
                 continue
 
             # Étape A : Essai d'abréviation/alias (ex: QQ -> QUERROCHOT, LU -> LUCIE)
-            matched_abbrev = is_abbreviation(raw_char_up, reference_chars)
+            matched_abbrev = is_abbreviation(raw_char_up, [r.upper() for r in reference_chars])
             if matched_abbrev:
-                log_debug_ocr(f"[DEBUG OCR] Association par abréviation détectée : '{raw_char}' -> '{matched_abbrev}'")
-                replacements[raw_char] = matched_abbrev
-                continue
+                for ref in reference_chars:
+                    if ref.upper() == matched_abbrev:
+                        matched_ref = ref
+                        break
+                if matched_ref:
+                    log_debug_ocr(f"[DEBUG OCR] Association par abréviation détectée : '{raw_char}' -> '{matched_ref}'")
+                    replacements[raw_char] = matched_ref
+                    continue
 
-            # Étape B : Fuzzy matching agressif contre la liste de référence (seuil de tolérance = 50%)
+            # Étape B : Fuzzy matching d'alignement avec la liste de référence (seuil de tolérance élevé = 75%)
             best_match = process.extractOne(
-                raw_char_up,
-                reference_chars,
+                raw_char_clean,
+                [r.lower() for r in reference_chars],
                 scorer=fuzz.ratio,
-                score_cutoff=50
+                score_cutoff=75
             )
 
             if best_match:
-                matched_char, score, _ = best_match
-                log_debug_ocr(f"[DEBUG OCR] Rapprochement agressif : '{raw_char}' -> '{matched_char}' (score fuzzy={score:.1f}%)")
+                matched_char_lower, score, index = best_match
+                matched_char = reference_chars[index]
+                log_debug_ocr(f"[DEBUG OCR] Rapprochement fuzzy : '{raw_char}' -> '{matched_char}' (score fuzzy={score:.1f}%)")
                 replacements[raw_char] = matched_char
             else:
-                # Rejet pur et simple de l'entité si aucun rapprochement n'est possible
-                log_debug_ocr(f"[DEBUG OCR] Rejet sémantique pur et simple (hors liste de référence) : '{raw_char}'")
+                # Rejet pur et simple (hors liste de référence)
+                log_debug_ocr(f"[DEBUG OCR] Rejet sémantique strict (hors liste de référence) : '{raw_char}'")
                 replacements[raw_char] = None
 
         log_debug_ocr(f"[DEBUG OCR] Mappings finaux de personnages appliqués : {replacements}")
 
-        # 3. Appliquer les remplacements et rejets dans tous les éléments du script
+        # 3. Supprimer complètement les éléments (en-têtes et répliques) des personnages rejetés
+        for act in script.acts:
+            for scene in act.scenes:
+                scene.elements = [
+                    e for e in scene.elements
+                    if not (e.character in replacements and replacements[e.character] is None)
+                ]
+
+        # Mettre à jour le nom des personnages restants avec leur nom de référence d'origine
         for element in script.all_elements:
             if element.character in replacements:
                 new_char = replacements[element.character]
@@ -682,10 +716,6 @@ class LayoutAnalyzer:
                 # Écraser physiquement le texte de l'élément CHARACTER par le nom officiel de référence si validé
                 if new_char is not None and element.element_type == ElementType.CHARACTER:
                     element.text = new_char
-                # Si le personnage est rejeté (mis à None) et qu'il s'agissait d'un en-tête CHARACTER,
-                # on le rétrograde en dialogue simple pour qu'il ne soit pas balisé comme personnage
-                if new_char is None and element.element_type == ElementType.CHARACTER:
-                    element.element_type = ElementType.DIALOGUE
 
         # 4. Élimination complète des en-têtes CHARACTER fantômes ou rejetés (None ou pas dans la liste obligatoire)
         for act in script.acts:

@@ -98,8 +98,8 @@ class ContextCorrector:
 
     def __init__(self, cfg: CorrectionConfig) -> None:
         self._cfg = cfg
-        # Noms de référence en MAJUSCULES pour matching insensible à la casse
-        self._known_chars: List[str] = [n.upper() for n in cfg.character_names]
+        # Noms de référence d'origine pour préserver la casse
+        self._known_chars: List[str] = [n.strip() for n in cfg.character_names]
         # Abréviations : dict {ABRÉV_UPPER → NOM_COMPLET_UPPER}
         self._abbreviations: Dict[str, str] = {
             k.upper().strip(): v.upper().strip()
@@ -144,19 +144,22 @@ class ContextCorrector:
         if not self._known_chars:
             return name, False
 
-        # Correspondance exacte rapide
-        if name_up in self._known_chars:
-            return name_up, name != name_up
+        # Correspondance exacte rapide insensible à la casse
+        for known in self._known_chars:
+            if known.lower().strip() == name.lower().strip():
+                return known, name != known
 
-        # Fuzzy match avec RapidFuzz
+        # Fuzzy match avec RapidFuzz (en utilisant des majuscules pour le matching)
+        known_chars_up = [k.upper() for k in self._known_chars]
         result = process.extractOne(
             name_up,
-            self._known_chars,
+            known_chars_up,
             scorer=fuzz.ratio,
             score_cutoff=self._cfg.fuzzy_match_threshold,
         )
         if result:
-            matched, score, _ = result
+            matched_up, score, index = result
+            matched = self._known_chars[index]
             logger.debug(
                 f"Nom corrigé : {name!r} → {matched!r} (score fuzzy={score})"
             )

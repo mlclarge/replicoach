@@ -204,7 +204,7 @@ class OCRConfig:
         # Correction contextuelle
         cfg.correction.enable = True
         if character_names:
-            cfg.correction.character_names = [n.upper() for n in character_names]
+            cfg.correction.character_names = [n.strip() for n in character_names]
 
         # Structure
         cfg.layout.enable = True
