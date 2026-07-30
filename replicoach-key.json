@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "replicoach",
+  "private_key_id": "312ca57c532dcb040fb18b2bc024d57bc92473c6",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCx0cG82A/60N6c\nOjjA0HF9prF9ZMZ3+RSgM6csFIQm74wHMGXsfM/IPDqGv8c8zyKNoLtU9OOST1KH\nIDcftypJ003gQ8Tv0zKuMHtG4N5OZVCLQbLrFh2rwazxEe6rnFyp2xH1o/iVs/FR\nRX2CiI48URr0oJOygGbyniNTOSvRrxJdKhkgSmHZ85poNpzr/aJcAXXsV1XeWR6C\nYk/D5o71rRmJdJKyFtFif4NC0Jn1Ys3QLSscuusNGlREvaPKwFeaPQsSv5m2Bb9M\ndjw3c8Aq47k0rV/fTJQK6n1B3VNo4ldr9BhEDoXYc+QFpBHARmh3Rrh2rXnYFaVV\nXwN/1w17AgMBAAECggEAISBTeEvEBlS889vA0OLEEcVpEVQhyR3k4sdcoFCeIebE\nbl5sznad+s6FlK7Lfh+Ub0//Nh98+be/Rx8QRd9IiIJN4radTJRKv7qWbKjdoTss\nmxS9MSBonKOzBSHzFZNGi/ocyWcnmzPvg9VvQU8ROFlfrSzw9vMGurINIKbo6+Hi\n7GkMYsRd/oji2dG0PZE9s/if+PfLwFUohcRfjMVS25Dj+Yn0oX2J7gEPPq+sRNts\nUrAk51bbKdnphTmrD/YPXEt6FZ62Wm8p9k2rlax78Em67LfF7nUXbnTW2aGv/QLP\nHKe3e+XDrY7sDEz8WEt4B5OUMznol6k0v04oZl4GKQKBgQDhODDwrL3YXBFcYoLv\n0XAb6cvOFJkgPsSgnUIauyjO7+ABk1cqdOmVBVvoP+3i8/begL60bYaM6VqXzxyY\njexg7R15eMVBX7KcAPdH5QQS4V55H0NUyKBsv1z6mL9+I9/Z5oXSSyeh369uB13V\nyNtPCd4QTogmJSxSzYH8Ytvz1wKBgQDKHypqnBXng9H737zmonVNIsEjCgIsT5FJ\nZHJPzrQ9BBumXjPBcvTX+lvAwl5NUKVMw1AGxG3qK8c2yOO8zbcazANGWESdYdis\n9j9GyFFSuwcqGYJlCXuoEefbDWq10t0J5KaR4pDN4rJE0XxW55dgkkIPKAnniISf\n9JBv9r8+/QKBgQDcmc6OH5WA1IWIyVFZl/rIzJN9Uv298N1mOULjrglF0P3IbUrG\n4mddOTeR4PShBbf8r3ycfF97rKK46fwnjXRIaFkjf2EvLI5lcijEehUobSm9WBr6\nc913R2XKbE29P2RnKf5QQp8aVmCeVIbb/XabD548uL9xJZ4pqPQ2g5rQVwKBgE9I\nWFAHN8Rffb+p7KQfN5nxNwcyhtWwxFGgmAJcF3ETqnDg5LZODGKnrtP2qhzztFNf\nDYYKCP9g+ryvoj1OCDP3sJUoTInbdq2pzfpK2zNzb4UBCpftV1b+5w6SvbfipZea\n3Ae/coOAF+NMtNQ19bgIxubBEtmCQFuqB/oTNMNVAoGBAMjMq10KQcAZIY21xzL6\ngu7XSLDef7dWKVhdRQXa+K+tzaF6TfE8yjMBXtwRBm7LTmOESzt4wkc0hPpn9Y9E\nMT6MMMlo+dHpIGrQt2qBRSTM5h3Yclv7Fw3bLBVU2MHYqsaOi46HVO1NULuazyLl\nRLLkHlTIerpshJliFGX9VZJx\n-----END PRIVATE KEY-----\n",
+  "client_email": "replicoach-ocr-sa@replicoach.iam.gserviceaccount.com",
+  "client_id": "111628484754195676449",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/replicoach-ocr-sa%40replicoach.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

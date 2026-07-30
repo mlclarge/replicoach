@@ -1,0 +1,35 @@
+﻿Task_ID,Date,Cost_USD,Messages_Count,First_Prompt
+1784209573577,N/A,0.0,675,<task> Nous devons terminer l'intégration du moteur OCR avec PaddleOCR pour mon application d'apprentissage de textes th
+1784534505950,N/A,0.0,24,<task> Mission : Amélioration UX et Optimisation Post-OCR (V1 Tesseract). Tu disposes maintenant d'une grande capacité d
+1784535139663,N/A,0.0,18,"<task> Mission : Correction du déclencheur de la Modale dans Upload.jsx La modale des personnages a bien été créée, mais"
+1784535477795,N/A,0.0,14,"<task> Mission : Débogage visuel de la Modale dans Upload.jsx La logique d'état a été corrigée, mais la modale n'apparaî"
+1784544813343,N/A,0.0,28,"<task> Mission : Fix Tesseract crash ""Image too small to scale"" Lors de l'extraction OCR, Tesseract plante avec l'erreur"
+1784548806047,N/A,0.0,24,<task> Mission : Correction du cycle de vie du fichier et du déclenchement du scan dans Upload.jsx Le scan OCR ne foncti
+1784549728536,N/A,0.0,32,<task> Mission : Optimisation de performance et filtre anti-poussière dans pdfProcessor.js La modale transmet correcteme
+1784558968998,N/A,0.0,72,<task> __Résumé de l'état d'avancement (CharacterResolver) :__  - __Fichiers modifiés :__ `src/lib/scriptParser.js` (uni
+1784562305824,N/A,0.0,18,<task> Correctif : Contourner l'erreur 413 (Payload Too Large) de Vercel  Le proxy serveur api/gemini-pdf-proxy.js bloqu
+1784562612638,N/A,0.0,12,<task> Correctif : Changer le modèle Gemini obsolète dans le code  L'API Google AI Studio refuse le modèle gemini-2.5-fl
+1784562740461,N/A,0.0,12,<task> Correctif final : Mettre le bon modèle Gemini 3.5 Flash  Modifier le modèle dans src/lib/geminiPdfProcessor.js po
+1784563454503,N/A,0.0,12,<task> Correctif : Rétablir le modèle valide gemini-1.5-flash  Il y a eu une confusion : gemini-3.5-flash n'est pas un n
+1784563760961,N/A,0.0,12,<task> Correctif : Passer sur l'API stable v1 avec gemini-2.0-flash  L'endpoint v1beta rejette gemini-1.5-flash et gemin
+1784563996443,N/A,0.0,11,<task> Correctif : Passer les paramètres en snake_case pour l'API REST v1  L'API stable v1 de Google exige une syntaxe s
+1784564252226,N/A,0.0,12,<task> Correctif : Configurer l'endpoint stable v1 avec gemini-1.5-flash  L'API demande le modèle de production stable s
+1784564499778,N/A,0.0,10,<task> Correctif : Supprimer responseMimeType pour valider la requête v1  L'API stable v1 rejette le champ responseMimeT
+1784564731861,N/A,0.0,16,"<task> Correctif final : Endpoint v1, gemini-2.0-flash et nettoyage du body  L'endpoint v1 demande le modèle gemini-2.0-"
+1784565043509,N/A,0.0,14,<task> URGENT : Remplacement strict et vérifiable de l'URL Gemini  Tu as affirmé avoir changé le modèle pour gemini-2.0-
+1784565457495,N/A,0.0,84,<task> Mission de débogage autonome : Trouver le bon modèle Gemini  Contexte : Nous essayons d'envoyer un PDF en Base64 
+1784569057907,N/A,0.0,14,<task> Correctif immédiat : Utiliser le modèle gemini-3.5-flash provisionné  Le compte API est provisionné et facturé po
+1784569696851,N/A,0.0,10,"<task> Correctif : Augmenter la limite de génération (maxOutputTokens)  L'appel à l'API réussit enfin, mais le JSON géné"
+1784570394912,N/A,0.0,16,"<task> Correctif : Sécuriser le parsing du JSON renvoyé par Gemini  L'appel à Gemini réussit, mais le texte renvoyé cont"
+1784570666782,N/A,0.0,12,<task> Correctif : Activer le mode JSON natif pour éviter les erreurs de syntaxe  Le modèle génère du JSON mal formaté (
+1784570945046,N/A,0.0,14,<task> Correctif : Gérer l'erreur de parsing JSON et afficher le texte brut  Le parseur JSON échoue toujours à la ligne 
+1784571525158,N/A,0.0,14,<task> Correctif : Réparer automatiquement les virgules du JSON  Le log a révélé que Gemini oublie parfois de mettre une
+1784571818752,N/A,0.0,12,<task> Correctif : Fermer automatiquement le JSON tronqué par la limite de tokens  Le modèle s'arrête de générer le text
+1784572440276,N/A,0.0,96,<task> Mission : Retrouver le code local PaddleOCR et préparer la mise en production  Contexte : Nous avons précédemment
+1784613193910,N/A,0.0,16,<task> Peux tu m'indiquer ou nous en sommes techniquement sur le developpement de la solution sur backend ocr sur render
+1784613614523,N/A,0.0,44,<task> Nous devons optimiser le backend FastAPI (FastAPI + PyMuPDF + PaddleOCR) dans le dossier `backend-ocr` pour gérer
+1784614464084,N/A,0.0,44,<task> Le Scan Premium échoue car le frontend appelle toujours `processWithGemini` (qui tronque le JSON par dépassement 
+1784615041928,N/A,0.0,32,<task> L'appel à https://replicoach.onrender.com/api/extract-premium échoue avec `Failed to fetch` au bout de 63 seconde
+1784634464820,N/A,0.0,80,<task> Rôle et Contexte : Tu travailles sur le backend Python du projet replicoach (situé dans le dossier backend-ocr). 
+1784636764906,N/A,0.0,74,<task> ⚡ CONSIGNES D'ÉCONOMIE DE TOKENS (À RESPECTER STRICTEMENT) :  Ciblage strict : Ne fais aucune recherche globale (
+1784640426592,N/A,0.0,52,<task> Problème à résoudre : Mauvais scan des personnages extrait depuis le pdf. Le résultat du scan est : 13 personnage

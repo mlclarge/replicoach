@@ -1,0 +1,50 @@
+====================================================
+         RAPPORT D'AUDIT LLM UNIVERSEL              
+====================================================
+
+Tâches analysées            : 34
+Coût API consommé (Gemini) : $0.0000 USD
+Abonnement fixe (Copilot)   : $20.00 USD
+CUMUL TOTAL ESTIMÉ         : $20.0000 USD
+
+--- TOP 5 DES TÂCHES LES PLUS COÛTEUSES ---
+ID Task     : 1784209573577 (0.0% du budget API)
+Date        : N/A
+Coût ($ USD) : $0.0000
+Messages    : 675
+Fichiers lus: 55
+Outils      : search_files, read_file, plan_mode_respond, execute_command, act_mode_respond, attempt_completion, write_to_file, replace_in_file, list_files
+First Prompt: <task> Nous devons terminer l'intégration du moteur OCR avec PaddleOCR pour mon application d'apprentissage de textes th...
+----------------------------------------------------
+ID Task     : 1784534505950 (0.0% du budget API)
+Date        : N/A
+Coût ($ USD) : $0.0000
+Messages    : 24
+Fichiers lus: 4
+Outils      : execute_command, attempt_completion, replace_in_file, read_file
+First Prompt: <task> Mission : Amélioration UX et Optimisation Post-OCR (V1 Tesseract). Tu disposes maintenant d'une grande capacité d...
+----------------------------------------------------
+ID Task     : 1784535139663 (0.0% du budget API)
+Date        : N/A
+Coût ($ USD) : $0.0000
+Messages    : 18
+Fichiers lus: 1
+Outils      : search_files, read_file, execute_command, attempt_completion, replace_in_file
+First Prompt: <task> Mission : Correction du déclencheur de la Modale dans Upload.jsx La modale des personnages a bien été créée, mais...
+----------------------------------------------------
+ID Task     : 1784535477795 (0.0% du budget API)
+Date        : N/A
+Coût ($ USD) : $0.0000
+Messages    : 14
+Fichiers lus: 1
+Outils      : execute_command, attempt_completion, replace_in_file, read_file
+First Prompt: <task> Mission : Débogage visuel de la Modale dans Upload.jsx La logique d'état a été corrigée, mais la modale n'apparaî...
+----------------------------------------------------
+ID Task     : 1784544813343 (0.0% du budget API)
+Date        : N/A
+Coût ($ USD) : $0.0000
+Messages    : 28
+Fichiers lus: 3
+Outils      : execute_command, attempt_completion, replace_in_file, read_file
+First Prompt: <task> Mission : Fix Tesseract crash "Image too small to scale" Lors de l'extraction OCR, Tesseract plante avec l'erreur...
+----------------------------------------------------

@@ -28,7 +28,8 @@ import DOMPurify from "dompurify";
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  // NOUVEAU : Récupération de isPremium
+  const { user, isPremium } = useAuthStore();
   const {
     currentScript,
     loading,
@@ -80,6 +81,9 @@ function ScriptDetail() {
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
+  
+  // NOUVEAU : État pour le Paywall Premium
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -124,7 +128,7 @@ function ScriptDetail() {
     return counts;
   }, [currentScript?.replicas]);
 
-  // NOUVEAU : Algorithme de clustering pour générer le sommaire des passages
+  // Algorithme de clustering pour générer le sommaire des passages
   const characterPassages = useMemo(() => {
     if (!myCharacterId || !currentScript?.replicas) return [];
 
@@ -186,6 +190,17 @@ function ScriptDetail() {
 
     return result;
   }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
+
+  // NOUVEAU : Fonction d'interception du clic Coach
+  const handleCoachClick = (e, characterId) => {
+    e.stopPropagation();
+    if (isPremium) {
+      setCoachingMode("character");
+      setCoachingCharacterId(characterId);
+    } else {
+      setShowPremiumModal(true);
+    }
+  };
 
   const handleDelete = async () => {
     try {
@@ -676,12 +691,9 @@ function ScriptDetail() {
                   </span>
                 </button>
 
+                {/* MODIFICATION : On utilise handleCoachClick pour le bouton Coach */}
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCoachingMode("character");
-                    setCoachingCharacterId(char.id);
-                  }}
+                  onClick={(e) => handleCoachClick(e, char.id)}
                   title={`Coaching IA pour ${char.name}`}
                   className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
                   style={{
@@ -697,7 +709,7 @@ function ScriptDetail() {
           </div>
         </div>
 
-        {/* NOUVEAU : Sommaire interactif des Passages */}
+        {/* Sommaire interactif des Passages */}
         {myCharacterId && characterPassages.length > 0 && (
           <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm">
             <p className="font-semibold text-indigo-900 text-sm mb-2 flex items-center gap-2">
@@ -1198,6 +1210,38 @@ function ScriptDetail() {
           allReplicas={replicas}
           onSaveAsNote={handleSaveAICoachingNote}
         />
+      )}
+
+      {/* NOUVEAU : La modale d'incitation Premium */}
+      {showPremiumModal && (
+        <div className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-xl p-6 max-w-sm w-full border border-gold-500/30 text-center shadow-2xl">
+            <span className="text-5xl block mb-4">✨</span>
+            <h3 className="text-xl font-bold text-gold-400 mb-2">
+              Fonctionnalité Premium
+            </h3>
+            <p className="text-gray-300 mb-6 text-sm">
+              Le Coaching IA personnalisé pour chaque personnage est réservé aux abonnés Premium. Passez au niveau supérieur pour améliorer votre jeu d'acteur !
+            </p>
+            <div className="flex flex-col gap-3">
+              <button 
+                onClick={() => {
+                  setShowPremiumModal(false);
+                  // Optionnel : navigate('/premium') si tu as une page premium
+                }}
+                className="w-full py-3 bg-gradient-to-r from-gold-600 to-gold-500 text-dark font-bold rounded-lg hover:from-gold-500 hover:to-gold-400"
+              >
+                Découvrir Premium
+              </button>
+              <button 
+                onClick={() => setShowPremiumModal(false)}
+                className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+              >
+                Plus tard
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -2700,7 +2744,7 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
               <p className="text-white font-bold">{name.toUpperCase()}</p>
               <p className="text-white/70 text-sm">Aperçu de la couleur</p>
             </div>
-          )}
+          </div>
         </div>
         <div className="p-4 border-t border-gray-700">
           <button

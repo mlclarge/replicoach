@@ -1,0 +1,80 @@
+=========================================================
+      RAPPORT D'AUDIT DE DÉVELOPPEMENT & DEPOSIT LLM    
+=========================================================
+
+Nombre total de tâches analysées : 34
+Dépense totale calculée Gemini API : $0.0000 USD
+Facturation fixe GitHub Copilot Pro : $20.00 USD (Fixe)
+
+--- TOP 5 DES SESSIONS LES PLUS COÛTEUSES ---
+ID Task     : 1784209573577
+Date        : N/A
+Coût        : $0.0000 USD
+Messages    : 675
+Fichiers lus: 55
+Prompt Init : <task> Nous devons terminer l'intégration du moteur OCR avec PaddleOCR pour mon application d'apprentissage de textes th...
+-------------------------------------------------------
+ID Task     : 1784534505950
+Date        : N/A
+Coût        : $0.0000 USD
+Messages    : 24
+Fichiers lus: 4
+Prompt Init : <task> Mission : Amélioration UX et Optimisation Post-OCR (V1 Tesseract). Tu disposes maintenant d'une grande capacité d...
+-------------------------------------------------------
+ID Task     : 1784535139663
+Date        : N/A
+Coût        : $0.0000 USD
+Messages    : 18
+Fichiers lus: 1
+Prompt Init : <task> Mission : Correction du déclencheur de la Modale dans Upload.jsx La modale des personnages a bien été créée, mais...
+-------------------------------------------------------
+ID Task     : 1784535477795
+Date        : N/A
+Coût        : $0.0000 USD
+Messages    : 14
+Fichiers lus: 1
+Prompt Init : <task> Mission : Débogage visuel de la Modale dans Upload.jsx La logique d'état a été corrigée, mais la modale n'apparaî...
+-------------------------------------------------------
+ID Task     : 1784544813343
+Date        : N/A
+Coût        : $0.0000 USD
+Messages    : 28
+Fichiers lus: 3
+Prompt Init : <task> Mission : Fix Tesseract crash "Image too small to scale" Lors de l'extraction OCR, Tesseract plante avec l'erreur...
+-------------------------------------------------------
+
+--- DIAGNOSTIC DES MAUVAISES PRATIQUES DÉTECTÉES ---
+❌ Session runaway ID 1784209573577 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 675 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784558968998 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 72 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784565457495 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 84 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784572440276 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 96 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784634464820 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 80 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784636764906 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 74 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+❌ Session runaway ID 1784640426592 ($0.00 USD, soit 0.0% du budget) :
+   - Motif : 52 messages échangés dans la même conversation.
+   - Cause principale : Boucle d'auto-correction sur l'OCR et accumulation de contexte de plus de 150M tokens.
+
+
+--- PLAN D'ACTION RECOMMANDE POUR LES PROCHAINS PROJETS ---
+1. RÈGLE DE DÉCOUPAGE : Ne jamais dépasser 15 à 20 messages dans la même session.
+2. STRATÉGIE SILENCIEUSE : Toujours exécuter les tests et commandes terminal en mode silencieux.
+3. EXCLUSION DU CONTEXTE : Garder `.clineignore` actif à la racine de tous vos projets.
+4. GESTION DES EXPÉRIMENTATIONS : Si une technologie (ex: PaddleOCR) échoue après 3 essais, faites un prototype minimal autonome hors du projet principal.

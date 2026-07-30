@@ -21,3 +21,7 @@ fastapi>=0.100.0
 uvicorn>=0.22.0
 python-multipart>=0.0.6
 gunicorn>=21.2.0
+
+# ─── Scan Premium (Cloud Vision) ──────────────────────────────────────────────
+google-cloud-storage>=2.10.0
+google-cloud-vision>=3.4.0

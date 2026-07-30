@@ -1,0 +1,21 @@
+# Fichiers ignorés par les agents IA (Tokens & Sécurité)
+node_modules/
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+dist/
+build/
+out/
+.next/
+.nuxt/
+*.sqlite
+*.sqlite3
+*.db
+*.csv
+*.xlsx
+*.pdf
+*.log
+npm-debug.log*
+.git/
