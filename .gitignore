@@ -38,3 +38,7 @@ coverage
 
 # Misc
 *.pem
+
+# Secrets
+replicoach-key.json
+*-key.json

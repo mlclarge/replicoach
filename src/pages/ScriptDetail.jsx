@@ -81,7 +81,7 @@ function ScriptDetail() {
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
-  
+
   // NOUVEAU : État pour le Paywall Premium
   const [showPremiumModal, setShowPremiumModal] = useState(false);
 
@@ -1221,10 +1221,12 @@ function ScriptDetail() {
               Fonctionnalité Premium
             </h3>
             <p className="text-gray-300 mb-6 text-sm">
-              Le Coaching IA personnalisé pour chaque personnage est réservé aux abonnés Premium. Passez au niveau supérieur pour améliorer votre jeu d'acteur !
+              Le Coaching IA personnalisé pour chaque personnage est réservé aux
+              abonnés Premium. Passez au niveau supérieur pour améliorer votre
+              jeu d'acteur !
             </p>
             <div className="flex flex-col gap-3">
-              <button 
+              <button
                 onClick={() => {
                   setShowPremiumModal(false);
                   // Optionnel : navigate('/premium') si tu as une page premium
@@ -1233,7 +1235,7 @@ function ScriptDetail() {
               >
                 Découvrir Premium
               </button>
-              <button 
+              <button
                 onClick={() => setShowPremiumModal(false)}
                 className="w-full py-3 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
               >
@@ -2744,7 +2746,8 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
               <p className="text-white font-bold">{name.toUpperCase()}</p>
               <p className="text-white/70 text-sm">Aperçu de la couleur</p>
             </div>
-          </div>
+          )}{" "}
+          {/* ✅ CORRECTION : Fermeture de la parenthèse et de l'accolade */}
         </div>
         <div className="p-4 border-t border-gray-700">
           <button
