@@ -7,7 +7,6 @@ import Loader from "../components/ui/Loader";
 import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
-import { filterScenesByCharacterIds } from "../lib/sceneFilter";
 import {
   DndContext,
   closestCenter,
@@ -82,10 +81,6 @@ function ScriptDetail() {
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
-  // NOUVEAUX STATES : Mode "Ciblage de scène"
-  const [isSceneTargetMode, setIsSceneTargetMode] = useState(false);
-  const [targetPartners, setTargetPartners] = useState([]);
-
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 8 },
@@ -129,40 +124,68 @@ function ScriptDetail() {
     return counts;
   }, [currentScript?.replicas]);
 
-  // Répliques filtrées (par personnage, par groupe, OU par scène ciblée)
+  // NOUVEAU : Algorithme de clustering pour générer le sommaire des passages
+  const characterPassages = useMemo(() => {
+    if (!myCharacterId || !currentScript?.replicas) return [];
+
+    const passages = [];
+    let currentPassage = null;
+    const MAX_GAP = 15; // Tolérance d'inactivité
+    const CONTEXT_WINDOW = 5; // Nombre de répliques "avant" l'intervention pour le contexte
+
+    currentScript.replicas.forEach((replica, index) => {
+      if (replica.character_id === myCharacterId) {
+        if (!currentPassage) {
+          // Initie un nouveau passage
+          currentPassage = { startIndex: index, endIndex: index };
+        } else {
+          // Vérifie si l'intervention est assez proche de la précédente pour fusionner
+          if (index - currentPassage.endIndex <= MAX_GAP) {
+            currentPassage.endIndex = index;
+          } else {
+            // Clôture le passage actuel et en démarre un nouveau
+            passages.push(currentPassage);
+            currentPassage = { startIndex: index, endIndex: index };
+          }
+        }
+      }
+    });
+
+    // Pousser le dernier passage s'il existe
+    if (currentPassage) {
+      passages.push(currentPassage);
+    }
+
+    // Formater pour l'affichage du menu
+    return passages.map((p, i) => {
+      // On recule de 5 répliques (sans tomber en dessous de 0) pour déterminer l'ancre exacte
+      const anchorIndex = Math.max(0, p.startIndex - CONTEXT_WINDOW);
+      const anchorReplicaId = currentScript.replicas[anchorIndex].id;
+
+      return {
+        id: i + 1,
+        anchorReplicaId: anchorReplicaId,
+        displayNumber: anchorIndex + 1, // +1 car l'affichage commence à #1
+      };
+    });
+  }, [currentScript?.replicas, myCharacterId]);
+
+  // Répliques filtrées classiquement (par personnage ou par groupe)
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
-
     let result = currentScript.replicas;
 
-    // NOUVEAU FILTRE : Mode Ciblage de Scène
-    if (isSceneTargetMode && myCharacterId && targetPartners.length > 0) {
-      result = filterScenesByCharacterIds(
-        result,
-        myCharacterId,
-        targetPartners,
-      );
-    } else {
-      // Filtres classiques (si le ciblage n'est pas actif)
-      if (studyingGroup?.replicaIds?.length > 0) {
-        const groupSet = new Set(studyingGroup.replicaIds);
-        result = result.filter((r) => groupSet.has(r.id));
-      }
+    if (studyingGroup?.replicaIds?.length > 0) {
+      const groupSet = new Set(studyingGroup.replicaIds);
+      result = result.filter((r) => groupSet.has(r.id));
+    }
 
-      if (selectedCharacter) {
-        result = result.filter((r) => r.character_id === selectedCharacter);
-      }
+    if (selectedCharacter) {
+      result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
     return result;
-  }, [
-    currentScript?.replicas,
-    selectedCharacter,
-    studyingGroup,
-    isSceneTargetMode,
-    myCharacterId,
-    targetPartners,
-  ]);
+  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
 
   const handleDelete = async () => {
     try {
@@ -674,51 +697,43 @@ function ScriptDetail() {
           </div>
         </div>
 
-        {/* NOUVEAU : Menu "Ciblage de Scènes" (Apparaît si "Mon rôle" est défini) */}
-        {myCharacterId && (
+        {/* NOUVEAU : Sommaire interactif des Passages */}
+        {myCharacterId && characterPassages.length > 0 && (
           <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm">
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 font-semibold text-indigo-900 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isSceneTargetMode}
-                  onChange={(e) => setIsSceneTargetMode(e.target.checked)}
-                  className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                />
-                🎯 Isoler mes scènes avec...
-              </label>
-            </div>
-
-            {isSceneTargetMode && (
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mt-3">
-                {characters
-                  .filter((c) => c.id !== myCharacterId) // Exclure le rôle du comédien lui-même
-                  .map((char) => {
-                    const isSelected = targetPartners.includes(char.id);
-                    return (
-                      <button
-                        key={char.id}
-                        onClick={() => {
-                          setTargetPartners((prev) =>
-                            isSelected
-                              ? prev.filter((id) => id !== char.id)
-                              : [...prev, char.id],
-                          );
-                        }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition shadow-sm border whitespace-nowrap
-                          ${
-                            isSelected
-                              ? "bg-indigo-600 text-white border-indigo-700"
-                              : "bg-white text-gray-600 border-gray-300 hover:bg-indigo-50"
-                          }`}
-                      >
-                        {isSelected ? "✓ " : "+ "}
-                        {char.name}
-                      </button>
+            <p className="font-semibold text-indigo-900 text-sm mb-2 flex items-center gap-2">
+              📍 Accès direct à vos passages ({characterPassages.length})
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {characterPassages.map((passage) => (
+                <button
+                  key={passage.id}
+                  onClick={() => {
+                    const element = document.getElementById(
+                      `replica-anchor-${passage.anchorReplicaId}`,
                     );
-                  })}
-              </div>
-            )}
+                    if (element) {
+                      element.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                      element.classList.add(
+                        "ring-4",
+                        "ring-indigo-400",
+                        "transition-all",
+                      );
+                      setTimeout(
+                        () =>
+                          element.classList.remove("ring-4", "ring-indigo-400"),
+                        1500,
+                      );
+                    }
+                  }}
+                  className="px-4 py-2 rounded-full text-xs font-bold transition shadow-sm border whitespace-nowrap bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100 hover:scale-105 active:scale-95"
+                >
+                  Passage {passage.id} (Aller à #{passage.displayNumber})
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
@@ -836,29 +851,11 @@ function ScriptDetail() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={filteredReplicas
-              .filter((r) => r.type !== "divider")
-              .map((r) => r.id)}
+            items={filteredReplicas.map((r) => r.id)}
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-3">
               {filteredReplicas.map((replica, index) => {
-                // NOUVEAU : Affichage du séparateur de scène
-                if (replica.type === "divider") {
-                  return (
-                    <div
-                      key={replica.id}
-                      className="flex items-center justify-center my-6"
-                    >
-                      <div className="h-px bg-indigo-300 flex-1"></div>
-                      <span className="px-4 text-xs font-bold text-indigo-500 uppercase tracking-widest bg-indigo-50 rounded-full py-1 shadow-sm border border-indigo-200">
-                        {replica.text}
-                      </span>
-                      <div className="h-px bg-indigo-300 flex-1"></div>
-                    </div>
-                  );
-                }
-
                 const character = characters.find(
                   (c) => c.id === replica.character_id,
                 );
@@ -867,7 +864,7 @@ function ScriptDetail() {
                   notesByReplicaId[replica.id] || [];
 
                 return (
-                  <div key={replica.id}>
+                  <div key={replica.id} id={`replica-anchor-${replica.id}`}>
                     {editMode && index === 0 && (
                       <button
                         onClick={() => {
