@@ -36,6 +36,19 @@ Thumbs.db
 # Testing
 coverage
 
+# Spikes / expérimentations locales (jamais de venv en versionné)
+ocr-spike/
+*/venv/
+*.venv/
+
+# Fichiers de sauvegarde / backup
+*.backup.*.js
+*.backup.js
+
+# Rapports/sorties d'audit générés localement
+output/
+cline_audit_report.csv
+
 # Misc
 *.pem
 
