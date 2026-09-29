@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
+import PremiumGateModal from "../components/PremiumGateModal";
 import { useScriptStore } from "../store/scriptStore";
 import { uploadFile, supabase } from "../lib/supabase";
 import { extractTextFromPDF } from "../lib/pdfProcessor";
@@ -42,7 +43,7 @@ const ADMIN_EMAILS = [
 
 function Upload() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isPremium } = useAuthStore();
   const { createScript, addCharacter, addReplicas, fetchScripts } =
     useScriptStore();
 
@@ -65,13 +66,19 @@ function Upload() {
   const [pastedText, setPastedText] = useState("");
   const [pastedTitle, setPastedTitle] = useState("");
 
-  // Option de scan : 'classic' (classique local) ou 'premium' (IA Gemini)
+  // Option de scan : 'classic' (OCR local Tesseract.js, gratuit, Standard)
+  // ou 'premium' (détection automatique sans saisie utilisateur, réservée Premium).
+  // NB : le backend appelé aujourd'hui est PaddleOCR (paddleOcrService.js) ;
+  // migration prévue vers un appel Gemini vision unique (voir chantier rc-10-12).
   const [scanMode, setScanMode] = useState("classic");
 
   // États pour les métadonnées de personnages (V1 Post-OCR)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [userCharacters, setUserCharacters] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+
+  // Paywall du Scan Express (OCR automatique) : réservé aux comptes Premium
+  const [showOcrPremiumModal, setShowOcrPremiumModal] = useState(false);
 
   const onDrop = useCallback(
     (acceptedFiles) => {
@@ -83,6 +90,14 @@ function Upload() {
         setShowResults(false);
 
         if (scanMode === "premium") {
+          // Garde de sécurité (défense en profondeur) : le mode Premium ne doit
+          // jamais lancer de traitement payant pour un utilisateur non Premium,
+          // même si scanMode a été positionné sur "premium" par un autre biais.
+          if (!isPremium) {
+            setShowOcrPremiumModal(true);
+            return;
+          }
+
           const ext = file.name.toLowerCase().split(".").pop();
           if (ext !== "pdf") {
             setError(
@@ -105,7 +120,7 @@ function Upload() {
         }
       }
     },
-    [scanMode],
+    [scanMode, isPremium],
   );
 
   const handleCharSubmit = async (e) => {
@@ -368,6 +383,12 @@ function Upload() {
 
   const handleProcessPremium = async (fileToProcess) => {
     if (!fileToProcess || !user) return;
+
+    // Garde de sécurité : ne jamais exécuter le traitement payant sans statut Premium
+    if (!isPremium) {
+      setShowOcrPremiumModal(true);
+      return;
+    }
 
     setProcessing(true);
     setError(null);
@@ -800,7 +821,13 @@ function Upload() {
 
             <button
               type="button"
-              onClick={() => setScanMode("premium")}
+              onClick={() => {
+                if (!isPremium) {
+                  setShowOcrPremiumModal(true);
+                  return;
+                }
+                setScanMode("premium");
+              }}
               className={`flex flex-col items-center justify-center py-3.5 px-4 rounded-xl transition-all ${
                 scanMode === "premium"
                   ? "bg-gradient-to-br from-gold-500/10 via-amber-500/5 to-transparent border border-gold-500/50 text-gold-400 shadow-lg shadow-gold-500/5"
@@ -1132,6 +1159,14 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             </button>
           </div>
         </div>
+      )}
+
+      {/* Paywall Scan Express (OCR automatique) — composant réutilisable */}
+      {showOcrPremiumModal && (
+        <PremiumGateModal
+          featureKey="OCR_AUTO"
+          onClose={() => setShowOcrPremiumModal(false)}
+        />
       )}
     </div>
   );
