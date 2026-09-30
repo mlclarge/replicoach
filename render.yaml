@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: replicoach
+    runtime: docker
+    rootDir: backend-ocr
+    dockerfilePath: ./Dockerfile
+    branch: main
+    plan: free
+    region: frankfurt
+    healthCheckPath: /docs
+    autoDeploy: true
+    envVars:
+      # Le Dockerfile écoute sur 8000 (Render utilise 10000 par défaut)
+      - key: PORT
+        value: "8000"
+      - key: GEMINI_OCR_MODEL
+        value: gemini-3.8-flash
+      # Secrets et valeurs propres à l'environnement : à saisir dans le dashboard Render
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      # Domaine(s) frontend autorisés (CORS), séparés par des virgules, sans slash final
+      - key: FRONTEND_ORIGINS
+        value: https://replicoach-beige.vercel.app
