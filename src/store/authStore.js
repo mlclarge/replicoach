@@ -49,7 +49,7 @@ export const useAuthStore = create((set, get) => ({
       // Écouter les changements d'état d'authentification
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange(async (event, session) => {
+      } = supabase.auth.onAuthStateChange((event, session) => {
         console.log("Auth state changed:", event);
 
         if (
@@ -58,12 +58,17 @@ export const useAuthStore = create((set, get) => ({
           event === "INITIAL_SESSION"
         ) {
           if (session?.user) {
-            const profile = await fetchProfile(session.user.id);
-            set({
-              user: session.user,
-              isPremium: profile?.is_premium || false,
-              loading: false,
-            });
+            // Ce rappel s'exécute pendant que supabase-js détient son verrou interne :
+            // y attendre une requête Supabase bloque toute la session (envoi Storage,
+            // getSession...). On diffère donc le chargement du profil hors du rappel.
+            setTimeout(async () => {
+              const profile = await fetchProfile(session.user.id);
+              set({
+                user: session.user,
+                isPremium: profile?.is_premium || false,
+                loading: false,
+              });
+            }, 0);
           }
         } else if (event === "SIGNED_OUT") {
           set({ user: null, isPremium: false, loading: false });

@@ -1,4 +1,9 @@
 import { supabase } from "./supabase";
+import { withTimeout } from "./withTimeout";
+
+const SESSION_TIMEOUT_MS = 15_000;
+// Gemini met ~1 à 2 min sur un long script, plus un éventuel démarrage à froid de Render.
+const REQUEST_TIMEOUT_MS = 6 * 60_000;
 
 function getEndpoint() {
   const configuredUrl =
@@ -38,7 +43,11 @@ export async function processWithGemini(file, onProgress) {
   const {
     data: { session },
     error: sessionError,
-  } = await supabase.auth.getSession();
+  } = await withTimeout(
+    supabase.auth.getSession(),
+    SESSION_TIMEOUT_MS,
+    "La vérification de votre session a expiré. Rechargez la page et réessayez.",
+  );
   if (sessionError) {
     throw new Error(`Impossible de vérifier la session : ${sessionError.message}`);
   }
@@ -52,13 +61,28 @@ export async function processWithGemini(file, onProgress) {
   formData.append("title", file.name.replace(/\.pdf$/i, ""));
 
   if (onProgress) onProgress(0.2, "Envoi sécurisé du PDF...");
-  const response = await fetch(getEndpoint(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: formData,
-  });
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(getEndpoint(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error(
+        "Le service OCR Premium n'a pas répondu à temps. Réessayez dans un instant.",
+      );
+    }
+    throw error;
+  } finally {
+    clearTimeout(abortTimer);
+  }
 
   if (!response.ok) {
     const message = await readErrorMessage(response);

@@ -20,7 +20,11 @@ import {
   detectGender,
 } from "../lib/scriptParser";
 import { processWithGemini } from "../lib/geminiOcrService";
+import { withTimeout } from "../lib/withTimeout";
 import Loader from "../components/ui/Loader";
+
+// Le stockage du fichier source est facultatif : on n'attend pas plus longtemps
+const UPLOAD_TIMEOUT_MS = 30_000;
 
 // Types de fichiers acceptés
 const ACCEPTED_FILE_TYPES = {
@@ -280,7 +284,11 @@ function Upload() {
       });
       let filePath = null;
       try {
-        filePath = await uploadFile(file, user.id);
+        filePath = await withTimeout(
+          uploadFile(file, user.id),
+          UPLOAD_TIMEOUT_MS,
+          "Envoi du fichier trop long",
+        );
       } catch (storageError) {
         console.warn("Échec d'upload storage ignoré :", storageError);
       }
@@ -477,7 +485,11 @@ function Upload() {
       });
       let filePath = null;
       try {
-        filePath = await uploadFile(fileToProcess, user.id);
+        filePath = await withTimeout(
+          uploadFile(fileToProcess, user.id),
+          UPLOAD_TIMEOUT_MS,
+          "Envoi du fichier trop long",
+        );
       } catch (storageError) {
         console.warn("Échec d'upload storage ignoré :", storageError);
       }
