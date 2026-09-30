@@ -19,7 +19,7 @@ import {
   generateCueWords,
   detectGender,
 } from "../lib/scriptParser";
-import { processWithPaddleOCR } from "../lib/paddleOcrService";
+import { processWithGemini } from "../lib/geminiOcrService";
 import Loader from "../components/ui/Loader";
 
 // Types de fichiers acceptés
@@ -68,8 +68,6 @@ function Upload() {
 
   // Option de scan : 'classic' (OCR local Tesseract.js, gratuit, Standard)
   // ou 'premium' (détection automatique sans saisie utilisateur, réservée Premium).
-  // NB : le backend appelé aujourd'hui est PaddleOCR (paddleOcrService.js) ;
-  // migration prévue vers un appel Gemini vision unique (voir chantier rc-10-12).
   const [scanMode, setScanMode] = useState("classic");
 
   // États pour les métadonnées de personnages (V1 Post-OCR)
@@ -408,18 +406,17 @@ function Upload() {
     };
 
     try {
-      // Étape 1 : Analyse par PaddleOCR
+      // Étape 1 : Analyse Premium par Gemini Vision
       setProgress({
-        step: "Analyse intelligente par le moteur Premium OCR...",
+        step: "Analyse intelligente par Gemini Vision...",
         percent: 20,
       });
 
-      const parsedData = await processWithPaddleOCR(
+      const parsedData = await processWithGemini(
         fileToProcess,
         (pct, message) => {
           setProgress({
-            step:
-              message || "Analyse intelligente par le moteur Premium OCR...",
+            step: message || "Analyse intelligente par Gemini Vision...",
             percent: 20 + pct * 40, // De 20% à 60%
           });
         },

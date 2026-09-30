@@ -41,6 +41,10 @@ ocr-spike/
 */venv/
 *.venv/
 
+# Bytecode Python compilé (jamais utile en versionné)
+__pycache__/
+*.pyc
+
 # Fichiers de sauvegarde / backup
 *.backup.*.js
 *.backup.js

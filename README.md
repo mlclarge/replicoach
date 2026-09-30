@@ -28,6 +28,11 @@ npm run dev
 
 L'app sera disponible sur http://localhost:5173
 
+Pour le scan Premium, définis `VITE_BACKEND_OCR_URL` vers l'URL racine du
+backend OCR. En local, démarre aussi le service dans `backend-ocr/` et configure
+ses variables Supabase et Gemini comme indiqué dans son README. L'OCR Standard
+reste entièrement local dans le navigateur.
+
 ## 📦 Stack Technique
 
 - **Frontend** : React 18 + Vite + Tailwind CSS
