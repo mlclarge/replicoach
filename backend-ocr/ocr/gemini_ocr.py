@@ -13,7 +13,7 @@ logger = logging.getLogger("ocr_pipeline.gemini")
 
 DEFAULT_MODEL = "gemini-3.8-flash"
 FILE_PROCESSING_TIMEOUT_SECONDS = 60
-MAX_OUTPUT_TOKENS = 32768
+MAX_OUTPUT_TOKENS = 65536
 
 EXTRACTION_PROMPT = """Analyse intégralement le PDF de cette pièce de théâtre.
 Retourne uniquement un objet JSON valide conforme à ce schéma :
@@ -39,6 +39,8 @@ Consignes impératives :
 - Les scènes/actes et didascalies peuvent rester dans le texte des répliques
   lorsque leur emplacement structure le dialogue. Ne les transforme pas en
   personnages.
+- Produis un JSON compact : pas d'indentation ni de retours à la ligne inutiles,
+  une réplique par objet sur une seule ligne, afin de limiter la taille de la réponse.
 - Aucun texte ni commentaire en dehors du JSON."""
 
 
@@ -175,6 +177,18 @@ def extract_script_with_gemini(pdf_path: Path, title: str | None = None) -> Dict
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
+        candidate = response.candidates[0] if getattr(response, "candidates", None) else None
+        finish_reason = str(getattr(candidate, "finish_reason", "")).rsplit(".", 1)[-1].upper()
+        if finish_reason == "MAX_TOKENS":
+            logger.error(
+                "Gemini response truncated (MAX_TOKENS) for %s: usage=%s",
+                pdf_path.name,
+                getattr(response, "usage_metadata", None),
+            )
+            raise GeminiOCRError(
+                "Ce script est trop long pour être analysé en une seule fois. "
+                "Essayez avec un extrait du PDF."
+            )
         response_text = getattr(response, "text", None)
         if not response_text:
             raise GeminiOCRError("Gemini n'a renvoyé aucun contenu pour ce document.")
