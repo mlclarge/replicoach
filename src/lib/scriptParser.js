@@ -164,12 +164,26 @@ const MOTS_MASCULINS = [
 
 /**
  * Pré-traitement : découpe les longues lignes OCR contenant plusieurs répliques inline.
- * Ex: "texte JACQUES (didascalie) - réplique LUCIE - autre" → 3 lignes séparées.
+ * Ex: "MARY : texte LOLA : autre" ou
+ * "texte JACQUES (didascalie) - réplique LUCIE - autre"
+ * → 3 lignes séparées.
  * C'est la correction principale pour les PDF dont l'OCR fusionne plusieurs répliques.
  */
-function splitInlineTransitions(text) {
+function splitInlineTransitions(text, knownCharacters = null) {
   const lines = text.split("\n");
   const result = [];
+  const hasKnownList =
+    Array.isArray(knownCharacters) && knownCharacters.length > 0;
+
+  // Pattern générique (casse libre) utilisé UNIQUEMENT quand une liste de
+  // personnages de référence existe (saisie par l'utilisateur en pop-up).
+  // Contrairement à dashPattern/colonPattern ci-dessous (tout en majuscules),
+  // il capture aussi les noms en casse mixte comme "William FARELL :".
+  // Chaque candidat est ensuite validé via resolveAgainstKnownList (seuil
+  // élevé) pour ne couper QUE sur un personnage réellement connu et éviter
+  // les faux positifs sur du texte narratif capitalisé.
+  const genericCuePattern =
+    /\s+([A-ZÀ-Üa-zà-ü][A-ZÀ-Üa-zà-ü'’\-]*(?:\s+[A-ZÀ-Üa-zà-ü][A-ZÀ-Üa-zà-ü'’\-]*){0,3})\s*(?:\([^)]*\))?\s*[-–—:]\s+/g;
 
   // Mots français courants en majuscules qui ne sont PAS des personnages
   const COMMON_CAPS = new Set([
@@ -246,31 +260,50 @@ function splitInlineTransitions(text) {
   ]);
 
   for (const line of lines) {
-    // Seulement pour les lignes longues (> 80 chars)
-    if (line.length < 80) {
-      result.push(line);
-      continue;
-    }
-
-    // Chercher les transitions de personnage au milieu d'une ligne :
-    // [espace][NOM_MAJUSCULES_3+_chars][espace?][didascalie?][tiret][espace]
-    // Exemple : " JACQUES (désignant son œil) - T'es content"
-    const pattern =
+    // Chercher les transitions de personnage au milieu d'une ligne.
+    // Les PDF/OCR produisent souvent plusieurs répliques sur une même ligne,
+    // notamment avec deux-points : "MARY : ... LOLA : ...".
+    const dashPattern =
       /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*[-–—]\s/g;
+    const colonPattern =
+      /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*:\s+/g;
 
     const splits = []; // positions de début de nom à l'intérieur de la ligne
-    let m;
-    while ((m = pattern.exec(line)) !== null) {
-      // Position du début du nom (après l'espace initial dans le match)
-      const namePos = m.index + m[0].search(/[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]/);
-      if (namePos <= 0) continue; // ne pas couper en début de ligne
 
-      // Extraire juste le nom capturé
-      const capturedName = m[1].trim();
-      if (COMMON_CAPS.has(capturedName)) continue; // ignorer les mots courants
-      if (capturedName.length < 3) continue;
+    if (hasKnownList) {
+      // Liste de référence disponible : on découpe sur tout personnage
+      // CONNU, quelle que soit sa casse (résout "William FARELL :" fusionné
+      // avec la réplique précédente).
+      genericCuePattern.lastIndex = 0;
+      let m;
+      while ((m = genericCuePattern.exec(line)) !== null) {
+        const namePos = m.index + m[0].search(/[A-ZÀ-Üa-zà-ü]/);
+        if (namePos <= 0) continue; // ne pas couper en début de ligne
 
-      splits.push(namePos);
+        const capturedName = m[1].trim();
+        if (capturedName.length < 3) continue;
+        if (!resolveAgainstKnownList(capturedName, knownCharacters, 0.82)) {
+          continue; // pas un personnage connu : ne pas couper (évite les faux positifs)
+        }
+
+        splits.push(namePos);
+      }
+    } else {
+      for (const pattern of [dashPattern, colonPattern]) {
+        let m;
+        while ((m = pattern.exec(line)) !== null) {
+          // Position du début du nom (après l'espace initial dans le match)
+          const namePos = m.index + m[0].search(/[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]/);
+          if (namePos <= 0) continue; // ne pas couper en début de ligne
+
+          // Extraire juste le nom capturé
+          const capturedName = m[1].trim();
+          if (COMMON_CAPS.has(capturedName)) continue; // ignorer les mots courants
+          if (capturedName.length < 3) continue;
+
+          splits.push(namePos);
+        }
+      }
     }
 
     if (splits.length === 0) {
@@ -278,9 +311,11 @@ function splitInlineTransitions(text) {
       continue;
     }
 
+    const uniqueSplits = [...new Set(splits)].sort((a, b) => a - b);
+
     // Découper la ligne aux positions identifiées
     let prev = 0;
-    for (const pos of splits) {
+    for (const pos of uniqueSplits) {
       const part = line.substring(prev, pos).trim();
       if (part) result.push(part);
       prev = pos;
@@ -412,7 +447,10 @@ export class CharacterResolver {
 export function parseScript(text, filename = "", referenceCharacters = null) {
   const cleanedText = cleanText(text);
   // Pré-traitement : séparer les répliques inline sur une même ligne (artefact OCR PDF)
-  const preprocessedText = splitInlineTransitions(cleanedText);
+  const preprocessedText = splitInlineTransitions(
+    cleanedText,
+    referenceCharacters,
+  );
 
   // DEBUG : afficher les premières lignes après pré-traitement
   const _dbgLines = preprocessedText.split("\n");

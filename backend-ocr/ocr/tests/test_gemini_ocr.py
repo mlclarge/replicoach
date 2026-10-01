@@ -92,9 +92,23 @@ class TestParseGeminiResponse(unittest.TestCase):
             pdf_path = Path(temp_dir) / "script.pdf"
             pdf_path.write_bytes(b"%PDF-1.4")
 
-            result = extract_script_with_gemini(pdf_path)
+            progress_stages = []
+            result = extract_script_with_gemini(
+                pdf_path,
+                progress_callback=progress_stages.append,
+            )
 
         self.assertEqual(result["characters"], ["FIGARO"])
+        self.assertEqual(
+            progress_stages,
+            [
+                "gemini_uploading",
+                "gemini_uploaded",
+                "gemini_ready",
+                "generation_started",
+                "response_received",
+            ],
+        )
         client.files.delete.assert_called_once_with(name="files/script")
 
 

@@ -410,33 +410,54 @@ function Upload() {
       warning: null,
       quality: "premium",
       usedOCR: true,
-      confidence: 100,
+      confidence: null,
     };
 
     try {
       // Étape 1 : Analyse Premium par Gemini Vision
       setProgress({
-        step: "Analyse intelligente par Gemini Vision...",
-        percent: 20,
+        step: "Envoi sécurisé du PDF au service OCR...",
+        percent: 0,
+        indeterminate: true,
       });
+
+      const progressMessages = {
+        upload_received: "PDF reçu par le service OCR.",
+        gemini_uploading: "Transfert sécurisé du PDF vers Gemini...",
+        gemini_uploaded: "PDF transmis ; Gemini prépare le document.",
+        gemini_ready: "PDF prêt ; démarrage de l'analyse Gemini.",
+        generation_started:
+          "Gemini analyse le script et prépare les répliques...",
+        response_received: "Réponse Gemini reçue ; validation des données...",
+        result_validated: "Analyse validée ; préparation de l'enregistrement...",
+      };
+      const progressHints = {
+        generation_started:
+          "La durée dépend de la longueur du script. Aucun pourcentage n'est simulé.",
+      };
+
+      const setPremiumStep = (step, hint = null) =>
+        setProgress({
+          step,
+          hint,
+          percent: 0,
+          indeterminate: true,
+        });
 
       const parsedData = await processWithGemini(
         fileToProcess,
-        (pct, message) => {
-          setProgress({
-            step: message || "Analyse intelligente par Gemini Vision...",
-            percent: 20 + pct * 40, // De 20% à 60%
-          });
+        (stage) => {
+          setPremiumStep(
+            progressMessages[stage] || "Analyse Premium en cours...",
+            progressHints[stage] || null,
+          );
         },
       );
 
       result.title = parsedData.title;
 
       // Étape 2 : Harmonisation des personnages via le CharacterResolver
-      setProgress({
-        step: "Harmonisation des personnages...",
-        percent: 65,
-      });
+      setPremiumStep("Harmonisation des personnages et des répliques...");
 
       const resolver = new CharacterResolver(
         parsedData.characters.map((c) => c.name),
@@ -479,10 +500,7 @@ function Upload() {
       }));
 
       // Étape 3 : Upload optionnel du fichier vers Supabase Storage
-      setProgress({
-        step: "Upload du fichier...",
-        percent: 75,
-      });
+      setPremiumStep("Enregistrement du fichier...");
       let filePath = null;
       try {
         filePath = await withTimeout(
@@ -495,10 +513,7 @@ function Upload() {
       }
 
       // Étape 4 : Enregistrement en base de données
-      setProgress({
-        step: "Création du script...",
-        percent: 80,
-      });
+      setPremiumStep("Création du script...");
       // On regroupe le full_text en une chaîne propre
       const fullText = enrichedReplicas
         .map((r) => `${r.character} : ${r.text}`)
@@ -512,10 +527,7 @@ function Upload() {
         pdf_url: filePath,
       });
 
-      setProgress({
-        step: "Création des personnages...",
-        percent: 85,
-      });
+      setPremiumStep("Enregistrement des personnages...");
       const characterMap = {};
 
       for (const char of resolvedCharacters) {
@@ -526,10 +538,7 @@ function Upload() {
         characterMap[char.name] = created.id;
       }
 
-      setProgress({
-        step: "Création des répliques...",
-        percent: 90,
-      });
+      setPremiumStep("Enregistrement des répliques...");
 
       const replicasToInsert = enrichedReplicas.map((rep, index) => ({
         script_id: script.id,
@@ -846,14 +855,14 @@ function Upload() {
               <div className="flex items-center gap-2">
                 <span className="text-lg">✨</span>
                 <span className="font-semibold text-sm flex items-center gap-1.5">
-                  Scan Express{" "}
+                  Scan Premium{" "}
                   <span className="bg-gold-500 text-black text-[9px] font-bold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
                     Premium IA
                   </span>
                 </span>
               </div>
               <span className="text-[10px] text-amber-500/80 mt-1">
-                Détection automatique ultra-rapide
+                Attribution automatique des personnages et répliques
               </span>
             </button>
           </div>
@@ -1036,15 +1045,30 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             {currentFileName}
           </p>
           <p className="text-gray-400 mt-2">{progress.step}</p>
-          <div className="w-full bg-gray-700 rounded-full h-2 mt-4">
+          {progress.hint && (
+            <p className="text-gray-500 text-sm mt-1">{progress.hint}</p>
+          )}
+          <div
+            className={`w-full bg-gray-700 rounded-full h-2 mt-4 ${
+              progress.indeterminate ? "overflow-hidden" : ""
+            }`}
+          >
             <div
-              className="bg-gold-500 h-2 rounded-full transition-all"
-              style={{ width: `${progress.percent}%` }}
+              className={`bg-gold-500 h-2 rounded-full ${
+                progress.indeterminate
+                  ? "progress-indeterminate"
+                  : "transition-all"
+              }`}
+              style={{
+                width: progress.indeterminate ? "35%" : `${progress.percent}%`,
+              }}
             />
           </div>
-          <p className="text-gray-500 text-sm mt-2">
-            {Math.round(progress.percent)}%
-          </p>
+          {!progress.indeterminate && (
+            <p className="text-gray-500 text-sm mt-2">
+              {Math.round(progress.percent)}%
+            </p>
+          )}
         </div>
       )}
 

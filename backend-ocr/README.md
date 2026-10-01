@@ -34,6 +34,14 @@ Les fichiers PDF sont limités à 50 Mio et supprimés du disque temporaire apr�
 traitement. Le fichier temporaire transmis à Gemini est supprimé après
 l'extraction ; en cas d'échec de suppression, le service le journalise.
 
+## Progression du Scan Premium
+
+`/api/extract-premium` renvoie les jalons vérifiés sous forme d'événements SSE :
+réception du PDF, transfert et préparation par Gemini, début de génération,
+réception puis validation du résultat. La génération Gemini ne fournit pas de
+pourcentage exploitable ; l'interface indique donc qu'elle est en cours sans
+simuler un pourcentage pendant cette étape.
+
 ## Lancement local
 
 Depuis ce dossier, installer `requirements.txt`, renseigner les variables
