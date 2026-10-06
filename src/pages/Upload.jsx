@@ -42,6 +42,7 @@ const SUPPORTED_EXTENSIONS = "PDF, Word (.doc, .docx), TXT";
 // Liste des emails autorisés à uploader (metteur en scène / développeur)
 const ADMIN_EMAILS = [
   "moz2611@gmail.com",
+  "consulting@mauricelargeron.com",
   // Ajouter d'autres emails d'admins ici
 ];
 
