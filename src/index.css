@@ -98,6 +98,19 @@
   border-radius: 18px;
   box-shadow: 0 2px 8px rgba(60, 60, 60, 0.08);
   color: #222;
+}
+
+.progress-indeterminate {
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(310%);
+  }
   display: flex;
   align-items: center;
   padding: 18px 24px;

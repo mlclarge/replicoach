@@ -55,17 +55,15 @@ export async function processWithGemini(file, onProgress) {
     throw new Error("Connectez-vous pour lancer le scan Premium.");
   }
 
-  if (onProgress) onProgress(0.1, "Préparation du PDF...");
   const formData = new FormData();
   formData.append("file", file);
   formData.append("title", file.name.replace(/\.pdf$/i, ""));
 
-  if (onProgress) onProgress(0.2, "Envoi sécurisé du PDF...");
+  if (onProgress) onProgress("uploading_to_backend");
   const controller = new AbortController();
   const abortTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  let response;
   try {
-    response = await fetch(getEndpoint(), {
+    const response = await fetch(getEndpoint(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${session.access_token}`,
@@ -73,6 +71,36 @@ export async function processWithGemini(file, onProgress) {
       body: formData,
       signal: controller.signal,
     });
+
+    if (!response.ok) {
+      const message = await readErrorMessage(response);
+      throw new Error(`Erreur du service Gemini Vision : ${message}`);
+    }
+
+    let result;
+    if (response.headers.get("content-type")?.includes("text/event-stream")) {
+      result = await readProgressStream(response, onProgress);
+    } else {
+      // Compatibilité pendant un déploiement progressif du backend.
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          "Le service Gemini Vision a renvoyé une réponse invalide.",
+        );
+      }
+      if (onProgress) onProgress("result_received");
+    }
+
+    if (
+      typeof result.title !== "string" ||
+      !Array.isArray(result.characters) ||
+      !Array.isArray(result.replicas)
+    ) {
+      throw new Error("La réponse du service Gemini Vision est incomplète.");
+    }
+
+    return result;
   } catch (error) {
     if (error.name === "AbortError") {
       throw new Error(
@@ -83,27 +111,78 @@ export async function processWithGemini(file, onProgress) {
   } finally {
     clearTimeout(abortTimer);
   }
+}
 
-  if (!response.ok) {
-    const message = await readErrorMessage(response);
-    throw new Error(`Erreur du service Gemini Vision : ${message}`);
+async function readProgressStream(response, onProgress) {
+  if (!response.body) {
+    throw new Error("Le service OCR Premium n'a pas fourni de flux de progression.");
   }
 
-  let result;
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
+
+  const dispatch = (block) => {
+    let event = "message";
+    const data = [];
+    for (const line of block.split("\n")) {
+      const normalizedLine = line.endsWith("\r") ? line.slice(0, -1) : line;
+      if (normalizedLine.startsWith("event:")) {
+        event = normalizedLine.slice(6).trim();
+      } else if (normalizedLine.startsWith("data:")) {
+        data.push(normalizedLine.slice(5).trimStart());
+      }
+    }
+    if (data.length === 0) return;
+
+    let payload;
+    try {
+      payload = JSON.parse(data.join("\n"));
+    } catch {
+      throw new Error("Le service OCR Premium a transmis un événement invalide.");
+    }
+
+    if (event === "progress") {
+      if (typeof payload.stage !== "string") {
+        throw new Error("Le service OCR Premium a transmis une étape invalide.");
+      }
+      if (onProgress) onProgress(payload.stage);
+    } else if (event === "result") {
+      result = payload;
+      if (onProgress) onProgress("result_received");
+    } else if (event === "error") {
+      throw new Error(
+        `Erreur du service Gemini Vision : ${
+          payload.detail || "Le traitement OCR Premium a échoué."
+        }`,
+      );
+    }
+  };
+
   try {
-    result = await response.json();
-  } catch {
-    throw new Error("Le service Gemini Vision a renvoyé une réponse invalide.");
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder
+        .decode(value, { stream: !done })
+        .replace(/\r\n/g, "\n");
+
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        dispatch(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+      }
+
+      if (done) break;
+    }
+
+    if (buffer.trim()) dispatch(buffer);
+  } finally {
+    reader.releaseLock();
   }
 
-  if (
-    typeof result.title !== "string" ||
-    !Array.isArray(result.characters) ||
-    !Array.isArray(result.replicas)
-  ) {
-    throw new Error("La réponse du service Gemini Vision est incomplète.");
+  if (!result) {
+    throw new Error("Le service Gemini Vision n'a pas transmis de résultat final.");
   }
-
-  if (onProgress) onProgress(1, "Analyse terminée !");
   return result;
 }

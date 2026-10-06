@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 import tempfile
 import unittest
@@ -59,8 +60,71 @@ class TestPremiumOcrApi(unittest.TestCase):
             "characters": ["FIGARO"],
             "replicas": [{"character": "FIGARO", "text": "Bonjour."}],
         }
+
+        def extract_with_progress(_path, _title, progress_callback):
+            progress_callback("gemini_uploaded")
+            progress_callback("gemini_ready")
+            progress_callback("generation_started")
+            progress_callback("response_received")
+            return extraction
+
+        with patch.object(main, "extract_script_with_gemini", extract_with_progress):
+            response = self.post(
+                "/api/extract-premium",
+                files={"file": ("script.pdf", b"%PDF-1.4", "application/pdf")},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("content-type", response.headers)
+        self.assertIn("text/event-stream", response.headers["content-type"])
+        events = [
+            line.removeprefix("event: ").strip()
+            for line in response.text.splitlines()
+            if line.startswith("event: ")
+        ]
+        self.assertEqual(
+            events,
+            [
+                "progress",
+                "progress",
+                "progress",
+                "progress",
+                "progress",
+                "progress",
+                "result",
+            ],
+        )
+        stages = [
+            json.loads(line.removeprefix("data: "))
+            for line in response.text.splitlines()
+            if line.startswith("data: ")
+        ]
+        self.assertEqual(
+            [stage["stage"] for stage in stages[:-1]],
+            [
+                "upload_received",
+                "gemini_uploaded",
+                "gemini_ready",
+                "generation_started",
+                "response_received",
+                "result_validated",
+            ],
+        )
+        self.assertEqual(
+            stages[-1],
+            {
+                "title": "La pièce",
+                "characters": [{"name": "FIGARO"}],
+                "replicas": [{"character": "FIGARO", "text": "Bonjour."}],
+            },
+        )
+
+    def test_gemini_error_is_reported_in_progress_stream(self):
+        main.app.dependency_overrides[get_premium_user] = lambda: {"id": "user-id"}
         with patch.object(
-            main, "extract_script_with_gemini", return_value=extraction
+            main,
+            "extract_script_with_gemini",
+            side_effect=main.GeminiOCRError("Échec Gemini."),
         ):
             response = self.post(
                 "/api/extract-premium",
@@ -68,14 +132,8 @@ class TestPremiumOcrApi(unittest.TestCase):
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.json(),
-            {
-                "title": "La pièce",
-                "characters": [{"name": "FIGARO"}],
-                "replicas": [{"character": "FIGARO", "text": "Bonjour."}],
-            },
-        )
+        self.assertIn("event: error", response.text)
+        self.assertIn("Échec Gemini.", response.text)
 
     def test_legacy_server_ocr_endpoint_is_not_available(self):
         response = self.post("/api/ocr")

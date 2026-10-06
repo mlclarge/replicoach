@@ -7,7 +7,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger("ocr_pipeline.gemini")
 
@@ -129,7 +129,11 @@ def parse_gemini_response(response_text: str, fallback_title: str) -> Dict[str, 
     }
 
 
-def extract_script_with_gemini(pdf_path: Path, title: str | None = None) -> Dict[str, Any]:
+def extract_script_with_gemini(
+    pdf_path: Path,
+    title: str | None = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
+) -> Dict[str, Any]:
     """Upload a PDF to Gemini, extract its structured dialogue, then delete the upload."""
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
@@ -149,16 +153,24 @@ def extract_script_with_gemini(pdf_path: Path, title: str | None = None) -> Dict
     client = genai.Client(api_key=api_key)
     uploaded_file = None
     try:
+        if progress_callback:
+            progress_callback("gemini_uploading")
         uploaded_file = client.files.upload(
             file=str(pdf_path),
             config=types.UploadFileConfig(mime_type="application/pdf"),
         )
+        if progress_callback:
+            progress_callback("gemini_uploaded")
         active_file = _wait_until_file_active(client, uploaded_file)
+        if progress_callback:
+            progress_callback("gemini_ready")
         file_uri = getattr(active_file, "uri", None)
         mime_type = getattr(active_file, "mime_type", None) or "application/pdf"
         if not file_uri:
             raise GeminiOCRError("Gemini n'a pas fourni l'URI du PDF importé.")
 
+        if progress_callback:
+            progress_callback("generation_started")
         response = client.models.generate_content(
             model=model,
             contents=[
@@ -177,6 +189,8 @@ def extract_script_with_gemini(pdf_path: Path, title: str | None = None) -> Dict
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
+        if progress_callback:
+            progress_callback("response_received")
         candidate = response.candidates[0] if getattr(response, "candidates", None) else None
         finish_reason = str(getattr(candidate, "finish_reason", "")).rsplit(".", 1)[-1].upper()
         if finish_reason == "MAX_TOKENS":
