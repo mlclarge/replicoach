@@ -448,6 +448,19 @@ function Upload() {
       const parsedData = await processWithGemini(
         fileToProcess,
         (stage) => {
+          const chunkTotal = stage.match(/^chunks_total:(\d+)$/);
+          const chunkDone = stage.match(/^chunks_done:(\d+)\/(\d+)$/);
+          if (chunkTotal || chunkDone) {
+            const done = chunkDone ? Number(chunkDone[1]) : 0;
+            const total = Number(chunkDone ? chunkDone[2] : chunkTotal[1]);
+            setProgress({
+              step: `Gemini analyse le script en parallèle : ${done}/${total} parties terminées`,
+              hint: "Les parties sont traitées simultanément.",
+              percent: Math.round((done / total) * 100),
+              indeterminate: false,
+            });
+            return;
+          }
           setPremiumStep(
             progressMessages[stage] || "Analyse Premium en cours...",
             progressHints[stage] || null,
