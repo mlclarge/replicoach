@@ -1,11 +1,11 @@
-import { useState, useCallback } from "react";
+﻿import { useState, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import PremiumGateModal from "../components/PremiumGateModal";
 import { useScriptStore } from "../store/scriptStore";
 import { uploadFile, supabase } from "../lib/supabase";
-import { extractTextFromPDF } from "../lib/pdfProcessor";
+import { extractTextFromPDF, hasNativeText } from "../lib/pdfProcessor";
 import {
   extractTextFromWord,
   isWordDocument,
@@ -82,6 +82,7 @@ function Upload() {
 
   // Paywall du Scan Express (OCR automatique) : réservé aux comptes Premium
   const [showOcrPremiumModal, setShowOcrPremiumModal] = useState(false);
+  const [nativeTextHint, setNativeTextHint] = useState(false);
 
   const onDrop = useCallback(
     (acceptedFiles) => {
@@ -113,6 +114,8 @@ function Upload() {
             file,
           );
           setFiles([file]);
+          setNativeTextHint(false);
+          hasNativeText(file).then(setNativeTextHint);
           handleProcessPremium(file);
         } else {
           console.log(
@@ -847,7 +850,7 @@ function Upload() {
                 <span className="font-semibold text-sm">Scan Classique</span>
               </div>
               <span className="text-[10px] text-gray-500 mt-1">
-                Gratuit • Saisie des personnages
+                Rapide et gratuit • Vous indiquez les personnages
               </span>
             </button>
 
@@ -876,7 +879,7 @@ function Upload() {
                 </span>
               </div>
               <span className="text-[10px] text-amber-500/80 mt-1">
-                Attribution automatique des personnages et répliques
+                Personnages détectés automatiquement • PDF scannés acceptés • ~45 s
               </span>
             </button>
           </div>
@@ -1061,6 +1064,12 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
           <p className="text-gray-400 mt-2">{progress.step}</p>
           {progress.hint && (
             <p className="text-gray-500 text-sm mt-1">{progress.hint}</p>
+          )}
+          {nativeTextHint && scanMode === "premium" && (
+            <p className="text-amber-500/80 text-xs mt-3">
+              💡 Votre PDF est lisible : le Scan Classique (gratuit) suffit pour
+              ce type de fichier.
+            </p>
           )}
           <div
             className={`w-full bg-gray-700 rounded-full h-2 mt-4 ${
