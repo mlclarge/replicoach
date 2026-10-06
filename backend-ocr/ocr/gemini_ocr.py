@@ -240,16 +240,28 @@ def _merge_chunk_results(results: List[Dict[str, Any]], fallback_title: str) -> 
     characters: List[str] = []
     seen: Dict[str, str] = {}
     replicas: List[Dict[str, str]] = []
-    for result in results:
+    for index, result in enumerate(results):
         for name in result["characters"]:
             key = name.casefold()
             if key not in seen:
                 seen[key] = name
                 characters.append(name)
-        for replica in result["replicas"]:
+        for position, replica in enumerate(result["replicas"]):
+            # Une réplique coupée par un saut de tranche ouvre la tranche suivante
+            # sans nom de locuteur : on la rattache à la réplique précédente.
+            if (
+                index > 0
+                and position == 0
+                and replicas
+                and replica["character"].casefold() == "inconnu"
+            ):
+                replicas[-1]["text"] = f'{replicas[-1]["text"]} {replica["text"]}'
+                continue
             replicas.append(
                 {"character": seen[replica["character"].casefold()], "text": replica["text"]}
             )
+    used = {replica["character"].casefold() for replica in replicas}
+    characters = [name for name in characters if name.casefold() in used]
     title = results[0]["title"] if results and results[0].get("title") else fallback_title
     return {"title": title, "characters": characters, "replicas": replicas}
 
