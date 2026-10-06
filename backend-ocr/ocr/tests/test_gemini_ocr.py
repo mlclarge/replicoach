@@ -127,5 +127,17 @@ class TestMergeChunks(unittest.TestCase):
         self.assertEqual([r["text"] for r in merged["replicas"]], ["A", "B", "C"])
 
 
+    def test_attaches_orphan_start_of_chunk_to_previous_replica(self):
+        merged = _merge_chunk_results(
+            [
+                {"title": "P", "characters": ["JEFF"], "replicas": [{"character": "JEFF", "text": "Début"}]},
+                {"title": "P", "characters": ["INCONNU", "SAM"], "replicas": [{"character": "INCONNU", "text": "suite."}, {"character": "SAM", "text": "Oui."}]},
+            ],
+            "fallback",
+        )
+        self.assertEqual(merged["replicas"][0], {"character": "JEFF", "text": "Début suite."})
+        self.assertEqual(merged["characters"], ["JEFF", "SAM"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -226,3 +226,20 @@ export async function extractTextSimple(file, onOCRProgress = () => {}) {
   const result = await extractTextFromPDF(file, onOCRProgress);
   return result.text;
 }
+
+// Indique si le PDF contient un texte natif lisible (donc exploitable en mode Standard).
+export async function hasNativeText(file, pagesToCheck = 3, minChars = 200) {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let chars = 0;
+    for (let i = 1; i <= Math.min(pagesToCheck, pdf.numPages); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      chars += content.items.map((item) => item.str || "").join("").trim().length;
+    }
+    return chars >= minChars;
+  } catch {
+    return false;
+  }
+}
