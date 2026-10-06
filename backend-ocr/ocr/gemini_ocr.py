@@ -1,11 +1,13 @@
-"""Premium script extraction with Gemini Vision."""
+﻿"""Premium script extraction with Gemini Vision."""
 
 from __future__ import annotations
 
 import json
 import logging
 import os
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -14,6 +16,8 @@ logger = logging.getLogger("ocr_pipeline.gemini")
 DEFAULT_MODEL = "gemini-3.8-flash"
 FILE_PROCESSING_TIMEOUT_SECONDS = 60
 MAX_OUTPUT_TOKENS = 65536
+PAGES_PER_CHUNK = int(os.environ.get("GEMINI_PAGES_PER_CHUNK", "9"))
+MAX_PARALLEL_CHUNKS = int(os.environ.get("GEMINI_MAX_PARALLEL", "6"))
 
 EXTRACTION_PROMPT = """Analyse intégralement le PDF de cette pièce de théâtre.
 Retourne uniquement un objet JSON valide conforme à ce schéma :
@@ -129,28 +133,39 @@ def parse_gemini_response(response_text: str, fallback_title: str) -> Dict[str, 
     }
 
 
-def extract_script_with_gemini(
+def _split_pdf(pdf_path: Path, pages_per_chunk: int) -> List[Path]:
+    """Split a PDF into page chunks; return [pdf_path] when splitting is not useful."""
+    try:
+        from pypdf import PdfReader, PdfWriter
+
+        reader = PdfReader(str(pdf_path))
+        total_pages = len(reader.pages)
+        if pages_per_chunk <= 0 or total_pages <= pages_per_chunk:
+            return [pdf_path]
+        chunk_paths: List[Path] = []
+        for index, start in enumerate(range(0, total_pages, pages_per_chunk)):
+            writer = PdfWriter()
+            for page in reader.pages[start : start + pages_per_chunk]:
+                writer.add_page(page)
+            chunk_path = pdf_path.with_name(f"{pdf_path.stem}_part{index:03d}.pdf")
+            with open(chunk_path, "wb") as chunk_file:
+                writer.write(chunk_file)
+            chunk_paths.append(chunk_path)
+        return chunk_paths
+    except Exception:
+        logger.warning("PDF split failed for %s, using a single request", pdf_path.name, exc_info=True)
+        return [pdf_path]
+
+
+def _extract_one_pdf(
+    client: Any,
+    types: Any,
+    model: str,
     pdf_path: Path,
-    title: str | None = None,
+    fallback_title: str,
     progress_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
-    """Upload a PDF to Gemini, extract its structured dialogue, then delete the upload."""
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if not api_key:
-        raise GeminiOCRError("La clé GEMINI_API_KEY n'est pas configurée sur le serveur.")
-
-    try:
-        from google import genai
-        from google.genai import types
-    except ImportError as exc:
-        raise GeminiOCRError(
-            "Le SDK Google GenAI n'est pas installé sur le serveur OCR."
-        ) from exc
-
-    pdf_path = Path(pdf_path)
-    fallback_title = title or pdf_path.stem
-    model = os.environ.get("GEMINI_OCR_MODEL", DEFAULT_MODEL)
-    client = genai.Client(api_key=api_key)
+    """Upload one PDF to Gemini, extract its dialogue, then delete the upload."""
     uploaded_file = None
     try:
         if progress_callback:
@@ -181,11 +196,8 @@ def extract_script_with_gemini(
                 response_mime_type="application/json",
                 temperature=0,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
-                # Le raisonnement interne ("thinking") de gemini-3.8-flash consomme
-                # une grande partie du budget de tokens de sortie, ce qui tronquait
-                # le JSON avant sa fin sur les scripts longs (finish_reason=MAX_TOKENS).
-                # Cette tâche est une extraction structurée : le thinking n'apporte
-                # rien et doit être désactivé pour garantir une réponse complète.
+                # Extraction structurée : le thinking consommerait le budget de
+                # sortie et tronquerait le JSON (finish_reason=MAX_TOKENS).
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
@@ -222,3 +234,78 @@ def extract_script_with_gemini(
                     uploaded_file.name,
                     exc_info=True,
                 )
+
+
+def _merge_chunk_results(results: List[Dict[str, Any]], fallback_title: str) -> Dict[str, Any]:
+    characters: List[str] = []
+    seen: Dict[str, str] = {}
+    replicas: List[Dict[str, str]] = []
+    for result in results:
+        for name in result["characters"]:
+            key = name.casefold()
+            if key not in seen:
+                seen[key] = name
+                characters.append(name)
+        for replica in result["replicas"]:
+            replicas.append(
+                {"character": seen[replica["character"].casefold()], "text": replica["text"]}
+            )
+    title = results[0]["title"] if results and results[0].get("title") else fallback_title
+    return {"title": title, "characters": characters, "replicas": replicas}
+
+
+def extract_script_with_gemini(
+    pdf_path: Path,
+    title: str | None = None,
+    progress_callback: Optional[Callable[[str], None]] = None,
+) -> Dict[str, Any]:
+    """Extract a script with Gemini, splitting long PDFs into parallel page chunks."""
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise GeminiOCRError("La clé GEMINI_API_KEY n'est pas configurée sur le serveur.")
+
+    try:
+        from google import genai
+        from google.genai import types
+    except ImportError as exc:
+        raise GeminiOCRError(
+            "Le SDK Google GenAI n'est pas installé sur le serveur OCR."
+        ) from exc
+
+    pdf_path = Path(pdf_path)
+    fallback_title = title or pdf_path.stem
+    model = os.environ.get("GEMINI_OCR_MODEL", DEFAULT_MODEL)
+    client = genai.Client(api_key=api_key)
+
+    chunk_paths = _split_pdf(pdf_path, PAGES_PER_CHUNK)
+    if len(chunk_paths) == 1:
+        return _extract_one_pdf(
+            client, types, model, chunk_paths[0], fallback_title, progress_callback
+        )
+
+    total = len(chunk_paths)
+    done = 0
+    lock = threading.Lock()
+    if progress_callback:
+        progress_callback(f"chunks_total:{total}")
+
+    def run_chunk(chunk_path: Path) -> Dict[str, Any]:
+        nonlocal done
+        result = _extract_one_pdf(client, types, model, chunk_path, fallback_title)
+        with lock:
+            done += 1
+            if progress_callback:
+                progress_callback(f"chunks_done:{done}/{total}")
+        return result
+
+    workers = max(1, min(MAX_PARALLEL_CHUNKS, total))
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(run_chunk, chunk_paths))
+    finally:
+        for chunk_path in chunk_paths:
+            try:
+                chunk_path.unlink()
+            except OSError:
+                pass
+    return _merge_chunk_results(results, fallback_title)

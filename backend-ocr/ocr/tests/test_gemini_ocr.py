@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import tempfile
 import unittest
@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from ocr.gemini_ocr import (
     GeminiOCRError,
+    _merge_chunk_results,
     extract_script_with_gemini,
     parse_gemini_response,
 )
@@ -110,6 +111,20 @@ class TestParseGeminiResponse(unittest.TestCase):
             ],
         )
         client.files.delete.assert_called_once_with(name="files/script")
+
+
+class TestMergeChunks(unittest.TestCase):
+    def test_merges_characters_and_keeps_chunk_order(self):
+        merged = _merge_chunk_results(
+            [
+                {"title": "Pièce", "characters": ["JOHN"], "replicas": [{"character": "JOHN", "text": "A"}]},
+                {"title": "x", "characters": ["John", "SAM"], "replicas": [{"character": "SAM", "text": "B"}, {"character": "JOHN", "text": "C"}]},
+            ],
+            "fallback",
+        )
+        self.assertEqual(merged["title"], "Pièce")
+        self.assertEqual(merged["characters"], ["JOHN", "SAM"])
+        self.assertEqual([r["text"] for r in merged["replicas"]], ["A", "B", "C"])
 
 
 if __name__ == "__main__":
