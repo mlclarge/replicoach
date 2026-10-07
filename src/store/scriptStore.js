@@ -35,10 +35,10 @@ export const useScriptStore = create((set, get) => ({
         .from("scripts")
         .select(
           `
-          *,
-          characters (*),
-          replicas (*)
-        `
+    *,
+    characters!characters_script_id_fkey (*),
+    replicas (*)
+  `,
         )
         .eq("user_id", userId)
         .order("display_order", { ascending: true });
@@ -53,7 +53,7 @@ export const useScriptStore = create((set, get) => ({
           code: error?.code,
           details: error?.details,
           hint: error?.hint,
-        })
+        }),
       );
       set({ error: error.message, loading: false });
     }
@@ -66,10 +66,10 @@ export const useScriptStore = create((set, get) => ({
         .from("scripts")
         .select(
           `
-          *,
-          characters (*),
-          replicas (*)
-        `
+    *,
+    characters!characters_script_id_fkey (*),
+    replicas (*)
+  `,
         )
         .eq("id", scriptId)
         .single();
@@ -166,12 +166,13 @@ export const useScriptStore = create((set, get) => ({
       if (error) throw error;
 
       set((state) => ({
-        scripts: state.scripts.map((s) => 
-          s.id === scriptId ? { ...s, ...updates } : s
+        scripts: state.scripts.map((s) =>
+          s.id === scriptId ? { ...s, ...updates } : s,
         ),
-        currentScript: state.currentScript?.id === scriptId 
-          ? { ...state.currentScript, ...updates }
-          : state.currentScript,
+        currentScript:
+          state.currentScript?.id === scriptId
+            ? { ...state.currentScript, ...updates }
+            : state.currentScript,
       }));
       notifyScriptCacheInvalidation(scriptId, userId);
 
@@ -211,11 +212,12 @@ export const useScriptStore = create((set, get) => ({
         .single();
 
       if (error) throw error;
-      
+
       // Mettre à jour le state local
       set((state) => {
-        if (!state.currentScript || state.currentScript.id !== scriptId) return state;
-        
+        if (!state.currentScript || state.currentScript.id !== scriptId)
+          return state;
+
         return {
           currentScript: {
             ...state.currentScript,
@@ -225,9 +227,9 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId)
+        findScriptUserId(get(), scriptId),
       );
-      
+
       return data;
     } catch (error) {
       console.error("Add character error:", error);
@@ -250,19 +252,19 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
             characters: state.currentScript.characters.map((c) =>
-              c.id === characterId ? { ...c, ...data } : c
+              c.id === characterId ? { ...c, ...data } : c,
             ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id
+        get().currentScript?.user_id,
       );
 
       return data;
@@ -294,18 +296,22 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
-            characters: state.currentScript.characters.filter((c) => c.id !== characterId),
-            replicas: state.currentScript.replicas.filter((r) => r.character_id !== characterId),
+            characters: state.currentScript.characters.filter(
+              (c) => c.id !== characterId,
+            ),
+            replicas: state.currentScript.replicas.filter(
+              (r) => r.character_id !== characterId,
+            ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id
+        get().currentScript?.user_id,
       );
     } catch (error) {
       console.error("Delete character error:", error);
@@ -324,7 +330,7 @@ export const useScriptStore = create((set, get) => ({
       if (replicas?.[0]?.script_id) {
         notifyScriptCacheInvalidation(
           replicas[0].script_id,
-          findScriptUserId(get(), replicas[0].script_id)
+          findScriptUserId(get(), replicas[0].script_id),
         );
       }
       return data;
@@ -348,10 +354,10 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         const updatedReplicas = [...(state.currentScript.replicas || []), data];
         updatedReplicas.sort((a, b) => a.order_index - b.order_index);
-        
+
         return {
           currentScript: {
             ...state.currentScript,
@@ -361,7 +367,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         replicaData.script_id,
-        findScriptUserId(get(), replicaData.script_id)
+        findScriptUserId(get(), replicaData.script_id),
       );
 
       return data;
@@ -386,11 +392,11 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         const updatedReplicas = state.currentScript.replicas.map((r) =>
-          r.id === replicaId ? { ...r, ...data } : r
+          r.id === replicaId ? { ...r, ...data } : r,
         );
-        
+
         return {
           currentScript: {
             ...state.currentScript,
@@ -400,7 +406,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id
+        get().currentScript?.user_id,
       );
 
       return data;
@@ -430,18 +436,20 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
-            replicas: state.currentScript.replicas.filter((r) => r.id !== replicaId),
+            replicas: state.currentScript.replicas.filter(
+              (r) => r.id !== replicaId,
+            ),
           },
         };
       });
 
       notifyScriptCacheInvalidation(
         replica?.script_id,
-        findScriptUserId(get(), replica?.script_id)
+        findScriptUserId(get(), replica?.script_id),
       );
     } catch (error) {
       console.error("Delete replica error:", error);
@@ -466,7 +474,7 @@ export const useScriptStore = create((set, get) => ({
       await get().fetchScript(scriptId);
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId)
+        findScriptUserId(get(), scriptId),
       );
     } catch (error) {
       console.error("Reorder replicas error:", error);
@@ -490,8 +498,9 @@ export const useScriptStore = create((set, get) => ({
 
       // Mettre à jour le state local
       set((state) => {
-        if (!state.currentScript || state.currentScript.id !== scriptId) return state;
-        
+        if (!state.currentScript || state.currentScript.id !== scriptId)
+          return state;
+
         return {
           currentScript: {
             ...state.currentScript,
@@ -521,7 +530,7 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
@@ -531,7 +540,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         data.script_id,
-        data.user_id || findScriptUserId(get(), data.script_id)
+        data.user_id || findScriptUserId(get(), data.script_id),
       );
 
       return data;
@@ -555,18 +564,18 @@ export const useScriptStore = create((set, get) => ({
       const scriptId = get().currentScript?.id;
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId)
+        findScriptUserId(get(), scriptId),
       );
 
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
             personalNotes: (state.currentScript.personalNotes || []).map((n) =>
-              n.id === noteId ? data : n
+              n.id === noteId ? data : n,
             ),
           },
         };
@@ -592,17 +601,19 @@ export const useScriptStore = create((set, get) => ({
       // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
-        
+
         return {
           currentScript: {
             ...state.currentScript,
-            personalNotes: (state.currentScript.personalNotes || []).filter((n) => n.id !== noteId),
+            personalNotes: (state.currentScript.personalNotes || []).filter(
+              (n) => n.id !== noteId,
+            ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id
+        get().currentScript?.user_id,
       );
     } catch (error) {
       console.error("Delete personal note error:", error);
