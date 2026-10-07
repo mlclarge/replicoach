@@ -1,4 +1,4 @@
-﻿import { useState, useCallback } from "react";
+﻿import { useState, useCallback, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
@@ -19,7 +19,7 @@ import {
   generateCueWords,
   detectGender,
 } from "../lib/scriptParser";
-import { processWithGemini } from "../lib/geminiOcrService";
+import { processWithGemini, warmUpOcrBackend } from "../lib/geminiOcrService";
 import { withTimeout } from "../lib/withTimeout";
 import Loader from "../components/ui/Loader";
 
@@ -83,6 +83,10 @@ function Upload() {
   // Paywall du Scan Express (OCR automatique) : réservé aux comptes Premium
   const [showOcrPremiumModal, setShowOcrPremiumModal] = useState(false);
   const [nativeTextHint, setNativeTextHint] = useState(false);
+
+  useEffect(() => {
+    if (isPremium) warmUpOcrBackend();
+  }, [isPremium]);
 
   const onDrop = useCallback(
     (acceptedFiles) => {

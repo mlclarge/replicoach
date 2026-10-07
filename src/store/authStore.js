@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { supabase } from "../lib/supabase";
+import { clearOfflineDataCache } from "../lib/offlineDataCache";
 
 // Nouvelle fonction utilitaire pour récupérer le profil Premium
 const fetchProfile = async (userId) => {
@@ -71,6 +72,8 @@ export const useAuthStore = create((set, get) => ({
             }, 0);
           }
         } else if (event === "SIGNED_OUT") {
+          // Sans await : le rappel d'auth ne doit pas attendre (voir plus haut).
+          clearOfflineDataCache().catch(() => {});
           set({ user: null, isPremium: false, loading: false });
         }
       });
@@ -199,6 +202,7 @@ export const useAuthStore = create((set, get) => ({
   signOut: async () => {
     set({ loading: true });
     await supabase.auth.signOut();
+    await clearOfflineDataCache();
     set({ user: null, isPremium: false, loading: false });
   },
 
