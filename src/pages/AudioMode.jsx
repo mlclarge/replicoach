@@ -9,6 +9,8 @@ import {
   supabase,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import PremiumVoicePicker from "../components/PremiumVoicePicker";
+import { fetchTtsStatus, lockTtsVoice, fetchTtsAudioUrl } from "../lib/premiumTts";
 
 // Prénoms pour détection du genre
 const MALE_NAMES = [
@@ -121,8 +123,13 @@ function isMobile() {
 
 function AudioMode() {
   const { id } = useParams();
-  const { user } = useAuthStore();
+  const { user, isPremium } = useAuthStore();
   const { currentScript, loading, fetchScript } = useScriptStore();
+
+  // Voix Premium (Google TTS)
+  const [premiumLocks, setPremiumLocks] = useState({}); // { charId: voiceId }
+  const [ttsUsage, setTtsUsage] = useState(null);
+  const [premiumNotice, setPremiumNotice] = useState("");
 
   // Voix synthétiques
   const [voices, setVoices] = useState({ male: [], female: [], all: [] });
@@ -164,6 +171,29 @@ function AudioMode() {
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
+
+  // Voix verrouillées et quota Premium
+  useEffect(() => {
+    if (!isPremium || !id) return;
+    let cancelled = false;
+    fetchTtsStatus(id).then((res) => {
+      if (cancelled || !res.ok) return;
+      setPremiumLocks(res.locks || {});
+      setTtsUsage(res.usage || null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPremium, id]);
+
+  const handleLockVoice = async (characterId, voiceId) => {
+    const res = await lockTtsVoice(id, characterId, voiceId);
+    if (res.ok || res.code === "already_locked") {
+      const status = await fetchTtsStatus(id);
+      if (status.ok) setPremiumLocks(status.locks || {});
+    }
+    return res;
+  };
 
   // Charger le script
   useEffect(() => {
@@ -687,6 +717,38 @@ function AudioMode() {
     }
   };
 
+  // Renvoie true si l'audio Premium a été lu, false pour basculer sur la voix du navigateur
+  const speakPremium = async (replicaId) => {
+    const res = await fetchTtsAudioUrl(id, replicaId);
+    if (!res.ok) {
+      if (res.code === "quota_exceeded") {
+        setPremiumNotice("Quota mensuel de voix Premium atteint : voix du navigateur utilisée.");
+      }
+      return false;
+    }
+    setPremiumNotice("");
+    if (res.usage) setTtsUsage(res.usage);
+    try {
+      await ensureAudioUnlocked();
+    } catch (e) {
+      // ignore
+    }
+    return await new Promise((resolve) => {
+      const audio = new Audio(res.url);
+      audioPlayerRef.current = audio;
+      audio.playbackRate = rate;
+      audio.onended = () => {
+        audioPlayerRef.current = null;
+        resolve(true);
+      };
+      audio.onerror = () => {
+        audioPlayerRef.current = null;
+        resolve(false);
+      };
+      audio.play().catch(() => resolve(false));
+    });
+  };
+
   // Fonction speak unifiée
   // Fonction speak unifiée: priorise enregistrement par réplique, puis par personnage, sinon TTS
   const speak = async (text, characterId, replicaId = null) => {
@@ -715,7 +777,13 @@ function AudioMode() {
       return await speakRecorded(characterId);
     }
 
-    // 3) Synthèse vocale — passer le texte nettoyé
+    // 3) Voix Premium (générée à la première écoute, puis mise en cache serveur)
+    if (isPremium && replicaId && premiumLocks[characterId]) {
+      const played = await speakPremium(replicaId);
+      if (played) return;
+    }
+
+    // 4) Synthèse vocale — passer le texte nettoyé
     return await speakSynth(cleanedForDecision, characterId);
   };
 
@@ -1101,6 +1169,30 @@ function AudioMode() {
                 })}
               </div>
             </div>
+
+            {/* Voix Premium par personnage */}
+            {isPremium && (
+              <div className="pt-3 border-t border-gray-200 space-y-3">
+                <p className="text-sm text-gray-600 font-semibold">
+                  ✨ Voix Premium (choix définitif par personnage) :
+                </p>
+                {characters.map((char) => (
+                  <PremiumVoicePicker
+                    key={char.id}
+                    character={char}
+                    lockedVoiceId={premiumLocks[char.id]}
+                    onLock={handleLockVoice}
+                  />
+                ))}
+                {ttsUsage && (
+                  <p className="text-xs text-gray-500">
+                    Quota du mois : {ttsUsage.used.toLocaleString("fr-FR")} /{" "}
+                    {ttsUsage.limit.toLocaleString("fr-FR")} caractères
+                  </p>
+                )}
+                {premiumNotice && <p className="text-xs text-amber-700">{premiumNotice}</p>}
+              </div>
+            )}
 
             {/* Choix de voix par personnage (DESKTOP) */}
             {!isMobile() && voices.all?.length > 1 && (
