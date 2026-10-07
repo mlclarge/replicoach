@@ -21,9 +21,13 @@ export default defineConfig({
       // On garde notre public/manifest.json, pas de génération automatique
       manifest: false,
 
-      // Patterns des assets à pré-cacher (tous les fichiers du build)
+      // Pré-cacher le shell et ses bundles d'entrée ; les routes chargent
+      // leurs chunks à la demande et le service worker les met ensuite en cache.
       injectManifest: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,webp,woff,woff2}"],
+        globPatterns: [
+          "**/*.{css,html,ico,png,svg,webp,woff,woff2}",
+          "**/assets/index-*.js",
+        ],
       },
 
       // Activer le SW en développement pour pouvoir tester le mode hors-ligne

@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600;700&display=swap");
+
 .menu-library-dropdown {
   width: 100%;
   max-width: 95vw;
@@ -115,7 +117,9 @@
   align-items: center;
   padding: 18px 24px;
   margin-bottom: 18px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
   font-family: "Source Sans 3", Arial, sans-serif;
   font-weight: 700;
 }
@@ -138,7 +142,9 @@
   font-family: "Source Sans 3", Arial, sans-serif;
   box-shadow: 0 2px 8px rgba(11, 107, 68, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: box-shadow 0.15s, transform 0.12s;
+  transition:
+    box-shadow 0.15s,
+    transform 0.12s;
 }
 .btn-newtext:hover {
   box-shadow: 0 6px 20px rgba(11, 107, 68, 0.18);
@@ -161,7 +167,9 @@
   font-weight: 700;
   font-size: 1.1em;
   letter-spacing: 0.01em;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 .menu-library:hover {
   box-shadow: 0 4px 16px rgba(13, 79, 139, 0.25);
@@ -184,12 +192,19 @@
   margin-bottom: 18px;
   width: 100%;
 }
-.menu-newtext:hover{ transform: translateY(-2px); box-shadow:0 10px 28px rgba(11,107,68,0.14)}
+.menu-newtext:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(11, 107, 68, 0.14);
+}
 
-.menu-newtext h3{ margin:0; font-size:1.1em; font-weight:800; }
-.menu-newtext p{ margin:0 }
-
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600;700&display=swap");
+.menu-newtext h3 {
+  margin: 0;
+  font-size: 1.1em;
+  font-weight: 800;
+}
+.menu-newtext p {
+  margin: 0;
+}
 
 @tailwind base;
 @tailwind components;
@@ -258,7 +273,9 @@
   align-items: center;
   padding: 18px 24px;
   margin-bottom: 18px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
   font-family: "Source Sans 3", Arial, sans-serif;
   font-weight: 700;
 }
@@ -276,7 +293,9 @@
   align-items: center;
   padding: 18px 24px;
   margin-bottom: 18px;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition:
+    box-shadow 0.2s,
+    transform 0.2s;
 }
 .menu-library:hover {
   box-shadow: 0 4px 16px rgba(183, 28, 80, 0.25);
@@ -294,7 +313,9 @@
   margin-bottom: 18px;
   color: #222;
   box-shadow: 0 1px 4px rgba(255, 214, 0, 0.08);
-  transition: border 0.2s, box-shadow 0.2s;
+  transition:
+    border 0.2s,
+    box-shadow 0.2s;
 }
 .menu-search:focus-within {
   border: 2.5px solid #ffb300;

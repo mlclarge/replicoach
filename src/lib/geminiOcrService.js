@@ -25,6 +25,16 @@ function getEndpoint() {
   return `${normalizedUrl}/api/extract-premium`;
 }
 
+// Réveille le backend Render (démarrage à froid ~30 s) dès l'arrivée sur la page d'import.
+export function warmUpOcrBackend() {
+  try {
+    const healthUrl = getEndpoint().replace(/\/api\/extract-premium$/, "/api/health");
+    fetch(healthUrl, { mode: "no-cors", cache: "no-store" }).catch(() => {});
+  } catch {
+    // backend non configuré : rien à réveiller
+  }
+}
+
 async function readErrorMessage(response) {
   try {
     const payload = await response.json();
