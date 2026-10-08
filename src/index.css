@@ -1,5 +1,39 @@
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Source+Sans+3:wght@300;400;600;700&display=swap");
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-darker text-gray-100 font-sans antialiased;
+  }
+  /* Safe area for mobile */
+  .safe-area-pb {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-primary-700 hover:bg-primary-600 text-white px-6 py-3 rounded-full font-semibold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95;
+  }
+  .btn-secondary {
+    @apply border-2 border-primary-700 text-primary-400 hover:bg-primary-700 hover:text-white px-6 py-3 rounded-full font-semibold transition-all duration-200 active:scale-95;
+  }
+  .btn-gold {
+    @apply bg-gold-500 hover:bg-gold-400 text-dark px-6 py-3 rounded-full font-bold transition-all duration-200 shadow-lg hover:shadow-xl active:scale-95;
+  }
+  .card {
+    @apply bg-dark rounded-xl p-4 border border-gray-800 hover:border-primary-700/50 transition-all duration-200;
+  }
+  .input {
+    @apply w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all duration-200;
+  }
+}
+
+/* --- Styles personnalisés --- */
+
 .menu-library-dropdown {
   width: 100%;
   max-width: 95vw;
@@ -36,7 +70,6 @@
     font-size: 1.35rem;
   }
 }
-
 .section-title .section-icon {
   display: inline-block;
   margin-right: 0.5rem;
@@ -44,26 +77,6 @@
   vertical-align: -0.08em;
 }
 
-/* Icon inside inputs */
-.input-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 1.05em;
-  color: #333333;
-  pointer-events: none;
-}
-.menu-library-content {
-  max-width: 95vw;
-  width: 100%;
-}
-@media (min-width: 768px) {
-  .menu-library-content {
-    max-width: 700px;
-    width: 100%;
-  }
-}
 /* Scrollbar blanche pour les menus bibliothèque et consignes */
 .menu-library ::-webkit-scrollbar,
 .menu-library-dropdown ::-webkit-scrollbar,
@@ -105,7 +118,6 @@
 .progress-indeterminate {
   animation: progress-indeterminate 1.5s ease-in-out infinite;
 }
-
 @keyframes progress-indeterminate {
   from {
     transform: translateX(-110%);
@@ -113,70 +125,14 @@
   to {
     transform: translateX(310%);
   }
-  display: flex;
-  align-items: center;
-  padding: 18px 24px;
-  margin-bottom: 18px;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
-  font-family: "Source Sans 3", Arial, sans-serif;
-  font-weight: 700;
 }
+
 .menu-director:hover {
   box-shadow: 0 4px 16px rgba(60, 60, 60, 0.15);
   transform: translateY(-2px) scale(1.02);
 }
 
-/* Nouveau style pour le bouton 'Nouveau texte' — vert bouteille */
-.btn-newtext {
-  background: linear-gradient(90deg, #0b6b44 0%, #095a39 100%);
-  color: #ffffff;
-  border-radius: 18px;
-  padding: 14px 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  font-weight: 700;
-  font-family: "Source Sans 3", Arial, sans-serif;
-  box-shadow: 0 2px 8px rgba(11, 107, 68, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition:
-    box-shadow 0.15s,
-    transform 0.12s;
-}
-.btn-newtext:hover {
-  box-shadow: 0 6px 20px rgba(11, 107, 68, 0.18);
-  transform: translateY(-2px);
-}
-.btn-newtext:focus {
-  outline: 3px solid rgba(11, 107, 68, 0.15);
-  outline-offset: 2px;
-}
-.menu-library {
-  background: #0d4f8b; /* bleu profond, police conservée */
-  border-radius: 18px;
-  box-shadow: 0 2px 8px rgba(13, 79, 139, 0.15);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  padding: 18px 24px;
-  margin-bottom: 18px;
-  font-family: "Source Sans 3", Arial, sans-serif;
-  font-weight: 700;
-  font-size: 1.1em;
-  letter-spacing: 0.01em;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
-}
-.menu-library:hover {
-  box-shadow: 0 4px 16px rgba(13, 79, 139, 0.25);
-  border: 2px solid rgba(255, 255, 255, 0.06);
-  transform: translateY(-2px) scale(1.02);
-}
-/* Nouveau style pour le bloc 'Nouveau texte' aligné à gauche, similaire aux autres menus */
+/* Nouveau style pour le bloc 'Nouveau texte' */
 .menu-newtext {
   background: linear-gradient(90deg, #0b6b44 0%, #095a39 100%);
   color: #ffffff;
@@ -196,7 +152,6 @@
   transform: translateY(-2px);
   box-shadow: 0 10px 28px rgba(11, 107, 68, 0.14);
 }
-
 .menu-newtext h3 {
   margin: 0;
   font-size: 1.1em;
@@ -204,84 +159,6 @@
 }
 .menu-newtext p {
   margin: 0;
-}
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  body {
-    @apply bg-darker text-gray-100 font-sans antialiased;
-  }
-
-  /* Safe area for mobile */
-  .safe-area-pb {
-    padding-bottom: env(safe-area-inset-bottom, 0);
-  }
-}
-
-@layer components {
-  .btn-primary {
-    @apply bg-primary-700 hover:bg-primary-600 text-white 
-           px-6 py-3 rounded-full font-semibold 
-           transition-all duration-200 
-           shadow-lg hover:shadow-xl
-           active:scale-95;
-  }
-
-  .btn-secondary {
-    @apply border-2 border-primary-700 text-primary-400 
-           hover:bg-primary-700 hover:text-white
-           px-6 py-3 rounded-full font-semibold 
-           transition-all duration-200
-           active:scale-95;
-  }
-
-  .btn-gold {
-    @apply bg-gold-500 hover:bg-gold-400 text-dark 
-           px-6 py-3 rounded-full font-bold 
-           transition-all duration-200
-           shadow-lg hover:shadow-xl
-           active:scale-95;
-  }
-
-  .card {
-    @apply bg-dark rounded-xl p-4 
-           border border-gray-800 
-           hover:border-primary-700/50 
-           transition-all duration-200;
-  }
-
-  .input {
-    @apply w-full px-4 py-3 rounded-lg 
-           bg-gray-800 border border-gray-700 
-           text-white placeholder-gray-500
-           focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 
-           outline-none transition-all duration-200;
-  }
-}
-
-/* Scrollbar styling */
-/* --- UI personnalisée pour les menus principaux --- */
-.menu-director {
-  background: linear-gradient(90deg, #ffe082 0%, #ffb300 100%);
-  border-radius: 18px;
-  box-shadow: 0 2px 8px rgba(255, 179, 0, 0.15);
-  color: #222;
-  display: flex;
-  align-items: center;
-  padding: 18px 24px;
-  margin-bottom: 18px;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s;
-  font-family: "Source Sans 3", Arial, sans-serif;
-  font-weight: 700;
-}
-.menu-director:hover {
-  box-shadow: 0 4px 16px rgba(255, 179, 0, 0.25);
-  transform: translateY(-2px) scale(1.02);
 }
 
 .menu-library {
@@ -334,20 +211,18 @@
   color: #ffd600;
   font-size: 1.3em;
 }
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
-
 ::-webkit-scrollbar-track {
   background: #1a1a2e;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #374151;
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
 }
