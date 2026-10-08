@@ -25,4 +25,4 @@ Je n'ai rien poussé. Pour déployer : `git push` de `feature/premium-paywall`, 
 
 Une fois déployé :
 1. Ferme tous les onglets de l'app. Dans Chrome, F12 > Application > Service Workers, clique sur « Unregister ». Dans Application > Storage, clique sur « Clear site data ». Recharge ensuite la page.
-2. Si le script apparaît complet, c'était le cache. Sinon, envoie-moi la ligne `Fetch scripts error` : elle contiendra enfin le message d'erreur.
+2. Si le script apparaît complet, c'était le cache. Sinon, envoie-moi la ligne `Fetch scripts error` : elle contiendra enfin le message d'erreur.	

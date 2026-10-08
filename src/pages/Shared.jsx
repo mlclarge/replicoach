@@ -13,6 +13,7 @@ import {
   unshareScript,
   copySharedScript,
   isUserTroupeAdmin,
+  getUserRole, // 👈 Ajouter cet import
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import TroupeDocuments from "../components/TroupeDocuments";
@@ -30,12 +31,16 @@ const ADMIN_EMAILS = [
 
 function Shared() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isPremium } = useAuthStore();
   const { scripts, fetchScripts } = useScriptStore();
+  const [userRole, setUserRole] = useState("member");
 
   // Vérifie si l'utilisateur peut créer des troupes
   const canCreateTroupe =
-    user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
+    userRole === "director" ||
+    userRole === "dev" ||
+    userRole === "admin" ||
+    (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
 
   const [loading, setLoading] = useState(true);
   const [troupes, setTroupes] = useState([]);
@@ -63,7 +68,9 @@ function Shared() {
   const [selectedScripts, setSelectedScripts] = useState([]);
 
   useEffect(() => {
-    loadData();
+    if (user?.id) {
+      getUserRole(user.id).then(setUserRole);
+    }
   }, [user]);
 
   const loadData = async () => {
@@ -198,7 +205,7 @@ function Shared() {
     setSelectedScripts((prev) =>
       prev.includes(scriptId)
         ? prev.filter((id) => id !== scriptId)
-        : [...prev, scriptId]
+        : [...prev, scriptId],
     );
   };
 
@@ -209,7 +216,7 @@ function Shared() {
     const count = selectedScripts.length;
     if (
       !confirm(
-        `Copier ${count} texte${count > 1 ? "s" : ""} dans "Mes textes" ?`
+        `Copier ${count} texte${count > 1 ? "s" : ""} dans "Mes textes" ?`,
       )
     )
       return;
@@ -241,13 +248,13 @@ function Shared() {
       setSuccess(
         `✅ ${successCount} texte${successCount > 1 ? "s" : ""} copié${
           successCount > 1 ? "s" : ""
-        } avec succès !`
+        } avec succès !`,
       );
     } else {
       setError(
         `⚠️ ${successCount} copié${
           successCount > 1 ? "s" : ""
-        }, ${errorCount} erreur${errorCount > 1 ? "s" : ""}`
+        }, ${errorCount} erreur${errorCount > 1 ? "s" : ""}`,
       );
     }
 
@@ -429,7 +436,7 @@ function Shared() {
                             e.stopPropagation();
                             if (
                               !confirm(
-                                "Créer une copie personnelle de ce texte ?"
+                                "Créer une copie personnelle de ce texte ?",
                               )
                             )
                               return;
@@ -438,28 +445,28 @@ function Shared() {
                             try {
                               console.log(
                                 "🔄 Tentative de copie du script:",
-                                item.scripts?.id
+                                item.scripts?.id,
                               );
                               const newScript = await copySharedScript(
                                 item.scripts?.id,
                                 item.troupe_id,
-                                user.id
+                                user.id,
                               );
                               console.log(
                                 "✅ Script copié avec succès:",
-                                newScript
+                                newScript,
                               );
                               // 🔥 FIX: Rafraîchir la liste des scripts pour que la copie apparaisse
                               await fetchScripts(user.id);
                               setSuccess(
-                                'Copie créée ! Retrouvez-la dans "Mes textes"'
+                                'Copie créée ! Retrouvez-la dans "Mes textes"',
                               );
                               setTimeout(() => navigate("/"), 1500);
                             } catch (err) {
                               console.error("❌ Erreur copie complète:", err);
                               setError(
                                 "Erreur lors de la copie: " +
-                                  (err.message || JSON.stringify(err))
+                                  (err.message || JSON.stringify(err)),
                               );
                             } finally {
                               setActionLoading(false);
@@ -606,7 +613,7 @@ function Shared() {
                   <button
                     onClick={() =>
                       setExpandedTroupe(
-                        expandedTroupe === troupe.id ? null : troupe.id
+                        expandedTroupe === troupe.id ? null : troupe.id,
                       )
                     }
                     className="mt-3 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg 

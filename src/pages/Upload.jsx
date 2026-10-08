@@ -4,7 +4,7 @@ import { useDropzone } from "react-dropzone";
 import { useAuthStore } from "../store/authStore";
 import PremiumGateModal from "../components/PremiumGateModal";
 import { useScriptStore } from "../store/scriptStore";
-import { uploadFile, supabase } from "../lib/supabase";
+import { uploadFile, supabase, getUserRole } from "../lib/supabase";
 import { extractTextFromPDF, hasNativeText } from "../lib/pdfProcessor";
 import {
   extractTextFromWord,
@@ -36,24 +36,34 @@ const ACCEPTED_FILE_TYPES = {
   "text/plain": [".txt"],
 };
 
-// Extensions supportées pour l'affichage
-const SUPPORTED_EXTENSIONS = "PDF, Word (.doc, .docx), TXT";
-
-// Liste des emails autorisés à uploader (metteur en scène / développeur)
-const ADMIN_EMAILS = [
-  "moz2611@gmail.com",
-  "consulting@mauricelargeron.com",
-  // Ajouter d'autres emails d'admins ici
-];
+// Liste des emails autorisés à uploader en illimité sans abonnement
+const ADMIN_EMAILS = ["moz2611@gmail.com", "consulting@mauricelargeron.com"];
 
 function Upload() {
   const navigate = useNavigate();
   const { user, isPremium } = useAuthStore();
-  const { createScript, addCharacter, addReplicas, fetchScripts } =
+  const { scripts, createScript, addCharacter, addReplicas, fetchScripts } =
     useScriptStore();
 
-  // Vérifier si l'utilisateur est admin
-  const isAdmin = user && ADMIN_EMAILS.includes(user.email?.toLowerCase());
+  const [userRole, setUserRole] = useState("member");
+
+  // Charger le rôle utilisateur et les scripts existants
+  useEffect(() => {
+    if (user?.id) {
+      getUserRole(user.id).then(setUserRole);
+      fetchScripts(user.id);
+    }
+  }, [user, fetchScripts]);
+
+  // Accès illimité si Premium, Dev, Metteur en scène ou Admin
+  const isUnlimited =
+    isPremium ||
+    userRole === "dev" ||
+    userRole === "director" ||
+    userRole === "admin" ||
+    (user?.email && ADMIN_EMAILS.includes(user.email?.toLowerCase()));
+
+  const userScriptsCount = scripts?.length || 0;
 
   // Onglet actif : 'file' ou 'paste'
   const [activeTab, setActiveTab] = useState("file");
@@ -71,8 +81,7 @@ function Upload() {
   const [pastedText, setPastedText] = useState("");
   const [pastedTitle, setPastedTitle] = useState("");
 
-  // Option de scan : 'classic' (OCR local Tesseract.js, gratuit, Standard)
-  // ou 'premium' (détection automatique sans saisie utilisateur, réservée Premium).
+  // Option de scan : 'classic' ou 'premium'
   const [scanMode, setScanMode] = useState("classic");
 
   // États pour les métadonnées de personnages (V1 Post-OCR)
@@ -80,7 +89,7 @@ function Upload() {
   const [userCharacters, setUserCharacters] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Paywall du Scan Express (OCR automatique) : réservé aux comptes Premium
+  // Paywall du Scan Express
   const [showOcrPremiumModal, setShowOcrPremiumModal] = useState(false);
   const [nativeTextHint, setNativeTextHint] = useState(false);
 
@@ -91,16 +100,13 @@ function Upload() {
   const onDrop = useCallback(
     (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
-        const file = acceptedFiles[0];
+        const file = acceptedFiles;
         setSelectedFile(file);
         setError(null);
         setResults([]);
         setShowResults(false);
 
         if (scanMode === "premium") {
-          // Garde de sécurité (défense en profondeur) : le mode Premium ne doit
-          // jamais lancer de traitement payant pour un utilisateur non Premium,
-          // même si scanMode a été positionné sur "premium" par un autre biais.
           if (!isPremium) {
             setShowOcrPremiumModal(true);
             return;
@@ -113,19 +119,11 @@ function Upload() {
             );
             return;
           }
-          console.log(
-            "Fichier détecté, démarrage Scan Premium immédiat...",
-            file,
-          );
           setFiles([file]);
           setNativeTextHint(false);
           hasNativeText(file).then(setNativeTextHint);
           handleProcessPremium(file);
         } else {
-          console.log(
-            "Fichier détecté, ouverture modale (Scan Classique)...",
-            file,
-          );
           setIsModalOpen(true);
         }
       }
@@ -138,19 +136,10 @@ function Upload() {
     if (!userCharacters.trim() || !selectedFile) return;
     const fileToProcess = selectedFile;
 
-    // Découper la liste de personnages de référence
     const referenceList = userCharacters
       .split(",")
       .map((c) => c.trim().toUpperCase())
       .filter(Boolean);
-
-    // Mouchard temporaire requis au moment exact de la soumission de la modale
-    console.log(
-      "Démarrage du traitement de l'OCR pour le fichier :",
-      selectedFile,
-      "avec les personnages :",
-      referenceList,
-    );
 
     setFiles([fileToProcess]);
     setIsModalOpen(false);
@@ -165,15 +154,10 @@ function Upload() {
     maxSize: 50 * 1024 * 1024,
   });
 
-  /**
-   * Extrait le texte selon le type de fichier
-   * Retourne { text, confidence, usedOCR, quality, warning }
-   */
   const extractText = async (file, onProgress, referenceList = null) => {
     const extension = file.name.toLowerCase().split(".").pop();
 
     if (extension === "pdf") {
-      // extractTextFromPDF retourne maintenant un objet avec métadonnées
       return await extractTextFromPDF(file, onProgress, referenceList);
     } else if (extension === "docx" || extension === "doc") {
       const text = await extractTextFromWord(file, onProgress);
@@ -200,9 +184,6 @@ function Upload() {
     }
   };
 
-  /**
-   * Retourne l'icône selon le type de fichier
-   */
   const getFileIcon = (filename) => {
     const ext = filename.toLowerCase().split(".").pop();
     switch (ext) {
@@ -239,7 +220,6 @@ function Upload() {
       setCurrentFileName(file.name);
       const extension = file.name.toLowerCase().split(".").pop();
 
-      // Étape 1: Extraction du texte
       const basePercent = (fileIndex / totalFiles) * 100;
       const filePercent = 100 / totalFiles;
 
@@ -263,7 +243,6 @@ function Upload() {
         referenceList,
       );
 
-      // Récupérer le texte et les métadonnées de qualité
       const text = extraction.text;
       result.warning = extraction.warning;
       result.quality = extraction.quality;
@@ -310,7 +289,7 @@ function Upload() {
         title: title,
         full_text: text,
         original_filename: file.name,
-        pdf_url: filePath, // Garde le même nom de champ pour compatibilité
+        pdf_url: filePath,
       });
 
       setProgress({
@@ -398,7 +377,6 @@ function Upload() {
   const handleProcessPremium = async (fileToProcess) => {
     if (!fileToProcess || !user) return;
 
-    // Garde de sécurité : ne jamais exécuter le traitement payant sans statut Premium
     if (!isPremium) {
       setShowOcrPremiumModal(true);
       return;
@@ -422,63 +400,21 @@ function Upload() {
     };
 
     try {
-      // Étape 1 : Analyse Premium par Gemini Vision
       setProgress({
         step: "Envoi sécurisé du PDF au service OCR...",
         percent: 0,
         indeterminate: true,
       });
 
-      const progressMessages = {
-        upload_received: "PDF reçu par le service OCR.",
-        gemini_uploading: "Transfert sécurisé du PDF vers Gemini...",
-        gemini_uploaded: "PDF transmis ; Gemini prépare le document.",
-        gemini_ready: "PDF prêt ; démarrage de l'analyse Gemini.",
-        generation_started:
-          "Gemini analyse le script et prépare les répliques...",
-        response_received: "Réponse Gemini reçue ; validation des données...",
-        result_validated: "Analyse validée ; préparation de l'enregistrement...",
-      };
-      const progressHints = {
-        generation_started:
-          "La durée dépend de la longueur du script. Aucun pourcentage n'est simulé.",
-      };
-
-      const setPremiumStep = (step, hint = null) =>
+      const parsedData = await processWithGemini(fileToProcess, (stage) => {
         setProgress({
-          step,
-          hint,
+          step: "Analyse Premium en cours...",
           percent: 0,
           indeterminate: true,
         });
-
-      const parsedData = await processWithGemini(
-        fileToProcess,
-        (stage) => {
-          const chunkTotal = stage.match(/^chunks_total:(\d+)$/);
-          const chunkDone = stage.match(/^chunks_done:(\d+)\/(\d+)$/);
-          if (chunkTotal || chunkDone) {
-            const done = chunkDone ? Number(chunkDone[1]) : 0;
-            const total = Number(chunkDone ? chunkDone[2] : chunkTotal[1]);
-            setProgress({
-              step: `Gemini analyse le script en parallèle : ${done}/${total} parties terminées`,
-              hint: "Les parties sont traitées simultanément.",
-              percent: Math.round((done / total) * 100),
-              indeterminate: false,
-            });
-            return;
-          }
-          setPremiumStep(
-            progressMessages[stage] || "Analyse Premium en cours...",
-            progressHints[stage] || null,
-          );
-        },
-      );
+      });
 
       result.title = parsedData.title;
-
-      // Étape 2 : Harmonisation des personnages via le CharacterResolver
-      setPremiumStep("Harmonisation des personnages et des répliques...");
 
       const resolver = new CharacterResolver(
         parsedData.characters.map((c) => c.name),
@@ -520,8 +456,6 @@ function Upload() {
         cueWords: generateCueWords(resolvedReplicas, index),
       }));
 
-      // Étape 3 : Upload optionnel du fichier vers Supabase Storage
-      setPremiumStep("Enregistrement du fichier...");
       let filePath = null;
       try {
         filePath = await withTimeout(
@@ -533,9 +467,6 @@ function Upload() {
         console.warn("Échec d'upload storage ignoré :", storageError);
       }
 
-      // Étape 4 : Enregistrement en base de données
-      setPremiumStep("Création du script...");
-      // On regroupe le full_text en une chaîne propre
       const fullText = enrichedReplicas
         .map((r) => `${r.character} : ${r.text}`)
         .join("\n");
@@ -548,7 +479,6 @@ function Upload() {
         pdf_url: filePath,
       });
 
-      setPremiumStep("Enregistrement des personnages...");
       const characterMap = {};
 
       for (const char of resolvedCharacters) {
@@ -558,8 +488,6 @@ function Upload() {
         });
         characterMap[char.name] = created.id;
       }
-
-      setPremiumStep("Enregistrement des répliques...");
 
       const replicasToInsert = enrichedReplicas.map((rep, index) => ({
         script_id: script.id,
@@ -582,13 +510,72 @@ function Upload() {
       setResults([result]);
       setShowResults(true);
 
-      // Rafraîchir les scripts
       fetchScripts(user.id);
     } catch (err) {
       console.error(`Erreur Scan Premium ${fileToProcess.name}:`, err);
       result.error = err.message;
       setResults([result]);
       setShowResults(true);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleProcessPastedText = async () => {
+    if (!pastedText.trim() || !pastedTitle.trim() || !user) return;
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const { title, characters, replicas } = parseScript(
+        pastedText,
+        pastedTitle,
+      );
+
+      const script = await createScript({
+        user_id: user.id,
+        title: title || pastedTitle,
+        full_text: pastedText,
+        original_filename: `${pastedTitle}.txt`,
+        pdf_url: null,
+      });
+
+      const characterMap = {};
+      for (const char of characters) {
+        const created = await addCharacter(script.id, {
+          name: char.name,
+          color: char.color,
+        });
+        characterMap[char.name] = created.id;
+      }
+
+      const replicasToInsert = replicas.map((rep, index) => ({
+        script_id: script.id,
+        character_id: characterMap[rep.character],
+        order_index: index,
+        text: rep.text,
+        text_gaps: rep.textGaps,
+        cue_words: rep.cueWords,
+      }));
+
+      if (replicasToInsert.length > 0) {
+        await addReplicas(replicasToInsert);
+      }
+
+      setResults([
+        {
+          filename: pastedTitle,
+          title: title || pastedTitle,
+          success: true,
+          charactersCount: characters.length,
+          replicasCount: replicas.length,
+        },
+      ]);
+      setShowResults(true);
+      fetchScripts(user.id);
+    } catch (err) {
+      setError("Erreur lors de l'analyse : " + err.message);
     } finally {
       setProcessing(false);
     }
@@ -610,151 +597,38 @@ function Upload() {
   const errorCount = results.filter((r) => !r.success).length;
   const warningCount = results.filter((r) => r.success && r.warning).length;
 
-  console.log("État isModalOpen actuel :", isModalOpen);
-
-  // Page d'accès refusé pour les non-admins
-  if (!isAdmin) {
+  // Contrôle de quota pour les utilisateurs Standard (limite à 2 scripts)
+  if (!isUnlimited && userScriptsCount >= 2) {
     return (
-      <div className="p-4 max-w-2xl mx-auto">
-        <div className="text-center py-12">
-          <p className="text-6xl mb-4">🔒</p>
-          <h1 className="text-2xl font-display text-gold-500 mb-4">
-            Accès réservé
-          </h1>
-          <p className="text-gray-400 mb-2">
-            L'importation de textes est réservée au metteur en scène.
-          </p>
-          <p className="text-gray-500 text-sm mb-6">
-            Demandez à votre metteur en scène d'importer les textes, <br />
-            puis de les partager avec vous via une troupe.
-          </p>
-
-          <div className="bg-gray-800/50 rounded-xl p-4 mb-6 max-w-sm mx-auto">
-            <p className="text-gray-400 text-sm mb-2">💡 Comment ça marche ?</p>
-            <ol className="text-left text-gray-500 text-sm space-y-2">
-              <li>1. Le metteur en scène importe les textes</li>
-              <li>2. Il crée une troupe et vous invite</li>
-              <li>3. Il partage les textes avec la troupe</li>
-              <li>4. Vous recevez les textes dans "Partagés"</li>
-            </ol>
-          </div>
-
-          <Link to="/shared" className="btn-gold inline-block">
-            👥 Voir les textes partagés
+      <div className="p-4 max-w-2xl mx-auto text-center py-12">
+        <p className="text-6xl mb-4">⚠️</p>
+        <h1 className="text-2xl font-display text-gold-500 mb-4">
+          Limite atteinte (Mode Standard)
+        </h1>
+        <p className="text-gray-300 mb-4">
+          En mode gratuit, vous pouvez importer jusqu'à{" "}
+          <strong>2 textes personnels</strong>.
+        </p>
+        <p className="text-gray-400 text-sm mb-6">
+          Passez au mode <strong>Premium</strong> pour des imports illimités, ou
+          rejoignez une <strong>troupe</strong> pour accéder aux textes partagés
+          par votre metteur en scène !
+        </p>
+        <div className="flex gap-4 justify-center">
+          <Link to="/shared" className="btn-gold">
+            👥 Accéder aux Troupes
+          </Link>
+          <Link to="/" className="btn-secondary">
+            🏠 Mes textes
           </Link>
         </div>
       </div>
     );
   }
 
-  // Traitement du texte collé
-  const handleProcessPastedText = async () => {
-    if (!pastedText.trim()) {
-      setError("Veuillez coller du texte à analyser");
-      return;
-    }
-    if (!pastedTitle.trim()) {
-      setError("Veuillez donner un titre au texte");
-      return;
-    }
-
-    setProcessing(true);
-    setError(null);
-
-    try {
-      setProgress({ step: "Analyse du texte collé...", percent: 10 });
-
-      // Parser le texte collé comme on le ferait pour un PDF
-      const { parseScript } = await import("../lib/scriptParser.js");
-      const parsed = parseScript(pastedText);
-
-      setProgress({ step: "Extraction des personnages...", percent: 40 });
-
-      if (parsed.characters.length === 0) {
-        setResults([
-          {
-            success: false,
-            title: pastedTitle.trim(),
-            error:
-              "Aucun personnage trouvé dans le texte. Vérifiez le format (NOM: réplique ou NOM - réplique)",
-          },
-        ]);
-        setShowResults(true);
-        setProcessing(false);
-        return;
-      }
-
-      setProgress({ step: "Création du script...", percent: 60 });
-
-      // Créer le script via le store (comme pour les fichiers)
-      const scriptData = await createScript({
-        user_id: user.id,
-        title: pastedTitle.trim(),
-        full_text: pastedText,
-        original_filename: "texte-colle.txt",
-      });
-
-      setProgress({ step: "Ajout des personnages...", percent: 70 });
-
-      // Ajouter les personnages et créer un mapping nom -> id
-      const characterMap = {};
-      for (const char of parsed.characters) {
-        const created = await addCharacter(scriptData.id, {
-          name: char.name,
-          color: char.color,
-        });
-        characterMap[char.name] = created.id;
-      }
-
-      setProgress({ step: "Ajout des répliques...", percent: 85 });
-
-      // Formater et ajouter les répliques
-      if (parsed.replicas && parsed.replicas.length > 0) {
-        const replicasToInsert = parsed.replicas.map((rep, index) => ({
-          script_id: scriptData.id,
-          character_id: characterMap[rep.character],
-          order_index: index,
-          text: rep.text,
-          text_gaps: rep.textGaps,
-          cue_words: rep.cueWords,
-        }));
-        await addReplicas(replicasToInsert);
-      }
-
-      setProgress({ step: "Terminé !", percent: 100 });
-
-      setResults([
-        {
-          success: true,
-          title: pastedTitle.trim(),
-          charactersCount: parsed.characters.length,
-          replicasCount: parsed.replicas?.length || 0,
-        },
-      ]);
-      setShowResults(true);
-      setPastedText("");
-      setPastedTitle("");
-
-      // Rafraîchir la liste des scripts
-      fetchScripts(user.id);
-    } catch (err) {
-      console.error("Erreur traitement texte collé:", err);
-      setResults([
-        {
-          success: false,
-          title: pastedTitle.trim(),
-          error: err.message,
-        },
-      ]);
-      setShowResults(true);
-    }
-
-    setProcessing(false);
-  };
-
   return (
     <div className="p-4 max-w-2xl mx-auto">
-      {/* Modale de saisie des personnages (V1 Post-OCR) */}
+      {/* Modale de saisie des personnages */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-gray-900 border border-gold-500/30 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
@@ -838,7 +712,6 @@ function Upload() {
       {/* Zone de drop (onglet fichier) */}
       {!processing && !showResults && activeTab === "file" && (
         <>
-          {/* Sélection du mode de scan (Classique / Premium) */}
           <div className="grid grid-cols-2 gap-3 mb-6 p-1.5 bg-gray-800/80 rounded-2xl border border-gray-700/50">
             <button
               type="button"
@@ -883,7 +756,7 @@ function Upload() {
                 </span>
               </div>
               <span className="text-[10px] text-amber-500/80 mt-1">
-                Personnages détectés automatiquement • PDF scannés acceptés • ~45 s
+                Personnages détectés automatiquement • PDF scannés acceptés
               </span>
             </button>
           </div>
@@ -935,7 +808,6 @@ function Upload() {
                 <p className="text-gray-500 text-sm mt-2">
                   ou cliquez pour sélectionner
                 </p>
-                {/* Formats supportés */}
                 <div className="mt-4 flex flex-wrap justify-center gap-2">
                   <span className="px-2 py-1 bg-red-500/20 text-red-400 rounded text-xs">
                     📕 PDF
@@ -947,9 +819,6 @@ function Upload() {
                     📄 TXT
                   </span>
                 </div>
-                <p className="text-gold-500 text-sm mt-3">
-                  📚 Jusqu'à 50 fichiers en une fois !
-                </p>
               </div>
             )}
           </div>
@@ -973,10 +842,9 @@ function Upload() {
         </>
       )}
 
-      {/* Zone de texte collé (onglet paste) */}
+      {/* Zone de texte collé */}
       {!processing && !showResults && activeTab === "paste" && (
         <div className="space-y-4">
-          {/* Titre du texte */}
           <div>
             <label className="block text-gray-300 text-sm mb-2">
               Titre du texte *
@@ -990,7 +858,6 @@ function Upload() {
             />
           </div>
 
-          {/* Zone de texte */}
           <div>
             <label className="block text-gray-300 text-sm mb-2">
               Collez votre texte ici *
@@ -998,30 +865,10 @@ function Upload() {
             <textarea
               value={pastedText}
               onChange={(e) => setPastedText(e.target.value)}
-              placeholder={`Collez le texte de votre scène ici...
-
-Format attendu (exemples):
-ROMEO: Ô Juliette, tu es le soleil !
-JULIETTE - Roméo, Roméo ! Pourquoi es-tu Roméo ?
-
-Le parser détecte automatiquement les personnages par leur nom en majuscules suivi de : ou -`}
-              rows={12}
-              className="w-full p-4 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors font-mono text-sm resize-none"
+              placeholder="ROMÉO: Chut ! Quelle lumière perce à cette fenêtre ?&#10;JULIETTE: Hélas !&#10;ROMÉO: Elle parle..."
+              rows={8}
+              className="w-full p-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-500 focus:border-gold-500 focus:outline-none transition-colors font-mono text-sm"
             />
-          </div>
-
-          {/* Info format */}
-          <div className="bg-gray-800/50 rounded-xl p-4">
-            <p className="text-gray-400 text-sm mb-2">💡 Format attendu :</p>
-            <ul className="text-gray-500 text-sm space-y-1">
-              <li>
-                • <code className="text-gold-400">NOM:</code> réplique
-              </li>
-              <li>
-                • <code className="text-gold-400">NOM -</code> réplique
-              </li>
-              <li>• Les noms doivent être en MAJUSCULES</li>
-            </ul>
           </div>
 
           {error && (
@@ -1030,7 +877,6 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             </div>
           )}
 
-          {/* Boutons */}
           <div className="flex gap-3">
             <button
               onClick={() => {
@@ -1066,43 +912,18 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             {currentFileName}
           </p>
           <p className="text-gray-400 mt-2">{progress.step}</p>
-          {progress.hint && (
-            <p className="text-gray-500 text-sm mt-1">{progress.hint}</p>
-          )}
-          {nativeTextHint && scanMode === "premium" && (
-            <p className="text-amber-500/80 text-xs mt-3">
-              💡 Votre PDF est lisible : le Scan Classique (gratuit) suffit pour
-              ce type de fichier.
-            </p>
-          )}
-          <div
-            className={`w-full bg-gray-700 rounded-full h-2 mt-4 ${
-              progress.indeterminate ? "overflow-hidden" : ""
-            }`}
-          >
+          <div className="w-full bg-gray-700 rounded-full h-2 mt-4">
             <div
-              className={`bg-gold-500 h-2 rounded-full ${
-                progress.indeterminate
-                  ? "progress-indeterminate"
-                  : "transition-all"
-              }`}
-              style={{
-                width: progress.indeterminate ? "35%" : `${progress.percent}%`,
-              }}
+              className="bg-gold-500 h-2 rounded-full transition-all"
+              style={{ width: `${progress.percent}%` }}
             />
           </div>
-          {!progress.indeterminate && (
-            <p className="text-gray-500 text-sm mt-2">
-              {Math.round(progress.percent)}%
-            </p>
-          )}
         </div>
       )}
 
       {/* Résultats */}
       {showResults && (
         <div>
-          {/* Résumé */}
           <div className="card mb-4">
             <h2 className="text-lg font-semibold text-white mb-3">
               📊 Résumé de l'import
@@ -1137,79 +958,6 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
             </div>
           </div>
 
-          {/* Détails */}
-          <div className="space-y-2 max-h-60 overflow-y-auto mb-4">
-            {results.map((result, index) => (
-              <div
-                key={index}
-                className={`p-3 rounded-lg ${
-                  !result.success
-                    ? "bg-red-500/10"
-                    : result.warning
-                      ? "bg-yellow-500/10"
-                      : "bg-green-500/10"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">
-                    {!result.success ? "❌" : result.warning ? "⚠️" : "✅"}
-                  </span>
-                  <div className="flex-1">
-                    <p
-                      className={`font-medium flex items-center gap-2 ${
-                        !result.success
-                          ? "text-red-400"
-                          : result.warning
-                            ? "text-yellow-400"
-                            : "text-green-400"
-                      }`}
-                    >
-                      <span>
-                        {result.filename ? getFileIcon(result.filename) : "📋"}
-                      </span>
-                      {result.title || result.filename}
-                      {result.usedOCR && (
-                        <span className="text-xs px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded">
-                          OCR
-                        </span>
-                      )}
-                    </p>
-                    {result.success ? (
-                      <p className="text-gray-500 text-sm">
-                        {result.charactersCount} personnage
-                        {result.charactersCount > 1 ? "s" : ""} •{" "}
-                        {result.replicasCount} réplique
-                        {result.replicasCount > 1 ? "s" : ""}
-                        {result.confidence !== null && result.usedOCR && (
-                          <span
-                            className={`ml-2 ${
-                              result.confidence >= 70
-                                ? "text-green-500"
-                                : result.confidence >= 50
-                                  ? "text-yellow-500"
-                                  : "text-red-500"
-                            }`}
-                          >
-                            • Confiance: {result.confidence}%
-                          </span>
-                        )}
-                      </p>
-                    ) : (
-                      <p className="text-red-400 text-sm">{result.error}</p>
-                    )}
-                  </div>
-                </div>
-                {/* Warning OCR */}
-                {result.success && result.warning && (
-                  <div className="mt-2 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded text-yellow-400 text-sm whitespace-pre-line">
-                    {result.warning}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* Actions */}
           <div className="flex gap-3">
             <button onClick={handleReset} className="btn-secondary flex-1">
               📄 Importer d'autres fichiers
@@ -1221,7 +969,6 @@ Le parser détecte automatiquement les personnages par leur nom en majuscules su
         </div>
       )}
 
-      {/* Paywall Scan Express (OCR automatique) — composant réutilisable */}
       {showOcrPremiumModal && (
         <PremiumGateModal
           featureKey="OCR_AUTO"

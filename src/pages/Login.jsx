@@ -54,10 +54,15 @@ function Login() {
       } else {
         const { error: signInError } = await signIn(email, password);
         if (signInError) {
-          if (signInError.message.includes("Invalid login")) {
-            setError("Email ou mot de passe incorrect");
-          } else if (signInError.message.includes("Email not confirmed")) {
-            setError("Veuillez d'abord confirmer votre email en cliquant sur le lien reçu");
+          const msg = signInError.message.toLowerCase();
+          if (msg.includes("email not confirmed")) {
+            setError(
+              "Veuillez d'abord confirmer votre e-mail en cliquant sur le lien reçu dans votre boîte de réception.",
+            );
+          } else if (msg.includes("invalid login")) {
+            setError(
+              "Email ou mot de passe incorrect (pensez aussi à vérifier si votre e-mail a été confirmé).",
+            );
           } else {
             setError(signInError.message);
           }
@@ -95,8 +100,10 @@ function Login() {
         <div className="w-full max-w-sm">
           <div className="card text-center">
             {/* Icône email */}
-            <div className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full 
-                            flex items-center justify-center">
+            <div
+              className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full 
+                            flex items-center justify-center"
+            >
               <span className="text-5xl">📧</span>
             </div>
 

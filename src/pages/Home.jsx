@@ -486,7 +486,7 @@ function DirectorNotesSection({
         onUpload(e.dataTransfer.files);
       }
     },
-    [onUpload]
+    [onUpload],
   );
 
   const handleFileSelect = (e) => {
@@ -751,7 +751,7 @@ function Home() {
     }),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   useEffect(() => {
@@ -817,7 +817,7 @@ function Home() {
         scripts.map(async (script) => {
           const tags = await fetchScriptTags(script.id);
           tagsMap[script.id] = tags || [];
-        })
+        }),
       );
       setScriptTagsMap(tagsMap);
     } catch (err) {
@@ -883,7 +883,7 @@ function Home() {
       sorted = sorted.filter(
         (script) =>
           script.title.toLowerCase().includes(query) ||
-          script.characters?.some((c) => c.name.toLowerCase().includes(query))
+          script.characters?.some((c) => c.name.toLowerCase().includes(query)),
       );
     }
 
@@ -1025,7 +1025,7 @@ function Home() {
       for (const file of files) {
         if (file.size > 10 * 1024 * 1024) {
           setUploadError(
-            `Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`
+            `Fichier trop volumineux: ${file.name}. Maximum 10 Mo.`,
           );
           continue;
         }
@@ -1139,7 +1139,7 @@ function Home() {
       setAudioImportMsg({
         type: "error",
         text: `Fichier trop volumineux (${(file.size / 1024 / 1024).toFixed(
-          1
+          1,
         )} Mo). Maximum : 10 Mo.`,
       });
       return;
@@ -1231,8 +1231,12 @@ function Home() {
           </div>
 
           <div className="flex-1 text-left">
-            <h3 className="text-white font-bold text-base m-0">Nouveau texte</h3>
-            <p className="text-green-100 text-sm mt-1 hidden sm:block">Créer ou importer un nouveau texte</p>
+            <h3 className="text-white font-bold text-base m-0">
+              Nouveau texte
+            </h3>
+            <p className="text-green-100 text-sm mt-1 hidden sm:block">
+              Créer ou importer un nouveau texte
+            </p>
           </div>
 
           <div className="text-amber-400 text-2xl">→</div>
@@ -1284,34 +1288,40 @@ function Home() {
         </div>
       )}
 
-      {/* En-tête liste + Actions - full width grid: left / center / right */}
-      <div className="mes-saynetes-hero mb-4">
-        <div className="grid grid-cols-3 items-center w-full mb-3">
-          <div className="flex flex-col items-start min-w-0">
-            <h2 className="section-title m-0 flex items-center gap-2 text-white text-base truncate">
-              <span className="section-icon mes-saynetes-icon" aria-hidden>
-                📣
-              </span>
-              Mes saynètes
-            </h2>
-
-            <p className="text-white/90 text-sm mt-1 block ml-4 sm:ml-8 md:ml-12 whitespace-nowrap">
-              {textCount} saynète{textCount > 1 ? "s" : ""} • {audioCount} fichier{audioCount > 1 ? "s" : ""} audio
+      {/* Bannière d'information pour les utilisateurs Standard */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-primary-900/60 to-gray-800/80 border border-primary-600/40 rounded-2xl shadow-lg">
+        <div className="flex items-start gap-3">
+          <span className="text-3xl">🎭</span>
+          <div className="flex-1">
+            <h3 className="text-white font-bold text-base mb-1">
+              Bienvenue sur RépliCoach !
+            </h3>
+            <p className="text-gray-300 text-sm mb-3 leading-relaxed">
+              Vous avez deux façons d'utiliser l'application selon votre
+              pratique :
             </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-black/30 rounded-xl border border-gold-500/20">
+                <p className="text-gold-400 font-bold mb-1">
+                  👤 Comédien indépendant
+                </p>
+                <p className="text-gray-300">
+                  Importez jusqu'à <strong>2 textes personnels</strong>{" "}
+                  gratuitement.
+                </p>
+              </div>
+              <div className="p-3 bg-black/30 rounded-xl border border-primary-500/20">
+                <p className="text-primary-300 font-bold mb-1">
+                  👥 En troupe / Atelier
+                </p>
+                <p className="text-gray-300">
+                  Saisissez le code fourni par votre metteur en scène dans
+                  l'onglet <strong>Partagés</strong> pour accéder directement
+                  aux pièces.
+                </p>
+              </div>
+            </div>
           </div>
-
-          <div className="flex items-center justify-center">{/* center preserved for symmetry */}</div>
-
-          <div className="flex items-center justify-end space-x-3">
-          {/* Right-side actions (aligned) */}
-          {localScripts.length > 1 && (
-            <button
-              className={`w-10 h-10 flex items-center justify-center rounded-lg text-white bg-gold-500 transition`}
-              title="Tri manuel (drag & drop)"
-            >
-              ⋮⋮
-            </button>
-          )}
         </div>
       </div>
 
@@ -1433,7 +1443,7 @@ function Home() {
                       notesCount={notesCounts[item.id] || 0}
                       orderLocked={orderLocked}
                     />
-                  )
+                  ),
                 )}
             </div>
           </SortableContext>
@@ -1452,11 +1462,22 @@ function Home() {
               </div>
             ) : null}
           </DragOverlay>
+          <DragOverlay>
+            {activeScript ? (
+              <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90">
+                <div className="flex items-center gap-3">
+                  <span className="text-gold-500 font-bold text-lg">
+                    #{activeScript.display_order}
+                  </span>
+                  <h3 className="font-semibold text-white">
+                    {activeScript.title}
+                  </h3>
+                </div>
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
-
-      {/* Fin du conteneur Mes saynètes */}
-      </div>
 
       {/* Menu bas : crédit */}
       <div className="mt-8 pt-4 border-t border-gray-800">
@@ -1554,8 +1575,8 @@ function Home() {
                         onClick={() => handleConfirmShare(troupe.id)}
                         disabled={sharingLoading}
                         className="w-full p-4 bg-gray-800 hover:bg-primary-600/30 rounded-xl 
-                                   text-left transition flex items-center justify-between
-                                   border border-gray-700 hover:border-primary-500"
+                               text-left transition flex items-center justify-between
+                               border border-gray-700 hover:border-primary-500"
                       >
                         <div className="flex items-center gap-3">
                           <span className="text-2xl">🎭</span>
@@ -1610,7 +1631,6 @@ function Home() {
           userId={user?.id}
           onClose={() => {
             setManagingTagsFor(null);
-            // Recharger les tags du script modifié
             loadScriptsTags();
             loadUserTags();
           }}
@@ -1646,8 +1666,8 @@ function Home() {
                         doUploadDirectorNotes(pendingFiles, troupe.id)
                       }
                       className="w-full p-4 bg-gray-800 hover:bg-yellow-600/30 rounded-xl 
-                             text-left transition flex items-center justify-between
-                             border border-gray-700 hover:border-yellow-500"
+                         text-left transition flex items-center justify-between
+                         border border-gray-700 hover:border-yellow-500"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">🎭</span>
@@ -1667,8 +1687,8 @@ function Home() {
                   <button
                     onClick={() => doUploadDirectorNotes(pendingFiles, null)}
                     className="w-full p-4 bg-gray-800/50 hover:bg-gray-700 rounded-xl 
-                           text-left transition flex items-center justify-between
-                           border border-gray-700"
+                       text-left transition flex items-center justify-between
+                       border border-gray-700"
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">🔒</span>
@@ -1708,8 +1728,8 @@ function Home() {
             audioImportMsg.type === "success"
               ? "bg-green-600 text-white"
               : audioImportMsg.type === "info"
-              ? "bg-blue-600 text-white"
-              : "bg-red-600 text-white"
+                ? "bg-blue-600 text-white"
+                : "bg-red-600 text-white"
           }`}
         >
           {audioImportMsg.type === "info" && (
