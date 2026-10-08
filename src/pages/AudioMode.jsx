@@ -722,8 +722,13 @@ function AudioMode() {
   };
 
   // Renvoie true si l'audio Premium a été lu, false pour basculer sur la voix du navigateur
+  // ==========================================
+  // 1. LECTURE VIA VOIX PREMIUM (Google Cloud TTS)
+  // ==========================================
   const speakPremium = async (replicaId) => {
+    // Utilise fetchTtsAudioUrl déjà importé depuis ../lib/premiumTts
     const res = await fetchTtsAudioUrl(id, replicaId);
+
     if (!res.ok) {
       if (res.code === "quota_exceeded") {
         setPremiumNotice(
@@ -732,17 +737,19 @@ function AudioMode() {
       }
       return false;
     }
+
     setPremiumNotice("");
     if (res.usage) setTtsUsage(res.usage);
+
     try {
       await ensureAudioUnlocked();
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
+
     return await new Promise((resolve) => {
       const audio = new Audio(res.url);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
+
       audio.onended = () => {
         audioPlayerRef.current = null;
         resolve(true);
@@ -751,65 +758,36 @@ function AudioMode() {
         audioPlayerRef.current = null;
         resolve(false);
       };
+
       audio.play().catch(() => resolve(false));
     });
   };
 
-  // Fonction speak unifiée
   // ==========================================
-  // MOTEUR AUDIO : LECTURE D'UNE RÉPLIQUE
+  // 2. MOTEUR AUDIO UNIFIÉ (speak)
   // ==========================================
-  const speak = async (text, characterId, replicaId) => {
-    return new Promise(async (resolve) => {
-      // 1. VÉRIFICATION DU MODE RECORDED (Si enregistrement personnel)
-      if (
-        voiceMode[characterId] === "recorded" &&
-        characterRecordings[characterId]
-      ) {
-        try {
-          const audio = new Audio(characterRecordings[characterId]);
-          audioPlayerRef.current = audio;
-          audio.onended = () => resolve();
-          audio.onerror = () => resolve();
-          await audio.play();
-          return;
-        } catch (err) {
-          console.warn("Erreur lecture enregistrement perso, bascule...", err);
-        }
-      }
+  const speak = async (text, characterId, replicaId = null) => {
+    const cleanedForDecision = cleanTextForSpeech(text || "");
 
-      // 2. CAS PREMIUM : Si l'utilisateur est Premium ET qu'une voix TTS est verrouillée
-      const lockedVoiceId = premiumLocks[characterId];
-      if (isPremium && lockedVoiceId) {
-        try {
-          // Appeler le service Google Cloud TTS via le helper premiumTts
-          const audioUrl = await getOrGenerateTtsAudio({
-            scriptId: currentScript.id,
-            characterId: characterId,
-            replicaId: replicaId,
-            text: text,
-            voiceId: lockedVoiceId,
-          });
+    // A) Enregistrement vocal local par réplique
+    if (replicaId && replicaRecordings[replicaId]?.data) {
+      return await playReplicaRecording(replicaId);
+    }
 
-          if (audioUrl) {
-            const audio = new Audio(audioUrl);
-            audioPlayerRef.current = audio;
-            audio.onended = () => resolve();
-            audio.onerror = () => {
-              console.warn("Erreur lecture MP3 Premium, fallback local...");
-              speakBrowserSynth(text, characterId, resolve);
-            };
-            await audio.play();
-            return;
-          }
-        } catch (err) {
-          console.error("Erreur génération TTS Google Cloud :", err);
-        }
-      }
+    // B) Enregistrement vocal par personnage
+    const mode = voiceMode[characterId] || "synth";
+    if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
+      return await speakRecorded(characterId);
+    }
 
-      // 3. CAS STANDARD / FALLBACK : Synthèse vocale du navigateur
-      speakBrowserSynth(text, characterId, resolve);
-    });
+    // C) Voix Premium Google Cloud TTS (si abonne Premium + voix verrouillée)
+    if (isPremium && replicaId && premiumLocks[characterId]) {
+      const played = await speakPremium(replicaId);
+      if (played) return; // Si la lecture MP3 a réussi, on s'arrête ici
+    }
+
+    // D) Fallback : Synthèse vocale locale du navigateur
+    return await speakSynth(cleanedForDecision, characterId);
   };
 
   // Fonction secondaire pour la synthèse vocale locale du navigateur
