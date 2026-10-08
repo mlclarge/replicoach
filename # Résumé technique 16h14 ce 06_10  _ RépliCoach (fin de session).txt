@@ -1,0 +1,89 @@
+﻿# Résumé technique : RépliCoach (fin de session)
+
+
+## Architecture
+- Front : React + Vite (PWA), déployé sur Vercel depuis `main`.
+- Backend OCR : FastAPI sur Render, déployé depuis `main`.
+- Base : nouveau projet Supabase (ancien bloqué par `exceed_storage_size_quota`).
+- Authentification : Google. Ton e-mail effectif est `consulting@mauricelargeron.com`.
+
+
+## Supabase
+- Schéma complet exécuté : `supabase/full_schema.sql`, soit 23 tables, RLS et 4 buckets. **Ce fichier n'est pas commité.**
+- Profil de `consulting@mauricelargeron.com` : `is_premium=true`, rôle `dev` dans `user_roles`.
+- Variables Vercel mises à jour : `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`. Les variables `VITE_*` sont figées au build.
+
+
+## Accès et Premium
+- L'accès à l'import dépend de la liste `ADMIN_EMAILS`, codée en dur dans `src/pages/Upload.jsx`, et non de `user_roles`. Tout nouvel utilisateur doit y être ajouté.
+- Le Premium dépend de `profiles.is_premium`, lu par le backend avec le jeton de l'utilisateur.
+
+
+## Scan Premium (Gemini)
+- Le code est dans `backend-ocr/ocr/gemini_ocr.py`, l'endpoint SSE `/api/extract-premium` dans `backend-ocr/main.py`.
+- Le PDF est découpé en tranches de 9 pages (`GEMINI_PAGES_PER_CHUNK`), traitées en parallèle, 6 appels au maximum (`GEMINI_MAX_PARALLEL`). La découpe utilise `pypdf`, ajouté à `requirements.txt`.
+- La progression affichée est réelle (« n/6 parties terminées »).
+- Résultats sur ton PDF : de 2 min 50 s à environ 45 s, avec 14 personnages et 917 répliques.
+- `_merge_chunk_results` rattache à la réplique précédente toute première réplique `INCONNU` d'une tranche (hors la première) et retire les personnages sans réplique.
+- Tests : 19 OK dans `backend-ocr/ocr/tests/test_gemini_ocr.py`.
+
+
+## Interface
+- Sous-titres des deux modes mis à jour : « Rapide et gratuit • Vous indiquez les personnages » pour Classique, « Personnages détectés automatiquement • PDF scannés acceptés • ~45 s » pour Premium.
+- `hasNativeText` (`src/lib/pdfProcessor.js`) lit les 3 premières pages avec pdf.js (seuil de 200 caractères). Si le PDF a du texte natif, un message discret s'affiche pendant l'analyse Premium : « le Scan Classique (gratuit) suffit ». Rien n'est bloqué ni redirigé.
+- Je n'ai pas testé ce message dans le navigateur, seulement le build Vite.
+
+
+## Documentation
+- `docs/FAQ.md` contient la comparaison Classique / Premium. Elle servira de base au futur menu Aide, qui remplacera le tutoriel en pop-up. Cette pop-up n'a pas été modifiée.
+
+
+## Git
+- Branche `feature/premium-paywall`, dernier commit `1cf0c08`.
+- Commits de la session : `ddc331e` (e-mail admin), `e0de9ec` (parallèle), `20d1585` (correctif INCONNU), `1cf0c08` (libellés, texte natif, FAQ).
+- Je n'ai pas confirmé la fusion de la PR dans `main`. Ton test de production a montré 14 personnages et plus d'« Inconnu », donc le correctif y est probablement déjà. Vérifie sur GitHub que la PR est fusionnée et que `main` contient `1cf0c08`.
+- Les outils de création de PR ne fonctionnent pas ici (`gh` n'est pas installé). Il faut passer par : https://github.com/mlclarge/replicoach/compare/main...feature/premium-paywall.
+
+
+## Environnement local
+- Python 3.12, Windows, PowerShell sans `&&`. `pypdf` et `google-genai` sont installés.
+- Les avertissements LF/CRLF de git donnent un code de sortie 1 sans erreur réelle.
+- Piège : un remplacement de texte multiligne en PowerShell échoue avec les fins de ligne CRLF. Utiliser l'outil d'édition.
+
+
+## Dette technique et pistes futures
+1. Migrer `ADMIN_EMAILS` vers `user_roles`.
+2. Limiter la taille des PDF stockés et les purger (cause du quota Supabase).
+3. Fusionner ou répartir les personnages « groupes » (« TOUT LE MONDE », « SAM + NOLAN »), conservés tels quels aujourd'hui.
+4. Commiter `supabase/full_schema.sql`.
+5. Relancer le support Supabase pour l'ancien projet.
+6. Redesign : menu Aide basé sur `docs/FAQ.md`, en remplacement de la pop-up de tutoriel.
+7. Piste écartée : un modèle plus léger (gain faible à 45 s, risque sur les noms). Le routage strict vers Classique reste possible via `hasNativeText`.
+8. Risque non observé : la limite de débit du quota gratuit de Gemini avec 6 appels simultanés.
+
+
+## Mise à jour — 6 octobre, 16h29
+
+### État local Git (non commité)
+- Branche `feature/premium-paywall`, alignée avec `origin/feature/premium-paywall`.
+- Fichiers suivis modifiés : `src/App.jsx`, `src/store/authStore.js`, `src/store/scriptStore.js`, `src/sw.js`, `vite.config.js`.
+- Fichiers non suivis pertinents pour le code/déploiement : `src/lib/offlineDataCache.js` et `supabase/full_schema.sql`.
+- Le présent résumé et `Audit_diag_plan V2 _ replicoach.txt` sont également non suivis.
+- Le répertoire contient aussi des documents, PDF, images, exports et archives non suivis. Ne pas les inclure dans un commit sans sélection/validation explicite.
+- Ces changements sont préexistants à la préparation du POC voix ; ne pas les écraser, réinitialiser ou inclure dans un commit lié au POC sans accord explicite.
+
+### Voix de synthèse Premium — décision de cadrage
+- Le POC d'écoute désigne Google Cloud Text-to-Speech comme fournisseur préféré ; le choix de production reste à confirmer après vérification des coûts, quotas et conditions d'utilisation.
+- Objectifs à mesurer : qualité/naturel en français, stabilité des voix par personnage, latence, coût par script et faisabilité du cache audio.
+- Accord donné pour tester des extraits de vrais scripts auprès des fournisseurs cloud ; le PDF sélectionné est `depit amoureux.pdf`.
+- Fournisseurs retenus pour le comparatif : Google Cloud Text-to-Speech, Azure AI Speech et ElevenLabs.
+- Banc d'essai local créé dans `scripts/tts-poc.mjs` ; protocole documenté dans `scripts/README-tts-poc.md`. OCR local effectué sur les 4 pages du PDF (confiance 87–91 %). Les quatre extraits ont été transmis à Google et Azure avec l'accord donné.
+- Le JSON OCR complet se trouve dans le `%TEMP%` local sous `replicoach-tts-poc-ocr.json`, pour examen et choix des courts extraits. Il contient le texte reconnu du document et n'est pas supprimé automatiquement.
+- Quatre courts extraits (2 voix féminines, 2 masculines; 189 caractères au total) ont été sélectionnés et préparés dans `%TEMP%\replicoach-tts-poc-samples.json`.
+- Google Cloud TTS (Chirp 3 HD : Achird/Achernar) et Azure AI Speech (HenriNeural/DeniseNeural) ont chacun généré les quatre extraits. Après écoute, préférence utilisateur pour Google (« google est le meilleur »).
+- Latences de génération initiales : Google 417–621 ms ; Azure 192–424 ms. Les générations abouties sont conservées en cache local. Une relance a confirmé les hits de cache, sans nouvelle facturation.
+- Les audios prêts à écouter sont dans `%LOCALAPPDATA%\Replicoach\tts-poc\listen`; métadonnées sans extrait de texte dans `%LOCALAPPDATA%\Replicoach\tts-poc\results.json`.
+- Après mise à jour locale de la clé ElevenLabs et activation de `voices_read`, le catalogue est accessible. Le compte expose 3 voix françaises, toutes masculines et classées « professional », aucune féminine. La génération d'une voix de bibliothèque a renvoyé HTTP 402 : le compte gratuit ne peut pas utiliser ces voix de bibliothèque via l'API. Pas d'audio ElevenLabs généré.
+- Pour compléter le comparatif ElevenLabs, il faut un abonnement autorisant la synthèse API de voix de bibliothèque ainsi que l'accès à une voix féminine française ; vérifier le coût avant toute mise à niveau.
+- Les tarifs/coûts par script, quotas de génération et conditions de conservation/utilisation des textes par fournisseur restent à vérifier avant de décider la mise en production de Google.
+- Après POC : `scripts/tts-poc.mjs` conserve les mesures de latence dans les métadonnées du cache et produit des copies d'écoute nommées par fournisseur/sample.

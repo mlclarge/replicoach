@@ -1,0 +1,147 @@
+﻿PRO
+Sources
+Tout sélectionner
+
+Actualités & théâtre pour et par les comédiens - Imparato
+
+Améliorer la diction - Imparato
+
+Avoir plus (ou moins) de temps pour dire mes répliques - Imparato
+
+Comment ça marche ? — Imparato
+
+Comment Imparato peut-il m'être utile
+
+Comment quitter le Premium - Imparato
+
+Explications détaillées sur la formule SOLO - Imparato
+https://photos.app.goo.gl/FiDxKeyJ3swpkw447
+
+Imparato - Théâtre - App Store - Apple
+
+Imparato : des tarifs adaptés pour les troupes.
+
+Imparato 4.3 : répétez directement depuis votre écran verrouillé
+
+Imparato inaugure sa licence pour les cours et les ateliers
+
+Imparato lance son éditeur de texte et de voix pour le théâtre
+
+Imparato permet l'ajout de sons et bruitages dans un texte
+
+Imparato, l'application qui révolutionne l'apprentissage d'un texte
+
+Imparato, l'outil redoutable pour apprendre un monologue
+
+J'ai un problème de son pendant une italienne - Imparato
+
+L'application qui aide à répéter vos textes de théâtre — Imparato
+
+La Formule Basique Gratuite en détail - Imparato
+
+Les erreurs courantes des comédiens débutants (et comment les éviter) - Imparato
+
+Les meilleurs cours de théâtre à Paris en 2026 - Imparato
+
+Les tarifs Imparato en 2026
+
+Modifier la vitesse de lecture des voix - Imparato
+
+Offre Premium - Imparato
+
+Our prices are changing in September 2026 - Imparato
+
+Poser un marque-page dans votre texte — Imparato
+
+Pour obtenir Imparato gratuitement, suivez ce guide
+
+Premiers pas avec l'outil de modification de texte - Imparato
+Rapport Deep Research : Panorama Fonctionnel et Analyse Technique d'Imparato : Solution Numérique d'Apprentissage Théâtral
+Replicoach : fonctionnalités
+
+Support - Imparato
+
+Tous les détails sur la formule Troupe ‍ ‍ ‍ - Imparato
+
+Un écran de texte repensé pour répéter plus vite (et plus confortablement) - Imparato
+📸
+Replicoach Vs Imparato
+33 sources·29 sept. 2026
+Imparato est une application conçue pour aider les comédiens et les troupes de théâtre à mémoriser et répéter leurs textes en toute autonomie, que ce soit sur smartphone, tablette ou ordinateur. L'outil intègre un générateur de synthèse vocale qui lit les dialogues, attribue une voix différente à chaque personnage et permet de faire des répétitions à l'italienne partout. Les utilisateurs peuvent importer leurs propres scripts, ajouter des didascalies ou des bruitages, et profiter d'une bibliothèque contenant des centaines d'œuvres classiques du domaine public. Des fonctionnalités avancées permettent de piloter les répétitions depuis l'écran verrouillé, de travailler hors ligne et de partager les modifications en temps réel avec toute une troupe. Enfin, l'application propose différentes formules tarifaires adaptées, incluant des achats individuels (SOLO), des abonnements illimités et des licences dédiées aux professeurs pour leurs cours et ateliers de théâtre.
+Comment fonctionne le souffleur de poche pour apprendre son texte ?
+Quelles sont les différentes formules tarifaires et options pour les troupes ?
+Comment l'application aide-t-elle à travailler les monologues et la diction ?
+33 sources
+Vérifiez les réponses de Gemini Notebook, car il peut se tromper.
+StudioRapport interactif
+* 1.
+* Introduction
+* 2.
+* Comparatif Exhaustif : Imparato vs RépliCoach
+* 3.
+* Analyse Spécifique des Écarts
+* 4.
+* Feuille de Route pour RépliCoach
+* 5.
+* Summary
+Introduction
+Saviez-vous qu'apprendre un texte de théâtre peut désormais se faire deux fois plus vite grâce à un souffleur de poche virtuel, sans dépendre de la disponibilité de ses proches ? Les applications mobiles transforment radicalement la mémorisation pour les comédiens. Mais entre le leader établi Imparato et le challenger RépliCoach, quelle solution choisir pour sa troupe ou sa pratique personnelle ?
+À la fin de cette leçon, vous saurez :
+* Comparer de manière exhaustive les fonctionnalités d'Imparato et de RépliCoach.
+* Identifier les forces respectives et les limitations techniques des deux applications.
+* Élaborer une feuille de route stratégique pour combler les lacunes de RépliCoach face aux standards du marché.
+Comparatif Exhaustif : Imparato vs RépliCoach
+Pour comprendre l'écosystème de ces deux applications de théâtre, analysons leurs fonctionnalités sur plusieurs piliers clés :
+1. Accessibilité et Plateformes
+* Imparato bénéficie d'un écosystème multiplateforme mature : application native iOS (iPhone/iPad), Android, et une interface web complète pour ordinateur.
+* RépliCoach s'appuie sur une technologie PWA (Progressive Web App) installable, garantissant une bonne légèreté mais moins d'optimisations natives profondes sur mobile.
+2. Importation et Gestion des Textes
+* Imparato propose un éditeur syntaxique dédié très structuré. En utilisant des balises simples (# pour les scènes, @ pour les personnages, parenthèses pour les didascalies), l'application identifie automatiquement qui parle et exclut les commentaires de la vocalisation. Elle propose aussi une bibliothèque intégrée de 458 pièces du domaine public en libre accès.
+* RépliCoach brille par sa flexibilité d'importation. Il accepte les fichiers PDF, Word (.doc/.docx) et TXT. Il intègre un outil de reconnaissance optique de caractères (OCR) pour les PDF scannés ainsi qu'un scan intelligent « Premium IA ».
+3. Le Moteur de Répétition Audio (L'Italienne)
+* Imparato simule l'exercice de « l'italienne » en lisant les répliques des partenaires grâce à une synthèse vocale de 8 voix distinctes. L'utilisateur peut régler la vitesse de lecture (de 0.8 à 1.6) et le délai de récitation (très court à très lent). L'option « Réduire l'écoute » permet de couper les longues tirades partenaires pour n'entendre que les 10 dernières secondes avant son tour.
+* RépliCoach propose également une lecture automatisée avec réglage de la vitesse et du pitch (tonalité). Son point fort réside dans la diversité de ses modes de mémorisation (texte à trous, premiers mots, mots-indices, etc.) et la possibilité d'enregistrer sa propre voix pour un personnage ou une réplique.
+Recommandé : infographie
+Grille Comparative Imparato vs RépliCoach
+Un tableau synthétique comparant les plateformes, l'importation, les options audio et les tarifs des deux applications.
+Ajouter
+Analyse Spécifique des Écarts
+Bien que les deux outils partagent le même objectif (aider le comédien à mémoriser), ils ont développé des fonctionnalités exclusives qui créent des écarts technologiques majeurs.
+Les superpouvoirs d'Imparato (v4.3 et v4.4)
+* Répétition sur écran verrouillé : C'est la fonction la plus plébiscitée. Les comédiens peuvent verrouiller leur téléphone, le mettre dans leur poche et contrôler l'enchaînement des répliques (suivante, précédente, pause) directement depuis l'écran de verrouillage, comme un podcast.
+* Mode hors ligne automatique : Depuis la version 4.3, les textes et leurs voix de synthèse sont stockés localement par défaut. Plus besoin de connexion internet pour faire ses italiennes dans le métro ou dans des théâtres en sous-sol.
+* Multi-langues : Imparato gère l'allemand, l'italien, l'anglais et le français pour l'interface et la vocalisation.
+* La Mini-carte visuelle : Un outil de repérage rapide sur le côté droit de l'écran affichant la densité des répliques, les marque-pages et les notes de couleur.
+Les atouts exclusifs de RépliCoach
+* Coaching IA : Un module d'intelligence artificielle qui propose des suggestions de jeu d'acteur directement liées à un personnage.
+* Enregistrement de voix personnalisée : Permet au comédien d'enregistrer sa propre voix pour donner la réplique, une fonction qu'Imparato a seulement à l'étude.
+* Modes de mémorisation multiples : La possibilité de masquer partiellement le texte (mots-indices, texte à trous) pour s'entraîner de manière progressive.
+Recommandé : carte mentale
+Cartographie des Forces et Faiblesses
+Une carte mentale illustrant d'un côté l'excellence ergonomique et mobile d'Imparato, et de l'autre l'innovation pédagogique (IA, enregistrement) de RépliCoach.
+Ajouter
+Feuille de Route pour RépliCoach
+Pour rivaliser avec Imparato et s'imposer auprès des troupes professionnelles et des écoles de théâtre (comme le Cours Florent), RépliCoach doit impérativement combler ses lacunes ergonomiques et techniques. Voici la feuille de route recommandée, divisée en 4 étapes clés :
+Étape 1 : Optimiser la répétition en mobilité (Urgence Absolue)
+* Tâche : Développer la lecture audio en arrière-plan et l'intégration des commandes sur l'écran verrouillé.
+* Pourquoi ? Un comédien répète souvent en marchant, dans les transports ou en faisant autre chose. Devoir garder l'écran allumé et déverrouillé est un frein majeur à l'usage.
+* Action : Migrer de l'audio web standard vers les API audio natives d'iOS et d'Android, et rendre les fichiers audio disponibles hors connexion par défaut sans manipulation complexe.
+Étape 2 : Structurer l'éditeur de texte et la gestion de la diction
+* Tâche : Intégrer un parseur typographique intelligent et des commandes de pause.
+* Pourquoi ? Imparato résout les problèmes de diction des mots en majuscules (qui sont épelés par défaut) et permet d'ajouter des silences de 1s ou 2s via les didascalies (pause) et (silence).
+* Action : Ajouter un système de détection des acronymes/majuscules et permettre l'insertion de silences calibrés et cumulables dans le script RépliCoach.
+Étape 3 : Créer une offre commerciale attractive et lisible
+* Tâche : Clarifier la grille tarifaire et créer un tarif troupe dégressif.
+* Pourquoi ? La tarification d'Imparato en 2026 est redoutable : un accès gratuit aux classiques, une formule « Solo » à paiement unique de 7,99 € par texte, et un tarif « Solos groupés » très avantageux pour les troupes (5,99 € par acteur).
+* Action : Remplacer l'abonnement mensuel flou par des achats uniques par projet (Solo) et un module d'achat groupé automatisé pour les metteurs en scène sans devoir passer par le support.
+Étape 4 : Déployer le multi-langues et l'accessibilité
+* Tâche : Prendre en charge l'anglais, l'italien et l'allemand, et intégrer la compatibilité avec les lecteurs d'écran (VoiceOver).
+Recommandé : présentation
+Présentation de la Feuille de Route RépliCoach
+Une présentation séquentielle des quatre étapes de développement stratégique pour RépliCoach afin d'atteindre le niveau d'excellence d'Imparato.
+Ajouter
+Summary
+Principaux enseignements de cette leçon :
+* Imparato domine largement sur l'ergonomie mobile pratique (lecture sur écran verrouillé, mode hors ligne automatisé, gestion rigoureuse de la syntaxe des dialogues et de la ponctuation).
+* RépliCoach propose des innovations pédagogiques intéressantes (importation OCR de PDF scannés, enregistrement de sa propre voix, coaching IA).
+* La feuille de route de RépliCoach doit prioritairement se concentrer sur l'expérience audio en arrière-plan et l'automatisation du mode hors ligne, suivies d'une clarification de son modèle tarifaire (achats uniques et tarifs troupes groupés).

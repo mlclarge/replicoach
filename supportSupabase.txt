@@ -1,0 +1,19 @@
+
+
+If you look at my project's current usage data, you will see that this is a very small, non-profit MVP and absolutely not an abuse of the platform. My usage across all other metrics is negligible:
+
+Database Size: 36.93 MB used (only 8% of the 500 MB limit).
+
+Egress: 0.27 GB used (only 5% of the 5 GB limit).
+
+Monthly Active Users (MAU): Only 3 users.
+
+The only issue is that some uploaded PDFs unexpectedly pushed the Storage to 1.69 GB.
+
+Since we are a non-profit association without the budget to upgrade to the Pro plan immediately, the project is completely bricked unless I can delete those files.
+
+Could you please grant a brief 1-hour window where the Storage API is unblocked? I will immediately delete the heavy files to restore compliance with the Free tier limits.
+
+Thank you for your time and understanding.
+
+Best regards,

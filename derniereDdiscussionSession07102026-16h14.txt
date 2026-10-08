@@ -1,0 +1,28 @@
+Read 
+Completed with input: {
+  "path": "c:\\Users\\moz26\\Downloads\\Supabase Snippet Untitled query.csv"
+}
+
+Search for `supabase|networkTimeout|NetworkFirst`
+
+Ran terminal command: git --no-pager diff --stat; git --no-pager diff src/sw.js src/store/scriptStore.js | Select-Object -First 150
+Tool execution failed with exit code -1
+
+Ran terminal command: npm run build 2>&1 | Select-Object -Last 4; git add src/App.jsx src/lib/geminiOcrService.js src/pages/Upload.jsx src/store/authStore.js src/store/scriptStore.js src/sw.js vite.config.js; git commit -q -m "fix: invalidation cache SW apres import, log fetchScripts detaille, pre-reveil OCR" -m "Co-authored-by: Copilot [223556219+Copilot@users.noreply.github.com](mailto:223556219+Copilot@users.noreply.github.com)"; git --no-pager log --oneline -1
+
+Les données sont bien en base : « DÉPIT AMOUREUX » a 2 personnages et 65 répliques. Le problème vient donc de la lecture, pas de l'enregistrement. Le script est vide à l'écran parce que `fetchScripts` échoue et que la liste affiche la version locale.
+
+Je n'ai pas encore la cause de cet échec. La prod (`5515d29`) contient le chantier #13 mais pas mes correctifs. Je soupçonne l'ancien service worker : il met en cache la liste des scripts et ne l'invalide pas après un import.
+
+Je viens de commiter localement (`b7c3087`, build OK) tout ce qui restait en attente :
+- l'invalidation du cache du service worker après chaque modification de script (`sw.js`, `scriptStore.js`, `App.jsx`, `authStore.js`, `vite.config.js`) ;
+- le message d'erreur détaillé de `fetchScripts` ;
+- le réveil de Render à l'ouverture de la page d'import.
+
+Ces fichiers contenaient déjà des modifications à toi non commitées, et je les ai incluses dans le commit.
+
+Je n'ai rien poussé. Pour déployer : `git push` de `feature/premium-paywall`, puis une PR vers `main`.
+
+Une fois déployé :
+1. Ferme tous les onglets de l'app. Dans Chrome, F12 > Application > Service Workers, clique sur « Unregister ». Dans Application > Storage, clique sur « Clear site data ». Recharge ensuite la page.
+2. Si le script apparaît complet, c'était le cache. Sinon, envoie-moi la ligne `Fetch scripts error` : elle contiendra enfin le message d'erreur.
