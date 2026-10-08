@@ -59,3 +59,5 @@ cline_audit_report.csv
 # Secrets
 replicoach-key.json
 *-key.json
+.vercel
+.env*.local

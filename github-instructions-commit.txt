@@ -1,0 +1,73 @@
+Voici les informations dont tu as besoin, en français.
+
+## Paramètres nécessaires pour commiter depuis VS Code
+
+### 1. Configuration Git (une seule fois sur ta machine)
+Ouvre un terminal (dans VS Code ou ailleurs) et configure ton identité Git :
+
+```bash
+git config --global user.name "mlclarge"
+git config --global user.email "ton-email@exemple.com"
+```
+
+⚠️ Utilise l'email associé à ton compte GitHub (`mlclarge`), sinon les commits ne seront pas liés à ton profil.
+
+### 2. Vérifier que le dépôt est bien cloné et lié à GitHub
+Dans le terminal VS Code :
+
+```bash
+git remote -v
+```
+
+Tu dois voir quelque chose comme :
+```
+origin  https://github.com/mlclarge/replicoach.git (fetch)
+origin  https://github.com/mlclarge/replicoach.git (push)
+```
+
+### 3. Authentification pour pouvoir pousser (push)
+Pour interagir avec GitHub depuis VS Code, il te faut un des éléments suivants :
+- **Extension GitHub Pull Requests and Issues** (recommandée) → connexion via OAuth intégrée à VS Code.
+- **Un token d'accès personnel (PAT)** si tu utilises HTTPS.
+- **Une clé SSH** configurée si tu utilises l'URL SSH (`git@github.com:mlclarge/replicoach.git`).
+
+### 4. Étapes pour commiter dans VS Code (interface graphique)
+1. Onglet **Source Control** (icône branche sur la gauche).
+2. Vérifie les fichiers modifiés listés sous "Changes".
+3. Clique sur le **+** pour "stage" les fichiers (ou stage tout avec l'icône en haut).
+4. Écris un **message de commit** clair dans le champ texte.
+5. Clique sur **Commit** (✔️ ou `Ctrl+Enter`).
+6. Clique sur **Sync Changes** ou **Push** pour envoyer sur GitHub.
+
+### 5. Étapes équivalentes en ligne de commande
+```bash
+git add .
+git commit -m "Ton message de commit"
+git push origin main
+```
+
+### 6. Cas spécifique à ton repo : script de déploiement
+J'ai remarqué que ton repo contient un script `scripts/deploy.ps1` avec une tâche VS Code intégrée :
+
+```powershell
+# Message de commit par défaut
+.\scripts\deploy.ps1
+
+# Avec un message personnalisé
+.\scripts\deploy.ps1 -Message "Votre message de commit"
+```
+
+Tu peux aussi lancer cette tâche via la palette de commandes VS Code : `Terminal: Run Task` → `Deploy: git push main`.
+
+---
+
+**Résumé des paramètres clés :**
+| Paramètre | Valeur/Action |
+|---|---|
+| `user.name` | ton nom GitHub |
+| `user.email` | email lié à ton compte GitHub |
+| `remote origin` | `https://github.com/mlclarge/replicoach.git` |
+| Authentification | Extension GitHub, PAT, ou clé SSH |
+| Branche cible | `main` |
+
+Tu veux que je t'aide à configurer l'authentification SSH ou le token GitHub directement ?

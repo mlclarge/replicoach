@@ -1,0 +1,186 @@
+﻿PRO
+Sources
+Tout sélectionner
+
+Actualités & théâtre pour et par les comédiens - Imparato
+
+Améliorer la diction - Imparato
+
+Avoir plus (ou moins) de temps pour dire mes répliques - Imparato
+
+Comment ça marche ? — Imparato
+
+Comment Imparato peut-il m'être utile
+
+Comment quitter le Premium - Imparato
+
+Explications détaillées sur la formule SOLO - Imparato
+https://photos.app.goo.gl/FiDxKeyJ3swpkw447
+
+Imparato - Théâtre - App Store - Apple
+
+Imparato : des tarifs adaptés pour les troupes.
+
+Imparato 4.3 : répétez directement depuis votre écran verrouillé
+
+Imparato inaugure sa licence pour les cours et les ateliers
+
+Imparato lance son éditeur de texte et de voix pour le théâtre
+
+Imparato permet l'ajout de sons et bruitages dans un texte
+
+Imparato, l'application qui révolutionne l'apprentissage d'un texte
+
+Imparato, l'outil redoutable pour apprendre un monologue
+
+J'ai un problème de son pendant une italienne - Imparato
+
+L'application qui aide à répéter vos textes de théâtre — Imparato
+
+La Formule Basique Gratuite en détail - Imparato
+
+Les erreurs courantes des comédiens débutants (et comment les éviter) - Imparato
+
+Les meilleurs cours de théâtre à Paris en 2026 - Imparato
+
+Les tarifs Imparato en 2026
+
+Modifier la vitesse de lecture des voix - Imparato
+
+Offre Premium - Imparato
+
+Our prices are changing in September 2026 - Imparato
+
+Poser un marque-page dans votre texte — Imparato
+
+Pour obtenir Imparato gratuitement, suivez ce guide
+
+Premiers pas avec l'outil de modification de texte - Imparato
+Rapport Deep Research : Panorama Fonctionnel et Analyse Technique d'Imparato : Solution Numérique d'Apprentissage Théâtral
+Replicoach : fonctionnalités
+
+Support - Imparato
+
+Tous les détails sur la formule Troupe ‍ ‍ ‍ - Imparato
+
+Un écran de texte repensé pour répéter plus vite (et plus confortablement) - Imparato
+📸
+Replicoach Vs Imparato
+33 sources·29 sept. 2026
+Imparato est une application conçue pour aider les comédiens et les troupes de théâtre à mémoriser et répéter leurs textes en toute autonomie, que ce soit sur smartphone, tablette ou ordinateur. L'outil intègre un générateur de synthèse vocale qui lit les dialogues, attribue une voix différente à chaque personnage et permet de faire des répétitions à l'italienne partout. Les utilisateurs peuvent importer leurs propres scripts, ajouter des didascalies ou des bruitages, et profiter d'une bibliothèque contenant des centaines d'œuvres classiques du domaine public. Des fonctionnalités avancées permettent de piloter les répétitions depuis l'écran verrouillé, de travailler hors ligne et de partager les modifications en temps réel avec toute une troupe. Enfin, l'application propose différentes formules tarifaires adaptées, incluant des achats individuels (SOLO), des abonnements illimités et des licences dédiées aux professeurs pour leurs cours et ateliers de théâtre.
+Comment fonctionne le souffleur de poche pour apprendre son texte ?
+Quelles sont les différentes formules tarifaires et options pour les troupes ?
+Comment l'application aide-t-elle à travailler les monologues et la diction ?
+33 sources
+Vérifiez les réponses de Gemini Notebook, car il peut se tromper.
+StudioRapport interactif
+* 1.
+* Introduction
+* 2.
+* Le moteur de répétition : L'italienne audio autonome
+* 3.
+* Flexibilité d'usage : Écran verrouillé et Mode Hors ligne
+* 4.
+* L'éditeur de texte et sa syntaxe dédiée
+* 5.
+* Bruitages, Monologues et Silences mesurés
+* 6.
+* Interface de lecture et outils visuels d'apprentissage
+* 7.
+* La bibliothèque publique et le module collaboratif de troupe
+* 8.
+* Summary
+Introduction
+Et s'il était possible d'apprendre vos textes de théâtre deux fois plus vite, n'importe où, sans jamais avoir besoin d'un partenaire physique pour vous donner la réplique ? C'est la promesse d'Imparato, le véritable souffleur de poche numérique des comédiens. Que vous soyez amateur ou professionnel, cette application révolutionne la mémorisation dramatique en combinant une synthèse vocale de pointe avec des outils collaboratifs puissants.
+Dans cette leçon, vous allez découvrir l'ensemble des fonctionnalités clés d'Imparato pour optimiser vos répétitions :
+* Le moteur de répétition vocale et l'animation d'une « italienne » autonome.
+* L'utilisation en mobilité avec le mode hors ligne et le contrôle sur écran verrouillé.
+* La syntaxe d'édition pour structurer parfaitement vos scripts personnalisés.
+* Les outils visuels de mémorisation comme le masquage de texte et la mini-carte.
+* Les fonctions de troupe pour synchroniser instantanément les modifications avec vos partenaires.
+Le moteur de répétition : L'italienne audio autonome
+Le cœur technologique d'Imparato réside dans sa capacité à simuler une répétition à l'italienne en solo. Grâce à une synthèse vocale avancée (deep learning), l'application attribue à chaque personnage d'une pièce une voix distincte parmi une banque de voix masculines et féminines de haute qualité.
+Les voix générées sont volontairement neutres et peu expressives. Ce choix stratégique est au cœur de la méthode de mémorisation d'Imparato : il permet aux comédiens d'apprendre leur texte de manière brute, sans y injecter d'intentions de jeu prématurées. Les intentions et les émotions seront construites plus tard sur scène, sous la direction du metteur en scène.
+Pour s'adapter à votre niveau d'apprentissage, l'italienne propose plusieurs paramètres de personnalisation avancés :
+* Vitesse de diction : Ajustable de 0.8 (très lent) à 1.6 (extrêmement rapide) pour accélérer progressivement le rythme.
+* Délai pour réciter : Règle le temps de silence accordé au comédien entre les répliques de ses partenaires (de Très court à Très lent).
+* Mode d'enchaînement : Choix entre un enchaînement automatique ou manuel (où vous devez toucher l'écran pour déclencher la réplique suivante).
+* Réduction de l'écoute partenaire : Une option redoutable qui tronque les longues répliques adverses pour ne diffuser que les 10 dernières secondes avant votre prise de parole. Un signal sonore discret vous avertit de ce saut de texte.
+Recommandé : présentation
+Guide visuel des réglages de l'italienne
+Une présentation étape par étape pour configurer sa vitesse de diction, ses délais de récitation et le mode de réduction d'écoute.
+Ajouter
+Flexibilité d'usage : Écran verrouillé et Mode Hors ligne
+Pour s'intégrer parfaitement dans le quotidien rythmé des artistes, Imparato propose des fonctionnalités de mobilité avancées qui permettent de répéter dans les transports, dans la rue ou en coulisses.
+Depuis la version 4.3, vous pouvez piloter votre italienne directement depuis l'écran verrouillé de votre smartphone. Le flux audio de la répétition continue de tourner en arrière-plan lorsque le téléphone est en veille. Vous pouvez ainsi :
+* Mettre en pause ou reprendre la lecture.
+* Passer à la réplique suivante ou revenir à la réplique précédente.
+* Suivre l'enchaînement des scènes avec l'affichage à jour des personnages et de leurs avatars.
+De plus, les répétitions hors ligne sont automatiques par défaut. Dès que vous ouvrez un texte, l'application télécharge localement le script et les fichiers audio associés. Vous n'avez plus besoin de réseau ni de Wi-Fi pour faire vos italiennes, ce qui s'avère indispensable dans les salles de répétition souvent mal couvertes ou les sous-sols de théâtres.
+Recommandé : infographie
+Fonctionnalités Nomades d'Imparato
+Schéma explicatif illustrant le contrôle de l'application depuis l'écran verrouillé et le fonctionnement du stockage audio local pour le mode hors ligne.
+Ajouter
+L'éditeur de texte et sa syntaxe dédiée
+Imparato vous permet d'intégrer vos propres textes en les saisissant directement ou en important un fichier PDF ou Word. Pour que le moteur de synthèse vocale puisse vocaliser correctement votre pièce, l'application s'appuie sur un système d'analyse syntaxique simple et intuitif :
+* Les scènes et actes : Ils se déclarent à l'aide du symbole # (ex: # Acte I ou ## Scène 2). Dans l'éditeur, ils s'affichent en orange et structurent automatiquement le menu de navigation rapide.
+* Les personnages : Déclarés avec le symbole @ suivi du nom et d'un retour à la ligne (ex: @Valère). Ils s'affichent en bleu.
+* Les didascalies : Toutes les indications scéniques doivent être écrites entre parenthèses (Il sort.). Elles s'affichent en gris et ne sont jamais vocalisées par l'application.
+* Les répliques : Tout texte brut écrit sous le nom d'un personnage est considéré comme du dialogue vocalise, affiché en noir.
+L'éditeur gère également des syntaxes plus complexes pour répondre à toutes les situations d'écriture :
+* Répliques simultanées : Si deux personnages parlent en même temps pour dire le même texte, vous pouvez utiliser la syntaxe @Les deux:Heurtebise+Eurydice pour fusionner leurs voix.
+* Alias de personnage : Si le nom affiché à l'écran doit différer du nom habituel sans perturber l'attribution de la voix, utilisez la syntaxe @La Tête d'Orphée:Orphée.
+* Texte mort : Les textes explicatifs placés en tout début de pièce ou de scène (hors réplique) sont traités comme des didascalies muettes, sans avoir besoin d'être mis entre parenthèses.
+Note de diction utile : Les mots rédigés entièrement en majuscules dans vos répliques sont considérés comme des acronymes ou des sigles et seront épelés lettre par lettre par l'application. Pour une lecture fluide, veillez à les écrire en minuscules !
+Recommandé : carte mentale
+Règles de syntaxe d'Imparato
+Une carte mentale montrant les différents marqueurs syntaxiques (#, @, parenthèses) et leur traitement par le moteur vocal.
+Ajouter
+Bruitages, Monologues et Silences mesurés
+Pour donner encore plus de relief à vos séances de mémorisation, Imparato propose des fonctionnalités d'apprentissage adaptées à tous les formats dramatiques :
+1. Intégration de bruitages et d'effets sonores Il est très fréquent qu'une réplique doive s'enchaîner après un bruitage précis (une sonnerie de téléphone, une alarme, une détonation). L'éditeur Imparato vous permet d'intégrer ces effets sonores directement dans votre texte pour qu'ils se déclenchent automatiquement pendant vos répétitions audio. Cela permet de créer des ancrages mémoriels redoutables pour ne jamais rater vos départs.
+2. Entraînement spécifique pour les monologues Pour travailler une tirade ou un monologue, la méthode recommandée consiste à morceler votre long texte en plusieurs sous-répliques dans l'éditeur. Activez ensuite le mode de répétition « Lire mes répliques » avec l'option « avant » ou « avant et après » : vous entendrez l'application lire le morceau de texte juste avant que vous ne deviez le réciter vous-même, facilitant l'assimilation phrase par phrase.
+3. Insertion de pauses et silences calibrés Vous pouvez intégrer des silences précis dans le débit de la synthèse vocale en utilisant des didascalies spécifiques :
+* La didascalie (pause) génère un silence de 1 seconde environ.
+* La didascalie (silence) génère une pause de 2 secondes.
+* Vous pouvez cumuler ces balises pour étirer le temps : par exemple, (silence) (silence) provoquera un silence pesant de 4 secondes avant la réprise de la diction.
+Recommandé : flashcards
+Cartes mémoires : Syntaxe des bruitages et silences
+Un jeu de fiches pour réviser rapidement les commandes d'insertion de silences, de bruitages et de gestion des monologues.
+Ajouter
+Interface de lecture et outils visuels d'apprentissage
+L'écran central d'Imparato a été repensé pour limiter la fatigue visuelle et offrir un confort d'apprentissage maximal. En dehors de l'écoute audio, l'interface graphique propose une multitude d'astuces pour travailler à l'écran :
+* Surlignage des rôles : Sélectionnez votre personnage en haut du texte, et toutes vos répliques se colorent instantanément pour un repérage immédiat.
+* Masquage de texte : Vous pouvez cacher vos propres répliques pour vous tester de mémoire (en touchant l'écran pour les dévoiler une à une, comme avec un cache en carton traditionnel) ou masquer complètement les didascalies pour purifier la lecture.
+* Annotations personnelles colorées : Prenez des notes de mise en scène sur des répliques spécifiques et organisez-les par couleur.
+* Marque-pages interactifs : Posez un marque-page sur une réplique (via un appui long sur mobile) pour y revenir instantanément. Glissez-le vers la gauche pour démarrer immédiatement l'italienne à cet endroit précis.
+* Mini-carte latérale : Un aperçu vertical du texte s'affiche sur la droite de l'écran. Il affiche votre position actuelle, la densité des répliques (traits colorés), vos marque-pages (repères jaunes) et vos notes personnelles. Vous pouvez y glisser votre doigt pour vous déplacer à toute vitesse sans scroller pendant des minutes.
+* Menu flottant de scènes : Toujours disponible en haut de l'interface, il vous permet d'aller directement au début de la scène suivante ou à la fin de la précédente sans casser votre rythme de jeu.
+Recommandé : vidéo
+Démonstration de l'interface visuelle
+Une vidéo de présentation montrant le fonctionnement de la mini-carte latérale, du menu flottant de navigation et des outils de masquage des répliques.
+Ajouter
+La bibliothèque publique et le module collaboratif de troupe
+Imparato s'adresse aussi bien aux comédiens isolés qu'aux groupes organisés.
+1. Une bibliothèque de textes classiques en libre accès L'application propose un catalogue de plus de 458 pièces de théâtre classiques issues du domaine public (Molière, Marivaux, Feydeau, Labiche...). L'accès à ces textes ainsi que les répétitions audio (italiennes) associées sont totalement gratuits et illimités pour tous les utilisateurs, même avec la formule Basique.
+2. Le module collaboratif de Troupe Pour les compagnies ou les ateliers de théâtre, Imparato permet de créer des troupes virtuelles. Lorsqu'une formule Troupe est active, elle offre des fonctionnalités collaboratives puissantes :
+* Distribution des rôles : Le chef de troupe assigne les personnages aux différents comédiens de son groupe.
+* Adaptation partagée en temps réel : Les administrateurs peuvent modifier le texte depuis l'éditeur. Le travail s'enregistre d'abord sous forme de brouillon d'édition. Une fois publié, les serveurs d'Imparato s'occupent de revocaliser automatiquement les répliques modifiées et de synchroniser la dernière version sur les smartphones de tous les comédiens de la troupe.
+* Notifications de mise à jour : Les membres sont automatiquement avertis des changements apportés au script, ce qui élimine définitivement les pertes de temps liées au renvoi incessant de fichiers PDF mis à jour.
+Recommandé : audio
+Gérer une troupe avec Imparato
+Discussion audio expliquant comment structurer une troupe virtuelle, attribuer les rôles et synchroniser les brouillons d'édition au sein d'une compagnie de théâtre.
+Ajouter
+Summary
+L'application Imparato est un outil complet conçu spécifiquement par et pour les comédiens afin de simplifier et d'accélérer l'apprentissage des textes.
+Voici les points clés à retenir de cette leçon :
+* L'italienne autonome utilise une synthèse vocale volontairement neutre pour une mémorisation brute, avec des options de vitesse, de délai et de réduction des tirades partenaires.
+* La flexibilité nomade est assurée grâce aux commandes audio sur écran verrouillé (style podcast) et au téléchargement local automatique pour une répétition hors ligne complète.
+* L'éditeur syntaxique permet de formater un script personnel très simplement (grâce aux balises @, # et ()), tout en gérant les répliques simultanées, les bruitages et les silences calibrés.
+* L'interface visuelle moderne multiplie les aides visuelles à l'apprentissage : masquage de répliques pour se tester, surlignage, marque-pages interactifs et mini-carte latérale de navigation rapide.
+* Le module collaboratif permet aux troupes et ateliers d'automatiser la distribution des rôles et de synchroniser instantanément les modifications de texte en cours de mise en scène.
+Recommandé : quiz
+Quiz : Testez vos connaissances sur Imparato
+Évaluez votre compréhension des fonctionnalités de répétition, de syntaxe et de gestion de troupe sur l'application Imparato.
+Ajouter
+Rapport "Révolutionner ses répétitions : Comparatif Imparato vs RépliCoach & Feuille de Route" est prêt.

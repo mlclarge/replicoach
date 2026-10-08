@@ -1,0 +1,59 @@
+﻿Voici l’inventaire des fonctionnalités repérées dans le code de RépliCoach, regroupées par usage.
+
+
+### 1. Compte et espace personnel
+- Connexion et déconnexion ; les pages de travail sont réservées aux utilisateurs connectés.
+- Espace personnel pour retrouver ses textes, ses consignes et son historique.
+- Affichage de statistiques : nombre de textes, de répliques, de personnages et de consignes.
+
+
+### 2. Importer et organiser des textes
+- Import de fichiers **PDF, Word (.doc/.docx) et TXT**, ou création d’un texte en collant son contenu.
+- Extraction de texte depuis les documents et reconnaissance OCR pour les PDF scannés.
+- Analyse du texte pour identifier les personnages et leurs répliques ; certains mots-repères sont aussi générés.
+- Deux options de traitement PDF : un scan classique et un scan « Premium IA » — ce dernier est limité aux PDF.
+- Bibliothèque de textes avec recherche, tags personnalisés et tri manuel par glisser-déposer.
+- Import et gestion d’audios dans l’espace personnel.
+
+
+### 3. Travailler son rôle et mémoriser ses répliques
+- Lecture du texte complet ou filtré par personnage.
+- Choix de son personnage, repérage de ses passages et possibilité de masquer ses propres répliques pour s’entraîner.
+- Plusieurs modes de mémorisation : **texte complet**, texte à trous, premiers mots, début/fin de réplique, dernier mot ou mots-indices.
+- Création de groupes de répliques pour réviser des passages choisis.
+- Modification du texte : titre, personnages, répliques ; ajout, suppression, découpage et réorganisation des répliques.
+- Consultation du fichier original associé au texte.
+
+
+### 4. Répétition audio
+- Lecture automatisée des répliques par synthèse vocale, avec des voix et réglages différents selon les personnages.
+- Réglage de la vitesse et du pitch ; commandes pour démarrer, arrêter, avancer, reculer et recommencer la lecture.
+- Mode où l’on attend l’intervention du comédien avant de poursuivre — pratique pour répéter ses répliques.
+- Enregistrement d’une voix pour un personnage ou d’un enregistrement pour une réplique, puis réécoute.
+
+
+### 5. Notes et coaching
+- Ajout de notes personnelles à des endroits précis du texte ; consultation, modification et suppression des notes.
+- Coaching IA associé à un personnage : suggestions de jeu, avec possibilité de relancer ou modifier sa demande et d’enregistrer les conseils comme note.
+- **Le coaching IA est limité aux comptes Premium** dans le code. Les textes d’aide présents dans le dépôt ne sont pas cohérents sur son coût et son accès ; je préfère donc ne pas annoncer de tarif.
+
+
+### 6. Partage et travail en troupe
+- Rejoindre une troupe avec un code ; création de troupe selon les autorisations configurées.
+- Partage de textes avec une troupe et création d’une copie personnelle d’un texte partagé.
+- Gestion de l’adhésion à une troupe et consultation de ses consignes et vidéos.
+- Bibliothèque publique filtrable par catégorie : scripts, guides, exercices et audios. Certains contenus peuvent être copiés dans son espace personnel.
+- Partage d’enregistrements avec une troupe.
+
+
+### 7. Enregistrements personnels
+- Enregistrement libre au microphone pour s’écouter, avec nommage, lecture, renommage et suppression.
+- Arrêt automatique après 15 secondes de silence, et limite d’enregistrement d’une heure.
+
+
+### 8. Installation et usage hors connexion
+- Application installable comme PWA et indicateur de connexion.
+- Les textes déjà consultés peuvent rester accessibles hors ligne ; les fonctions qui nécessitent le service IA, elles, demandent une connexion.
+
+
+Ces éléments sont visibles notamment dans `l’import des textes`, `la bibliothèque principale`, `la lecture et le travail d’un script`, `le mode audio` et `le partage en troupe`.

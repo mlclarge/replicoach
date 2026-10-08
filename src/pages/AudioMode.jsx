@@ -10,7 +10,11 @@ import {
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
-import { fetchTtsStatus, lockTtsVoice, fetchTtsAudioUrl } from "../lib/premiumTts";
+import {
+  fetchTtsStatus,
+  lockTtsVoice,
+  fetchTtsAudioUrl,
+} from "../lib/premiumTts";
 
 // Prénoms pour détection du genre
 const MALE_NAMES = [
@@ -722,7 +726,9 @@ function AudioMode() {
     const res = await fetchTtsAudioUrl(id, replicaId);
     if (!res.ok) {
       if (res.code === "quota_exceeded") {
-        setPremiumNotice("Quota mensuel de voix Premium atteint : voix du navigateur utilisée.");
+        setPremiumNotice(
+          "Quota mensuel de voix Premium atteint : voix du navigateur utilisée.",
+        );
       }
       return false;
     }
@@ -750,41 +756,81 @@ function AudioMode() {
   };
 
   // Fonction speak unifiée
-  // Fonction speak unifiée: priorise enregistrement par réplique, puis par personnage, sinon TTS
-  const speak = async (text, characterId, replicaId = null) => {
-    // Nettoyer systématiquement le texte destiné au TTS (debug + robustesse)
-    const cleanedForDecision = cleanTextForSpeech(text || "");
+  // ==========================================
+  // MOTEUR AUDIO : LECTURE D'UNE RÉPLIQUE
+  // ==========================================
+  const speak = async (text, characterId, replicaId) => {
+    return new Promise(async (resolve) => {
+      // 1. VÉRIFICATION DU MODE RECORDED (Si enregistrement personnel)
+      if (
+        voiceMode[characterId] === "recorded" &&
+        characterRecordings[characterId]
+      ) {
+        try {
+          const audio = new Audio(characterRecordings[characterId]);
+          audioPlayerRef.current = audio;
+          audio.onended = () => resolve();
+          audio.onerror = () => resolve();
+          await audio.play();
+          return;
+        } catch (err) {
+          console.warn("Erreur lecture enregistrement perso, bascule...", err);
+        }
+      }
 
-    // Log pour debug local
-    try {
-      // eslint-disable-next-line no-console
-      console.log("speak() called:", {
-        original: text,
-        cleaned: cleanedForDecision,
-        characterId,
-        replicaId,
-      });
-    } catch (e) {}
+      // 2. CAS PREMIUM : Si l'utilisateur est Premium ET qu'une voix TTS est verrouillée
+      const lockedVoiceId = premiumLocks[characterId];
+      if (isPremium && lockedVoiceId) {
+        try {
+          // Appeler le service Google Cloud TTS via le helper premiumTts
+          const audioUrl = await getOrGenerateTtsAudio({
+            scriptId: currentScript.id,
+            characterId: characterId,
+            replicaId: replicaId,
+            text: text,
+            voiceId: lockedVoiceId,
+          });
 
-    // 1) Enregistrement par réplique (local)
-    if (replicaId && replicaRecordings[replicaId]?.data) {
-      return await playReplicaRecording(replicaId);
+          if (audioUrl) {
+            const audio = new Audio(audioUrl);
+            audioPlayerRef.current = audio;
+            audio.onended = () => resolve();
+            audio.onerror = () => {
+              console.warn("Erreur lecture MP3 Premium, fallback local...");
+              speakBrowserSynth(text, characterId, resolve);
+            };
+            await audio.play();
+            return;
+          }
+        } catch (err) {
+          console.error("Erreur génération TTS Google Cloud :", err);
+        }
+      }
+
+      // 3. CAS STANDARD / FALLBACK : Synthèse vocale du navigateur
+      speakBrowserSynth(text, characterId, resolve);
+    });
+  };
+
+  // Fonction secondaire pour la synthèse vocale locale du navigateur
+  const speakBrowserSynth = (text, characterId, resolve) => {
+    speechSynthesis.cancel();
+
+    const cleanText = stripHtml(text || "");
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = rate;
+
+    // Assigner la voix locale sélectionnée
+    const assignedVoiceName = characterVoices[characterId];
+    if (assignedVoiceName && voices.all) {
+      const foundVoice = voices.all.find((v) => v.name === assignedVoiceName);
+      if (foundVoice) utterance.voice = foundVoice;
     }
 
-    // 2) Enregistrement par personnage (remote)
-    const mode = voiceMode[characterId] || "synth";
-    if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
-      return await speakRecorded(characterId);
-    }
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
 
-    // 3) Voix Premium (générée à la première écoute, puis mise en cache serveur)
-    if (isPremium && replicaId && premiumLocks[characterId]) {
-      const played = await speakPremium(replicaId);
-      if (played) return;
-    }
-
-    // 4) Synthèse vocale — passer le texte nettoyé
-    return await speakSynth(cleanedForDecision, characterId);
+    speechSynthesis.speak(utterance);
   };
 
   // Test voix synthétique
@@ -1063,151 +1109,73 @@ function AudioMode() {
       </div>
 
       {/* ====== PARAMÈTRES VOIX SYNTHÉTIQUE ====== */}
+      {/* ====== PARAMÈTRES VOIX (AudioMode.jsx) ====== */}
       {showSettings && (
         <div className="bg-white border-b border-gray-200 p-4 shadow-md">
           <h3 className="font-semibold text-gray-800 mb-3">
-            🔊 Réglages voix synthétique
+            🔊 Configuration des voix du partenaire
           </h3>
 
-          <div className="space-y-4">
-            {/* Vitesse */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-gray-600 text-sm">Vitesse</span>
-                <span className="text-primary-700 font-semibold">{rate}x</span>
-              </div>
-              <input
-                type="range"
-                min="0.5"
-                max="2"
-                step="0.1"
-                value={rate}
-                onChange={(e) => setRate(parseFloat(e.target.value))}
-                className="w-full accent-primary-600"
-              />
-            </div>
-
-            {/* Pitch féminin */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-gray-600 text-sm">Pitch ♀ (aigu)</span>
-                <span className="text-pink-600 font-semibold">
-                  {femalePitch.toFixed(1)}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="1.0"
-                max="2.0"
-                step="0.1"
-                value={femalePitch}
-                onChange={(e) => setFemalePitch(parseFloat(e.target.value))}
-                className="w-full accent-pink-500"
-              />
-            </div>
-
-            {/* Pitch masculin */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-gray-600 text-sm">Pitch ♂ (grave)</span>
-                <span className="text-blue-600 font-semibold">
-                  {malePitch.toFixed(1)}
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0.1"
-                max="1.0"
-                step="0.1"
-                value={malePitch}
-                onChange={(e) => setMalePitch(parseFloat(e.target.value))}
-                className="w-full accent-blue-500"
-              />
-            </div>
-
-            {/* Test voix */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => testVoice("female")}
-                className="flex-1 py-2 bg-pink-100 text-pink-700 rounded-lg text-sm font-semibold"
-              >
-                🔊 Test ♀
-              </button>
-              <button
-                onClick={() => testVoice("male")}
-                className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-semibold"
-              >
-                🔊 Test ♂
-              </button>
-            </div>
-
-            {/* Genre par personnage */}
-            <div className="pt-3 border-t border-gray-200">
-              <p className="text-sm text-gray-600 mb-2 font-semibold">
-                Genre des personnages :
+          {isPremium ? (
+            /* 🟢 CAS 1 : PROFIL PREMIUM — Uniquement Google Cloud TTS */
+            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded space-y-3">
+              <p className="text-sm text-amber-900 font-bold">
+                ✨ Voix Premium Google Cloud TTS (verrouillage définitif par
+                personnage) :
               </p>
-              <div className="flex flex-wrap gap-2">
-                {characters.map((char) => {
-                  const gender =
-                    characterGenders[char.id] ||
-                    char.gender ||
-                    detectGender(char.name);
-                  return (
-                    <button
-                      key={char.id}
-                      onClick={() => toggleCharacterGender(char.id, gender)}
-                      className={`px-3 py-1 rounded-full text-xs font-bold transition ${
-                        gender === "female"
-                          ? "bg-pink-100 text-pink-600 border-2 border-pink-300"
-                          : "bg-blue-100 text-blue-600 border-2 border-blue-300"
-                      }`}
-                    >
-                      {char.name.substring(0, 10)}{" "}
-                      {gender === "female" ? "♀" : "♂"}
-                    </button>
-                  );
-                })}
-              </div>
+
+              {characters.map((char) => (
+                <PremiumVoicePicker
+                  key={char.id}
+                  character={char}
+                  lockedVoiceId={premiumLocks[char.id]}
+                  onLock={handleLockVoice}
+                />
+              ))}
+
+              {ttsUsage && (
+                <p className="text-xs text-gray-500 pt-2 border-t border-amber-200">
+                  Quota du mois : {ttsUsage.used.toLocaleString("fr-FR")} /{" "}
+                  {ttsUsage.limit.toLocaleString("fr-FR")} caractères
+                </p>
+              )}
             </div>
+          ) : (
+            /* 🔵 CAS 2 : PROFIL STANDARD — Uniquement synthèse vocale du navigateur */
+            <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded space-y-4">
+              <p className="text-sm text-blue-900 font-bold">
+                🔊 Voix locales de votre appareil (Standard) :
+              </p>
 
-            {/* Voix Premium par personnage */}
-            {isPremium && (
-              <div className="pt-3 border-t border-gray-200 space-y-3">
-                <p className="text-sm text-gray-600 font-semibold">
-                  ✨ Voix Premium (choix définitif par personnage) :
-                </p>
-                {characters.map((char) => (
-                  <PremiumVoicePicker
-                    key={char.id}
-                    character={char}
-                    lockedVoiceId={premiumLocks[char.id]}
-                    onLock={handleLockVoice}
-                  />
-                ))}
-                {ttsUsage && (
-                  <p className="text-xs text-gray-500">
-                    Quota du mois : {ttsUsage.used.toLocaleString("fr-FR")} /{" "}
-                    {ttsUsage.limit.toLocaleString("fr-FR")} caractères
-                  </p>
-                )}
-                {premiumNotice && <p className="text-xs text-amber-700">{premiumNotice}</p>}
+              {/* Vitesse */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-gray-600 text-sm">Vitesse</span>
+                  <span className="text-primary-700 font-semibold">
+                    {rate}x
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="2"
+                  step="0.1"
+                  value={rate}
+                  onChange={(e) => setRate(parseFloat(e.target.value))}
+                  className="w-full accent-primary-600"
+                />
               </div>
-            )}
 
-            {/* Choix de voix par personnage (DESKTOP) */}
-            {!isMobile() && voices.all?.length > 1 && (
-              <div className="pt-3 border-t border-gray-200">
-                <p className="text-sm text-gray-600 mb-2 font-semibold">
-                  Voix par personnage :
-                </p>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
+              {/* Voix par personnage (Navigateur) */}
+              {voices.all?.length > 1 && (
+                <div className="space-y-2">
                   {characters.map((char) => (
                     <div key={char.id} className="flex items-center gap-2">
                       <span
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: char.color }}
                       />
-                      <span className="text-gray-700 text-sm flex-shrink-0 w-24 truncate">
+                      <span className="text-gray-700 text-sm w-24 truncate">
                         {char.name}
                       </span>
                       <select
@@ -1231,9 +1199,9 @@ function AudioMode() {
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1284,6 +1252,88 @@ function AudioMode() {
         </div>
       )}
 
+      {/* ====== PANNEAU DE CONTRÔLE - ANCRÉ EN HAUT ====== */}
+      <div className="sticky top-[68px] z-30 bg-black border-b-2 border-red-800 shadow-xl overflow-hidden">
+        {/* Effet rideau théâtral */}
+        <div className="absolute inset-0 opacity-20 bg-gradient-to-b from-red-900/20 to-black pointer-events-none"></div>
+
+        {/* Infos réplique */}
+        <div className="px-4 py-2 bg-black/80 border-b border-red-900/50">
+          <div className="flex items-center gap-3 relative z-10">
+            <div
+              className={`text-2xl ${isPlaying && !waitingForClick ? "animate-pulse" : ""}`}
+            >
+              {waitingForClick ? "🎭" : isPlaying ? "🔊" : "⏸️"}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-white text-sm font-bold truncate">
+                {characters.find(
+                  (c) => c.id === replicas[currentIndex]?.character_id,
+                )?.name || "-"}
+              </p>
+              <p className="text-gray-400 text-xs truncate">
+                {waitingForClick
+                  ? "À vous de jouer !"
+                  : (stripHtml(replicas[currentIndex]?.text || "").substring(
+                      0,
+                      40,
+                    ) || "") + "..."}
+              </p>
+            </div>
+            <span className="text-red-400 text-sm font-bold drop-shadow">
+              {currentIndex + 1}/{replicas.length}
+            </span>
+          </div>
+        </div>
+
+        {/* Contrôles */}
+        <div className="px-4 py-3 relative z-10">
+          <div className="flex items-center justify-center gap-6 sm:gap-12">
+            <button
+              onClick={stop}
+              title="Arrêter"
+              className="text-2xl text-white/60 hover:text-white transition"
+            >
+              ⏹️
+            </button>
+            <button
+              onClick={goToPrevious}
+              disabled={currentIndex === 0}
+              title="Réplique précédente"
+              className="text-2xl text-white/60 hover:text-white transition disabled:opacity-30"
+            >
+              ⏮️
+            </button>
+            <button
+              onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
+              title={isPlaying ? "Pause" : "Lecture"}
+              className="text-5xl text-emerald-500 hover:text-emerald-400 transition transform active:scale-95"
+            >
+              {isPlaying ? "⏸️" : "▶️"}
+            </button>
+            <button
+              onClick={goToNext}
+              disabled={currentIndex === replicas.length - 1}
+              title="Réplique suivante"
+              className="text-2xl text-white/60 hover:text-white transition disabled:opacity-30"
+            >
+              ⏭️
+            </button>
+            <button
+              onClick={() => {
+                stop();
+                setCurrentIndex(0);
+                setTimeout(() => playAll(0), 100);
+              }}
+              title="Recommencer"
+              className="text-2xl text-white/60 hover:text-white transition"
+            >
+              🔄
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Liste des répliques */}
       <div className="p-4 space-y-3">
         {replicas.map((replica, index) => {
@@ -1330,104 +1380,9 @@ function AudioMode() {
           );
         })}
       </div>
-
-      {/* ====== PANNEAU DE CONTRÔLE - THÉÂTRAL ====== */}
-      <div className="fixed bottom-16 left-0 right-0 z-50 bg-black border-t-4 border-red-800 shadow-2xl relative overflow-hidden">
-        {/* Effet rideau théâtral */}
-        <div className="absolute inset-0 opacity-20 bg-gradient-to-b from-red-900/20 to-black pointer-events-none"></div>
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-900 via-red-700 to-red-900"></div>
-
-        {/* Infos réplique */}
-        <div className="px-4 py-2 bg-black/80 border-b border-red-900/50">
-          <div className="flex items-center gap-3 relative z-10">
-            <div
-              className={`text-2xl ${
-                isPlaying && !waitingForClick ? "animate-pulse" : ""
-              }`}
-            >
-              {waitingForClick ? "🎭" : isPlaying ? "🔊" : "⏸️"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-bold truncate">
-                {characters.find(
-                  (c) => c.id === replicas[currentIndex]?.character_id,
-                )?.name || "-"}
-              </p>
-              <p className="text-gray-400 text-xs truncate">
-                {waitingForClick
-                  ? "À vous de jouer !"
-                  : (stripHtml(replicas[currentIndex]?.text || "").substring(
-                      0,
-                      40,
-                    ) || "") + "..."}
-              </p>
-            </div>
-            <span className="text-red-400 text-sm font-bold drop-shadow">
-              {currentIndex + 1}/{replicas.length}
-            </span>
-          </div>
-        </div>
-
-        {/* Contrôles - Design épuré minimaliste */}
-        <div className="px-4 py-8 pb-8 relative z-10">
-          <div className="flex items-center justify-center gap-10 sm:gap-16">
-            {/* Arrêter */}
-            <button
-              onClick={stop}
-              title="Arrêter"
-              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95"
-            >
-              ⏹️
-            </button>
-
-            {/* Précédent */}
-            <button
-              onClick={goToPrevious}
-              disabled={currentIndex === 0}
-              title="Réplique précédente"
-              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95 disabled:opacity-30"
-            >
-              ⏮️
-            </button>
-
-            {/* PLAY PRINCIPAL - Juste l'emoji énorme vert */}
-            <button
-              onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
-              title={isPlaying ? "Pause" : "Lecture"}
-              className="text-8xl sm:text-9xl text-emerald-500 hover:text-emerald-400 transition-colors duration-200 transform hover:scale-120 active:scale-95 drop-shadow-xl"
-            >
-              {isPlaying ? "⏸️" : "▶️"}
-            </button>
-
-            {/* Suivant */}
-            <button
-              onClick={goToNext}
-              disabled={currentIndex === replicas.length - 1}
-              title="Réplique suivante"
-              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95 disabled:opacity-30"
-            >
-              ⏭️
-            </button>
-
-            {/* Recommencer */}
-            <button
-              onClick={() => {
-                stop();
-                setCurrentIndex(0);
-                setTimeout(() => playAll(0), 100);
-              }}
-              title="Recommencer"
-              className="text-4xl sm:text-5xl text-white/60 hover:text-white transition-colors duration-200 hover:scale-115 active:scale-95"
-            >
-              🔄
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
-
 /**
  * Bulle audio
  */

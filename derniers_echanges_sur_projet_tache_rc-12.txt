@@ -1,0 +1,502 @@
+Je comprends la frustration — on tourne en rond depuis un moment. Avant de trancher entre "tout revoir" ou "repartir de zéro", laissez-moi vérifier le résultat du diagnostic en cours (il doit être fini ou presque) : ça va nous dire clairement si le pipeline Gemini est fiable ou pas.
+
+Lire le terminal
+Completed with input: {
+  "delay": 15,
+  "shellId": "53"
+}
+
+**Cause racine identifiée avec certitude** — ce n'est pas aléatoire, c'est un vrai bug de configuration :
+
+- `FINISH_REASON: MAX_TOKENS` → Gemini a été **coupé en plein milieu du JSON** (JSON invalide car tronqué).
+- Le détail choc : `thoughts_token_count=16330` — le modèle `gemini-3.8-flash` est un modèle de **raisonnement ("thinking")** qui consomme **la moitié du budget de tokens** (16 330 sur 32 768) juste pour "réfléchir" en interne, avant même de produire le JSON de sortie. Il ne reste que ~16 400 tokens pour le texte réel de la pièce → insuffisant pour un texte complet, d'où la troncature.
+
+Ce n'est donc pas un problème d'architecture générale ni besoin de repartir de zéro — c'est un réglage de configuration Gemini à corriger : soit désactiver le "thinking" (pas nécessaire pour une tâche d'extraction structurée), soit augmenter fortement `max_output_tokens`. Je vérifie si le SDK supporte la désactivation du thinking.
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+.\.venv\Scripts\python.exe -c "from google.genai import types; import inspect; print(inspect.signature(types.ThinkingConfig.__init__)); print(inspect.signature(types.GenerateContentConfig.__init__))" 2>&1 | Select-String "thinking" -Context 0,2
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+.\.venv\Scripts\python.exe -c "from google.genai import types; help(types.ThinkingConfig)" 2>&1 | Select-Object -First 30
+
+Confirmé : `ThinkingConfig` existe avec `thinking_budget`. Je teste avec `thinking_budget=0` pour désactiver le raisonnement interne et libérer tout le budget de tokens pour le JSON de sortie.
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^\s*#' -or $_.Trim() -eq '') { return }
+    $parts = $_ -split '=', 2
+    if ($parts.Length -eq 2) { [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim()) }
+}
+$code = @'
+import os, time, json
+from google import genai
+from google.genai import types
+
+api_key = os.environ["GEMINI_API_KEY"]
+client = genai.Client(api_key=api_key)
+pdf_path = r"D:\Dev\replicoach-starter\replicoach-starter\TU M CONNAIS.pdf"
+
+uploaded = client.files.upload(file=pdf_path, config=types.UploadFileConfig(mime_type="application/pdf"))
+deadline = time.monotonic() + 60
+while True:
+    f = client.files.get(name=uploaded.name)
+    state = str(getattr(f, "state", "")).rsplit(".", 1)[-1].upper()
+    if state == "ACTIVE":
+        break
+    time.sleep(1)
+
+from ocr.gemini_ocr import EXTRACTION_PROMPT
+response = client.models.generate_content(
+    model="gemini-3.8-flash",
+    contents=[types.Part.from_uri(file_uri=f.uri, mime_type=f.mime_type or "application/pdf"), EXTRACTION_PROMPT],
+    config=types.GenerateContentConfig(
+        response_mime_type="application/json",
+        temperature=0,
+        max_output_tokens=32768,
+        thinking_config=types.ThinkingConfig(thinking_budget=0),
+    ),
+)
+text = response.text or ""
+print("TEXT_LEN", len(text))
+cand = response.candidates[0] if response.candidates else None
+print("FINISH_REASON", getattr(cand, "finish_reason", None))
+print("USAGE", response.usage_metadata)
+try:
+    data = json.loads(text)
+    print("JSON_OK characters=", len(data.get("characters", [])), "replicas=", len(data.get("replicas", [])))
+except Exception as e:
+    print("JSON_ERROR", e)
+
+client.files.delete(name=uploaded.name)
+'@
+$code | Out-File -Encoding utf8 diag_response2.py
+.\.venv\Scripts\python.exe diag_response2.py
+
+Test en cours avec `thinking_budget=0` (~30-60s attendus, sans le raisonnement interne qui bouffait la moitié du budget).
+
+Lire le terminal
+Completed with input: {
+  "delay": 50,
+  "shellId": "56"
+}
+
+Lire le terminal
+Completed with input: {
+  "delay": 40,
+  "shellId": "56"
+}
+
+**Confirmé, le fix fonctionne parfaitement** : `FINISH_REASON: STOP` (pas de troncature), JSON valide, 10 personnages, 407 répliques extraites. J'applique cette correction dans le code réel, puis je relance le test complet via le navigateur.
+
+Edit 
+
+Redémarrage du backend avec la correction, puis nouvel essai réel via l'UI.
+
+Lister les sessions d’interpréteur de commandes
+Completed with input: {}
+
+Search for `shellId: 52`
+
+Search for `shellId: 52`
+
+Le backend (shellId 52) tourne encore. Je le redémarre pour charger le code corrigé.
+
+Arrêter la session terminale
+Completed with input: {
+  "shellId": "52"
+}
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+$env:PYTHONUNBUFFERED = "1"
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^\s*#' -or $_.Trim() -eq '') { return }
+    $parts = $_ -split '=', 2
+    if ($parts.Length -eq 2) { [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim()) }
+}
+.\.venv\Scripts\python.exe -u -m uvicorn main:app --port 8000
+
+Lire le terminal
+Completed with input: {
+  "delay": 8,
+  "shellId": "57"
+}
+
+Backend prêt avec le fix. Nouvel essai réel via l'UI navigateur.
+
+Ran navigatePage
+Completed with input: {"pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262","type":"reload"}
+
+Ran readPage
+Completed with input: {"pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262"}
+
+Page prête, mode Premium déjà actif (compte Premium confirmé plus tôt). Je clique et upload le PDF.
+
+Ran clickElement
+Completed with input: {"element":"Bouton \"Scan Express Premium IA\"","pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262","ref":"e27"}
+
+Pas de modale de gating → mode Premium bien actif, aucune régression. Envoi du PDF.
+
+Ran runPlaywrightCode
+Completed with input: {"code":"\nconst input = page.locator('input[type=\"file\"]');\nawait input.setInputFiles('D:\\\\Dev\\\\replicoach-starter\\\\replicoach-starter\\\\TU M CONNAIS.pdf');\nreturn \"file set\";\n","pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262"}
+
+Envoi en cours. Sans le "thinking" à budgétiser, le traitement devrait être plus rapide qu'avant (~40-60s). J'attends et surveille les logs en direct.
+
+Lire le terminal
+Completed with input: {
+  "delay": 60,
+  "shellId": "57"
+}
+
+**200 OK !** Vérifions le résultat affiché dans l'UI.
+
+Ran readPage
+Completed with input: {"pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262"}
+
+**🎉 Succès complet et réel de bout en bout !**
+
+- ✅ Import "Parfait" (1/1)
+- ✅ Titre détecté : **"TU M'CONNAIS"** (correspond exactement au PDF réel)
+- ✅ **10 personnages** et **407 répliques** extraits automatiquement, sans aucune saisie manuelle
+- ✅ Confiance : 100%
+- ✅ En un seul passage réseau via l'UI réelle (pas un script isolé), avec votre compte Google réel, votre PDF réel
+
+Vérifions maintenant que la fiche est bien accessible et cohérente en base, avant de conclure.
+
+Ran clickElement
+Completed with input: {"element":"Bouton \"Voir mes textes\"","pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262","ref":"e83"}
+
+Ran readPage
+Completed with input: {"pageId":"09f766a0-a52b-423c-b7fd-4e3a201e9262"}
+
+Search for `TU M|CONNAIS`
+
+Search for `connais`
+
+Search for `TU M`
+
+## Statut clair : le test #rc-10-12 est maintenant **réussi en conditions réelles**, pas besoin de repartir de zéro
+
+Je comprends l'inquiétude après tous ces aller-retours, mais la bonne nouvelle est qu'on a maintenant identifié et corrigé la **vraie cause racine**, avec preuve à l'appui :
+
+### Ce qui bloquait réellement
+Le modèle `gemini-3.8-flash` est un modèle de "raisonnement" (thinking) : sur ce PDF, il utilisait **16 330 tokens rien que pour "réfléchir" en interne** avant de produire le JSON, laissant un budget insuffisant → le JSON était coupé en plein milieu (`finish_reason: MAX_TOKENS`), d'où l'erreur "réponse qui n'est pas un JSON valide". Ce n'était ni un bug frontend, ni une erreur aléatoire d'infrastructure : un simple réglage manquant.
+
+### Le correctif appliqué
+Dans `gemini_ocr.py`, ajout de `thinking_config=types.ThinkingConfig(thinking_budget=0)` — désactive le raisonnement interne, inutile pour une tâche d'extraction structurée.
+
+### Résultat du test réel via l'UI (votre compte, votre navigateur, votre PDF)
+- ✅ Connexion Google réelle (`moz2611@gmail.com`)
+- ✅ Gating Premium fonctionnel (#rc-16)
+- ✅ Upload PDF → `200 OK` (avant : `502`)
+- ✅ Fiche créée : **"TU M'CONNAIS"**, **10 personnages**, **407 répliques**, confiance 100%
+- ✅ Visible et cohérente dans "Mes textes" (fiche #55)
+
+C'est un vrai succès de bout en bout, pas un script isolé cette fois.
+
+### Point d'attention
+J'ai remarqué une fiche #54 "TU M'°CONNAIS" (401 répliques) qui semble être un test antérieur à cette session — je ne l'ai pas touchée.
+
+Demander à l’utilisateur
+Completed with input: {
+  "question": "Le test #rc-10-12 est validé en local. Comment veux-tu poursuivre maintenant ?",
+  "choices": [
+    "Committer ce correctif maintenant (backend + frontend, sans push)",
+    "Nettoyer d'abord la fiche de test en double (#54) puis committer",
+    "Faire un dernier test avec un autre PDF pour confirmer la robustesse avant de committer",
+    "Arrêter les serveurs locaux et faire une pause, on committera plus tard"
+  ]
+}
+
+GitKraken-git_status
+Completed with input: {
+  "directory": "D:\\Dev\\replicoach-starter\\replicoach-starter"
+}
+
+Je vérifie le `.gitignore`, l'état des fichiers `.pyc` trackés (à nettoyer), et le contenu de `offlineDataCache.js` avant de composer le commit.
+
+Ran terminal command: git check-ignore -v backend-ocr/.env backend-ocr/__pycache__/main.cpython-312.pyc 2>&1
+
+Read 
+Completed with input: {
+  "path": "D:\\Dev\\replicoach-starter\\replicoach-starter\\.gitignore"
+}
+
+No `__pycache__`/`*.pyc` rule. I'll add it and untrack the compiled files, then view `offlineDataCache.js` to decide if it belongs in this commit.
+
+Read , lines 1 to 30
+Completed with input: {
+  "path": "D:\\Dev\\replicoach-starter\\replicoach-starter\\src\\lib\\offlineDataCache.js",
+  "view_range": [
+    1,
+    30
+  ]
+}
+
+Search for `offlineDataCache|clearOfflineDataCache`
+
+Ran terminal command: git --no-pager diff --stat src/App.jsx src/sw.js src/store/authStore.js src/store/scriptStore.js vite.config.js backend-ocr/Dockerfile
+
+Ran terminal command: git --no-pager diff src/sw.js
+
+Ran terminal command: git --no-pager diff src/store/authStore.js src/store/scriptStore.js vite.config.js backend-ocr/Dockerfile
+
+Read tool output
+Completed with input: {
+  "path": "C:\\Users\\moz26\\AppData\\Local\\Temp\\1790774876549-copilot-tool-output-8908-ed20fa58-d803-4e6e-aae2-fe31d088a175.txt"
+}
+
+Read tool output
+Completed with input: {
+  "path": "C:\\Users\\moz26\\AppData\\Local\\Temp\\1790774876549-copilot-tool-output-8908-ed20fa58-d803-4e6e-aae2-fe31d088a175.txt",
+  "view_range": [
+    1,
+    100
+  ]
+}
+
+Ran terminal command: git --no-pager diff src/App.jsx | Out-File -Encoding utf8 app_jsx.diff.txt
+Get-Content app_jsx.diff.txt -TotalCount 100
+
+Search for `diff --git a/vite.config.js`
+
+Confirmé, nettoyage du fichier temporaire.
+
+Ran terminal command: Remove-Item "D:\Dev\replicoach-starter\replicoach-starter\app_jsx.diff.txt" -ErrorAction SilentlyContinue
+
+J'ai trouvé un point important avant de committer : le working tree contient **deux chantiers mélangés**, pas un seul.
+
+Demander à l’utilisateur
+Completed with input: {
+  "question": "En examinant les fichiers modifiés, j'ai découvert que le working tree contient en fait DEUX chantiers distincts mélangés : (A) la migration OCR Gemini (#rc-10-12 : main.py, auth.py, gemini_ocr.py, geminiOcrService.js, Upload.jsx, Dockerfile allégé) — testée et validée aujourd'hui ; et (B) un chantier PWA/perf non testé par moi (App.jsx en lazy-loading, sw.js avec partitionnement du cache par utilisateur pour éviter une fuite de données entre comptes sur le même appareil, scriptStore.js, authStore.js, vite.config.js) — ressemble à du travail préparatoire pour #rc-02, non validé aujourd'hui. Comment veux-tu que je découpe le commit ?",
+  "choices": [
+    "Committer uniquement (A) OCR Gemini maintenant ; laisser (B) PWA non committé en attendant de le tester séparément",
+    "Committer les deux ensemble dans un seul commit (A)+(B)",
+    "Committer (A) et (B) séparément en deux commits distincts, sans tester (B) maintenant"
+  ]
+}
+
+Parfait, c'est le choix le plus prudent. Je prépare le commit A (OCR Gemini) et je nettoie au passage les fichiers de bytecode Python trackés par erreur.
+
+Edit file
+Completed with input: {
+  "old_str": "# Spikes / expérimentations locales (jamais de venv en versionné)\nocr-spike/\n*/venv/\n*.venv/",
+  "new_str": "# Spikes / expérimentations locales (jamais de venv en versionné)\nocr-spike/\n*/venv/\n*.venv/\n\n# Bytecode Python compilé (jamais utile en versionné)\n__pycache__/\n*.pyc"
+}
+
+Edit 
+
+Suppression des fichiers `.pyc` trackés et des scripts de diagnostic temporaires, puis staging précis du chantier A uniquement.
+
+Ran terminal command: git rm --cached backend-ocr/__pycache__/main.cpython-312.pyc backend-ocr/ocr/__pycache__/__init__.cpython-312.pyc -q
+Remove-Item backend-ocr/diag_response.py, backend-ocr/diag_response2.py -ErrorAction SilentlyContinue
+Remove-Item backend-ocr/__pycache__ -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item backend-ocr/ocr/__pycache__ -Recurse -Force -ErrorAction SilentlyContinue
+git status --short
+
+Ran terminal command: git --no-pager diff .env.example
+
+Confirmé, lié à l'OCR. Vérifions le README racine.
+
+Ran terminal command: git --no-pager diff README.md | Select-Object -First 40
+
+Le README mélange aussi les deux chantiers (paragraphe OCR + section PWA). Je vais isoler proprement : garder seulement le paragraphe OCR pour ce commit, et remettre la section PWA en attente (non committée).
+
+Read , lines 1 to 55
+Completed with input: {
+  "path": "D:\\Dev\\replicoach-starter\\replicoach-starter\\README.md",
+  "view_range": [
+    1,
+    55
+  ]
+}
+
+Edit 
+
+Maintenant je stage précisément uniquement le chantier A (OCR Gemini).
+
+Ran terminal command: git add .gitignore .env.example README.md `
+  backend-ocr/Dockerfile backend-ocr/main.py backend-ocr/ocr/__init__.py backend-ocr/requirements.txt `
+  backend-ocr/.env.example backend-ocr/README.md backend-ocr/ocr/auth.py backend-ocr/ocr/gemini_ocr.py `
+  backend-ocr/ocr/tests/test_api.py backend-ocr/ocr/tests/test_auth.py backend-ocr/ocr/tests/test_gemini_ocr.py `
+  "backend-ocr/ocr/cloudOcrService.py" "backend-ocr/ocr/config.py" "backend-ocr/ocr/context_correction.py" `
+  "backend-ocr/ocr/exceptions.py" "backend-ocr/ocr/exporter.py" "backend-ocr/ocr/layout_analysis.py" `
+  "backend-ocr/ocr/models.py" "backend-ocr/ocr/ocr_engine.py" "backend-ocr/ocr/pipeline.py" `
+  "backend-ocr/ocr/preprocessing.py" "backend-ocr/ocr/reader.py" "backend-ocr/ocr/utils.py" `
+  "backend-ocr/ocr/tests/test_cloud_ocr_service.py" "backend-ocr/ocr/tests/test_context_correction.py" `
+  "backend-ocr/ocr/tests/test_exporter.py" "backend-ocr/ocr/tests/test_layout_analysis.py" `
+  "backend-ocr/ocr/tests/test_preprocessing.py" `
+  src/pages/Upload.jsx src/lib/geminiOcrService.js src/lib/geminiPdfProcessor.js src/lib/paddleOcrService.js `
+  backend-ocr/__pycache__/main.cpython-312.pyc backend-ocr/ocr/__pycache__/__init__.cpython-312.pyc
+git status --short
+
+Ran terminal command: git --no-pager diff --cached --stat
+
+Ran terminal command: $paths = @(
+  ".gitignore", ".env.example", "README.md",
+  "backend-ocr/Dockerfile", "backend-ocr/main.py", "backend-ocr/ocr/__init__.py", "backend-ocr/requirements.txt",
+  "backend-ocr/.env.example", "backend-ocr/README.md", "backend-ocr/ocr/auth.py", "backend-ocr/ocr/gemini_ocr.py",
+  "backend-ocr/ocr/tests/test_api.py", "backend-ocr/ocr/tests/test_auth.py", "backend-ocr/ocr/tests/test_gemini_ocr.py",
+  "backend-ocr/ocr/cloudOcrService.py", "backend-ocr/ocr/config.py", "backend-ocr/ocr/context_correction.py",
+  "backend-ocr/ocr/exceptions.py", "backend-ocr/ocr/exporter.py", "backend-ocr/ocr/layout_analysis.py",
+  "backend-ocr/ocr/models.py", "backend-ocr/ocr/ocr_engine.py", "backend-ocr/ocr/pipeline.py",
+  "backend-ocr/ocr/preprocessing.py", "backend-ocr/ocr/reader.py", "backend-ocr/ocr/utils.py",
+  "backend-ocr/ocr/tests/test_cloud_ocr_service.py", "backend-ocr/ocr/tests/test_context_correction.py",
+  "backend-ocr/ocr/tests/test_exporter.py", "backend-ocr/ocr/tests/test_layout_analysis.py",
+  "backend-ocr/ocr/tests/test_preprocessing.py",
+  "src/pages/Upload.jsx", "src/lib/geminiOcrService.js", "src/lib/geminiPdfProcessor.js", "src/lib/paddleOcrService.js"
+)
+foreach ($p in $paths) { git add -- $p }
+git --no-pager diff --cached --stat
+
+Staging correcte. Vérification finale de l'état non-staged (chantier B intact) avant de committer.
+
+Ran terminal command: git status --short
+
+Chantier B bien intact et non staged. Je lance rapidement les tests unitaires Python et une compilation avant de committer.
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+Get-Content .env | ForEach-Object {
+    if ($_ -match '^\s*#' -or $_.Trim() -eq '') { return }
+    $parts = $_ -split '=', 2
+    if ($parts.Length -eq 2) { [System.Environment]::SetEnvironmentVariable($parts[0].Trim(), $parts[1].Trim()) }
+}
+.\.venv\Scripts\python.exe -m py_compile main.py ocr\auth.py ocr\gemini_ocr.py ocr\__init__.py
+Write-Host "PYCOMPILE_EXIT=$LASTEXITCODE"
+.\.venv\Scripts\python.exe -m pytest ocr\tests -q
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+Get-Content requirements.txt | Select-String -Pattern "pytest|test" -CaseSensitive:$false
+Get-ChildItem -Filter "requirements*.txt"
+
+Pas de dépendance pytest listée. Installation temporaire pour valider les tests unitaires existants.
+
+Ran terminal command: cd D:\Dev\replicoach-starter\replicoach-starter\backend-ocr
+.\.venv\Scripts\python.exe -m pip install pytest pytest-asyncio httpx -q
+.\.venv\Scripts\python.exe -m pytest ocr\tests -q
+
+Les 16 tests unitaires passent. Vérification rapide du build frontend avant de committer.
+
+Ran terminal command: npm run build 2>&1 | Select-Object -Last 30
+
+Build réussi. Je committe maintenant le chantier A.
+
+GitKraken-git_commit
+Completed with input: {"serverName":"GitKraken","toolName":"GitKraken-git_commit"}
+
+Commit créé (`e6d8d9e`), local uniquement, non poussé. Vérification finale qu'aucun fichier sensible ou hors périmètre n'a été inclus.
+
+Ran terminal command: git status --short
+
+Reste un point de propreté : les anciens `.pyc` de PaddleOCR (orphelins depuis la suppression de leurs sources `.py`) sont encore trackés en historique. Je les inclus en complétant le commit.
+
+Ran terminal command: git add -u backend-ocr/ocr/__pycache__/
+git status --short backend-ocr
+
+GitKraken-git_commit
+Completed with input: {"serverName":"GitKraken","toolName":"GitKraken-git_commit"}
+
+Nettoyage des artefacts temporaires de session, puis arrêt propre des serveurs locaux.
+
+Arrêter la session terminale
+Completed with input: {
+  "shellId": "39"
+}
+
+Arrêter la session terminale
+Completed with input: {
+  "shellId": "57"
+}
+
+Ran terminal command: Remove-Item backend-ocr/__pycache__ -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item backend-ocr/ocr/__pycache__ -Recurse -Force -ErrorAction SilentlyContinue
+git log --oneline -5
+git status --short
+
+Serveurs arrêtés, historique propre. Voici le résumé de l'état actuel :
+
+## ✅ #rc-10-12 terminé et committé (local, non poussé)
+
+**4 commits locaux** sur `feature/premium-paywall` :
+1. `e1388b9` — rc-08 (nettoyage OCR)
+2. `e780456` — rc-16 (gating Premium)
+3. `e6d8d9e` — **rc-10-12** (migration Gemini Vision)
+4. `07304d9` — nettoyage `.pyc` orphelins
+
+**Preuve de test réel** : compte `moz2611@gmail.com` (Premium activé en base), PDF réel de 12 Mo → titre "TU M'CONNAIS", 10 personnages, 407 répliques, confiance 100%, 16 tests unitaires + build OK.
+
+**Bug réel trouvé et corrigé** : `gemini-3.8-flash` gaspillait la moitié de son budget de tokens en "réflexion" interne, tronquant le JSON sur les scripts longs → corrigé avec `thinking_budget=0`.
+
+## ⚠️ Ce qui reste en attente (non touché, comme demandé)
+Un **chantier B distinct** traîne dans le working tree, non testé par moi aujourd'hui :
+- `src/App.jsx`, `src/sw.js`, `src/store/authStore.js`, `src/store/scriptStore.js`, `vite.config.js`, `src/lib/offlineDataCache.js`
+- Contenu : lazy-loading des routes + **partitionnement du cache PWA par utilisateur** (pour éviter qu'un compte voie les données en cache d'un compte précédent sur le même appareil) — probablement lié à #rc-02.
+
+## Rappels
+- Le compte `moz2611@gmail.com` a été passé Premium **en base Supabase réelle**.
+- Rien n'a été poussé sur GitHub.
+
+Add artifact "feat(rc-10-12): migre l'OCR Premium vers Gemini Vision"
+Completed with input: {
+  "items": [
+    {
+      "type": "commit",
+      "label": "feat(rc-10-12): migre l'OCR Premium vers Gemini Vision",
+      "isArtifact": true,
+      "commitHash": "e6d8d9e"
+    }
+  ]
+}
+
+Demander à l’utilisateur
+Completed with input: {
+  "choices": [
+    "Continuer avec #rc-02 (diagnostic PWA) en s'appuyant sur ce chantier B déjà présent",
+    "Tester d'abord ce chantier B tel quel avant de poursuivre",
+    "Laisser de côté pour l'instant, je m'en occupe plus tard"
+  ],
+  "question": "#rc-10-12 est terminé. Que veux-tu faire du chantier B (PWA/cache par utilisateur) déjà présent mais non testé ?"
+}
+------------
+Ran terminal command: git log --oneline origin/feature/premium-paywall..feature/premium-paywall; echo "---STATUS---"; git status --short; echo "---CHECK ENV TRACKED---"; git ls-files | Select-String -Pattern "\.env$|\.env\.|backend-ocr/.env"
+
+Bonne nouvelle : les 4 commits sont propres, seuls les `.env.example` (sans secrets) sont trackés — aucun `.env` réel n'est dans l'historique. Le chantier B (PWA/cache) reste bien non commité et non concerné par ce push. Je pousse maintenant.
+
+Ran terminal command: git push origin feature/premium-paywall
+
+✅ **Push réussi.** La branche `feature/premium-paywall` sur GitHub (`mlclarge/replicoach`) contient maintenant les 4 commits :
+
+1. `e1388b9` — nettoyage OCR/code mort (#rc-08)
+2. `e780456` — contrôle d'accès Premium centralisé (#rc-16)
+3. `e6d8d9e` — migration OCR Premium vers Gemini Vision (#rc-10-12)
+4. `07304d9` — nettoyage des `.pyc` orphelins
+
+**Important : ce n'est qu'un push de branche, pas un déploiement.**
+- Rien n'a été mergé vers `main`/`master`.
+- Aucun déploiement Vercel/Render n'a été déclenché (sauf si tes plateformes ont un auto-deploy sur preview branches — à vérifier de ton côté, je n'y ai pas accès).
+- Le site en production reste inchangé tant que tu ne merges pas et/ou ne déploies pas explicitement.
+
+Prochaines étapes possibles :
+- Ouvrir une Pull Request `feature/premium-paywall` → `main` pour review avant merge.
+- Ou continuer les tests en local encore un peu.
+- Décider du sort du chantier B (PWA/cache utilisateur) resté non commité.
+
+Veux-tu que je crée la Pull Request maintenant, ou préfères-tu t'en occuper toi-même sur GitHub ?
+
+Bonne observation, et ça mérite une clarification importante : **oui, Vercel a bien déployé automatiquement**, mais regarde bien l'étiquette sur la ligne de ton commit `07304d9` :
+
+- Ta ligne : **`Preview`** (pas `Production`)
+- La ligne juste en dessous (`Jul 30`, commit `a748167`, branche `main`) : **`Production`**
+
+**Ce que ça signifie concrètement :**
+
+Vercel est configuré pour déployer **automatiquement chaque push**, sur n'importe quelle branche, dès que le repo GitHub est connecté — c'est un comportement par défaut de l'intégration Vercel/GitHub, indépendant de ma volonté ou de la tienne. Donc :
+
+1. **Preview deployment** (ta ligne, branche `feature/premium-paywall`) : Vercel a construit une version isolée, accessible via une URL unique de type `replicoach-git-feature-premium-paywall-xxx.vercel.app` (ou l'URL générée pour ce commit précis). Ce n'est **pas** le site que tes utilisateurs voient.
+2. **Production deployment** : c'est uniquement celui lié à la branche `main`, servi sur ton domaine principal (`replicoach-beige.vercel.app` ou ton domaine custom). Celui-ci **n'a pas bougé** — toujours le commit `a748167` du 30 juillet.
+
+**Donc concrètement :**
+- Le site que tes utilisateurs/joueurs utilisent (production) tourne toujours sur l'ancien code, sans Gemini.
+- Une preview existe maintenant, techniquement accessible si quelqu'un a l'URL, mais elle n'est pas linkée depuis ton domaine public.
+- ⚠️ Point important : cette preview frontend appelle probablement encore ton **backend Render de production** (PaddleOCR, sans auth) pour l'OCR, puisque le backend n'a pas été redéployé séparément — donc même la preview ne pourra pas tester Gemini correctement en ligne tant que tu n'as pas aussi déployé `backend-ocr/` quelque part avec les bonnes variables d'environnement.
+
+Veux-tu que je vérifie la config Vercel (`vercel.json` ou variables d'env liées au preview) pour confirmer quel backend cette preview appelle réellement ?
