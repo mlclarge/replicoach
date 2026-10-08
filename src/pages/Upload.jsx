@@ -100,7 +100,7 @@ function Upload() {
   const onDrop = useCallback(
     (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
-        const file = acceptedFiles;
+        const file = acceptedFiles[0]; // 👈 C'est ici : [0] permet de prendre le 1er fichier
         setSelectedFile(file);
         setError(null);
         setResults([]);
