@@ -1248,6 +1248,7 @@ function Home() {
       </div>
       {/* 🧭 BARRE DE NAVIGATION ET FILTRES D'ONGLETS */}
       <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm">
+        {/* Onglet 1 : Mes textes */}
         <button
           onClick={() => setActiveHomeTab("scripts")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -1259,10 +1260,11 @@ function Home() {
           <span>🎭</span>
           <span>Mes textes</span>
           <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full font-mono">
-            {filteredScripts.length}
+            {scripts?.length || 0}
           </span>
         </button>
 
+        {/* Onglet 2 : Consignes */}
         <button
           onClick={() => setActiveHomeTab("director")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -1275,6 +1277,7 @@ function Home() {
           <span>Consignes</span>
         </button>
 
+        {/* Onglet 3 : Bibliothèque */}
         <button
           onClick={() => setActiveHomeTab("library")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
