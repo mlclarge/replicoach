@@ -1248,7 +1248,6 @@ function Home() {
       </div>
       {/* 🧭 BARRE DE NAVIGATION ET FILTRES D'ONGLETS */}
       <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm">
-        {/* Onglet 1 : Mes textes */}
         <button
           onClick={() => setActiveHomeTab("scripts")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -1264,7 +1263,6 @@ function Home() {
           </span>
         </button>
 
-        {/* Onglet 2 : Consignes */}
         <button
           onClick={() => setActiveHomeTab("director")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -1277,7 +1275,6 @@ function Home() {
           <span>Consignes</span>
         </button>
 
-        {/* Onglet 3 : Bibliothèque */}
         <button
           onClick={() => setActiveHomeTab("library")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -1290,6 +1287,63 @@ function Home() {
           <span>Bibliothèque</span>
         </button>
       </div>
+
+      {/* ---------------------------------------------------- */}
+      {/* AFFICHAGE CONDITIONNEL DES 3 ONGLETS                 */}
+      {/* ---------------------------------------------------- */}
+
+      {/* 1. ONGLET MES TEXTES */}
+      {activeHomeTab === "scripts" && (
+        <div className="space-y-4">
+          {/* Bloc Nouveau texte */}
+          <Link
+            to="/upload"
+            className="menu-newtext hover:opacity-90 transition block"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📄</span>
+              <div>
+                <h3 className="font-bold text-white text-sm">Nouveau texte</h3>
+                <p className="text-xs text-green-100">
+                  Créer ou importer un nouveau texte
+                </p>
+              </div>
+            </div>
+          </Link>
+
+          {/* Barre de recherche et liste de vos saynètes */}
+          {/* ... Votre code existant pour la recherche et la liste des scripts ... */}
+        </div>
+      )}
+
+      {/* 2. ONGLET CONSIGNES */}
+      {activeHomeTab === "director" && (
+        <div className="space-y-4">
+          <DirectorNotesSection
+            directorNotes={directorNotes || []} // 👈 Sécurité anti-écran noir
+            onDeleteNote={handleDeleteDirectorNote || (() => {})}
+            onViewNoteDoc={setViewingDocument || (() => {})}
+            onOpenTroupeSelector={(files) => {
+              if (setPendingFiles) setPendingFiles(files);
+              if (setShowTroupeSelector) setShowTroupeSelector(true);
+            }}
+            userRole={userRole || "member"}
+            userId={user?.id || null}
+          />
+        </div>
+      )}
+
+      {/* 3. ONGLET BIBLIOTHÈQUE */}
+      {activeHomeTab === "library" && (
+        <div className="space-y-4">
+          <PublicLibrarySection
+            publicLibraryScripts={publicLibraryScripts || []} // 👈 Sécurité anti-écran noir
+            importingPublicScript={importingPublicScript || null}
+            onImportPublicScript={handleImportPublicScript || (() => {})}
+            onViewPublicDoc={setViewingDocument || (() => {})}
+          />
+        </div>
+      )}
 
       {/* ---------------------------------------------------- */}
       {/* AFFICHAGE CONDITIONNEL SELON L'ONGLET SÉLECTIONNÉ     */}
@@ -1400,41 +1454,6 @@ function Home() {
       )}
 
       {/* Bannière d'information pour les utilisateurs Standard */}
-      <div className="mb-6 p-4 bg-gradient-to-r from-primary-900/60 to-gray-800/80 border border-primary-600/40 rounded-2xl shadow-lg">
-        <div className="flex items-start gap-3">
-          <span className="text-3xl">🎭</span>
-          <div className="flex-1">
-            <h3 className="text-white font-bold text-base mb-1">
-              Bienvenue sur RépliCoach !
-            </h3>
-            <p className="text-gray-300 text-sm mb-3 leading-relaxed">
-              Vous avez deux façons d'utiliser l'application selon votre
-              pratique :
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div className="p-3 bg-black/30 rounded-xl border border-gold-500/20">
-                <p className="text-gold-400 font-bold mb-1">
-                  👤 Comédien indépendant
-                </p>
-                <p className="text-gray-300">
-                  Importez jusqu'à <strong>2 textes personnels</strong>{" "}
-                  gratuitement.
-                </p>
-              </div>
-              <div className="p-3 bg-black/30 rounded-xl border border-primary-500/20">
-                <p className="text-primary-300 font-bold mb-1">
-                  👥 En troupe / Atelier
-                </p>
-                <p className="text-gray-300">
-                  Saisissez le code fourni par votre metteur en scène dans
-                  l'onglet <strong>Partagés</strong> pour accéder directement
-                  aux pièces.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Filtre par Tags */}
       {userTags.length > 0 && (
