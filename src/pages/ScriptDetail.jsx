@@ -1177,9 +1177,7 @@ function ScriptDetail() {
           }
           scriptText={replicas
             .map((r) => `${r.character?.name}: ${r.text}`)
-            .join("
-
-")}
+            .join("\n\n")}
           coachingCharacterId={coachingCharacterId}
           allCharacters={characters}
           allReplicas={replicas}
@@ -2796,7 +2794,7 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
       await onAdd(selectedReplicaId, text.trim(), noteType);
     } catch (err) {
       console.error("Erreur:", err);
-    } finally {
+    } fontally {
       setSaving(false);
     }
   };
