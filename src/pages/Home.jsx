@@ -45,7 +45,7 @@ import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
 /**
- * Section Consignes Metteur en Scène (Sécurisée contre undefined)
+ * Section Consignes Metteur en Scène (Sécurisée)
  */
 function DirectorNotesSection({
   notes = [],
@@ -215,7 +215,7 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({});
 
-  // Navigation par onglets sur la home ('scripts', 'director', 'library')
+  // Navigation par onglets ('scripts', 'director', 'library')
   const [activeHomeTab, setActiveHomeTab] = useState("scripts");
 
   // Rôle utilisateur
@@ -564,7 +564,8 @@ function Home() {
   }
 
   return (
-    <div className="p-4 pb-24 max-w-2xl mx-auto">
+    /* 👈 POINT 1 : passage à max-w-4xl pour une meilleure largeur sur PC */
+    <div className="p-4 pb-24 max-w-4xl mx-auto">
       {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
       <div className="mb-6 p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
         <h2 className="text-white font-bold text-lg mb-1 flex items-center gap-2 font-display">
@@ -674,24 +675,7 @@ function Home() {
       {/* 1. ONGLET : MES TEXTES */}
       {activeHomeTab === "scripts" && (
         <div className="space-y-4">
-          {/* Bouton 'Nouveau texte' UNIQUE */}
-          <Link
-            to="/upload"
-            className="menu-newtext hover:opacity-90 transition flex items-center justify-between p-4 bg-gradient-to-r from-emerald-800 to-emerald-900 rounded-2xl border border-emerald-600/40 text-white shadow-lg"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">📄</span>
-              <div>
-                <h3 className="font-bold text-white text-sm m-0">
-                  Nouveau texte
-                </h3>
-                <p className="text-xs text-emerald-200 m-0">
-                  Créer ou importer un nouveau texte
-                </p>
-              </div>
-            </div>
-            <span className="text-amber-400 text-xl font-bold">→</span>
-          </Link>
+          {/* 👈 POINT 2 : Le bloc vert menu-newtext a été retiré ici */}
 
           {/* Accès rapide au texte récent */}
           {recentScript &&
