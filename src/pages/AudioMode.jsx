@@ -4,8 +4,6 @@ import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
   fetchCharacterRecordings,
-  uploadCharacterRecording,
-  deleteCharacterRecording,
   supabase,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
@@ -16,7 +14,6 @@ import {
   fetchTtsAudioUrl,
 } from "../lib/premiumTts";
 
-// Prénoms pour détection du genre
 const MALE_NAMES = [
   "maurice", "jean", "christophe", "pierre", "paul", "jacques", "michel",
   "philippe", "alain", "bernard", "françois", "patrick", "daniel", "nicolas",
@@ -30,6 +27,7 @@ const FEMALE_NAMES = [
 ];
 
 function detectGender(name) {
+  if (!name) return "male";
   const lowerName = name.toLowerCase().split("-")[0].trim();
   if (MALE_NAMES.includes(lowerName)) return "male";
   if (FEMALE_NAMES.includes(lowerName)) return "female";
@@ -37,7 +35,6 @@ function detectGender(name) {
   return "male";
 }
 
-// Supprimer les balises HTML pour l'affichage
 function stripHtml(text) {
   if (!text) return "";
   try {
@@ -50,7 +47,6 @@ function stripHtml(text) {
   return text.replace(/<[^>]+>/g, "");
 }
 
-// Nettoyer le texte pour la lecture audio
 function cleanTextForSpeech(text) {
   if (!text) return "";
   try {
@@ -80,10 +76,6 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
-function isMobile() {
-  return window.innerWidth < 768;
-}
-
 function AudioMode() {
   const { id } = useParams();
   const { user, isPremium } = useAuthStore();
@@ -103,7 +95,9 @@ function AudioMode() {
   const [characterRecordings, setCharacterRecordings] = useState({});
   const [replicaRecordings, setReplicaRecordings] = useState({});
   const [voiceMode, setVoiceMode] = useState({});
-  const [recordingCharacter, setRecordingCharacter] = useState(null);
+
+  // Enregistrement réplique
+  const [recordingReplicaId, setRecordingReplicaId] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
@@ -118,10 +112,9 @@ function AudioMode() {
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
   const [waitingForClick, setWaitingForClick] = useState(false);
 
-  // UI
-  const [showSettings, setShowSettings] = useState(!isMobile());
+  // UI : 📍 POINT 3 : Fermé par défaut sur TOUS les écrans
+  const [showSettings, setShowSettings] = useState(false);
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
-  const [savingRecording, setSavingRecording] = useState(false);
   const [tempRevealedReplicas, setTempRevealedReplicas] = useState({});
 
   // Refs
@@ -175,9 +168,9 @@ function AudioMode() {
     }
   }, [id]);
 
-  // Charger les voix synthétiques
   useEffect(() => {
     const loadVoices = () => {
+      if (typeof window === "undefined" || !window.speechSynthesis) return;
       const availableVoices = speechSynthesis.getVoices();
       const frenchVoices = availableVoices.filter((v) =>
         v.lang.startsWith("fr")
@@ -189,11 +182,7 @@ function AudioMode() {
           v.name.toLowerCase().includes("male") ||
           v.name.toLowerCase().includes("homme") ||
           v.name.toLowerCase().includes("paul") ||
-          v.name.toLowerCase().includes("thomas") ||
-          (!v.name.toLowerCase().includes("female") &&
-            !v.name.toLowerCase().includes("femme") &&
-            !v.name.toLowerCase().includes("julie") &&
-            !v.name.toLowerCase().includes("marie"))
+          v.name.toLowerCase().includes("thomas")
       );
 
       const femaleVoices = voicesToUse.filter(
@@ -201,9 +190,7 @@ function AudioMode() {
           v.name.toLowerCase().includes("female") ||
           v.name.toLowerCase().includes("femme") ||
           v.name.toLowerCase().includes("julie") ||
-          v.name.toLowerCase().includes("marie") ||
-          v.name.toLowerCase().includes("hortense") ||
-          v.name.toLowerCase().includes("amélie")
+          v.name.toLowerCase().includes("marie")
       );
 
       setVoices({
@@ -214,10 +201,14 @@ function AudioMode() {
     };
 
     loadVoices();
-    speechSynthesis.onvoiceschanged = loadVoices;
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
     return () => {
-      speechSynthesis.cancel();
+      if (typeof window !== "undefined" && window.speechSynthesis) {
+        speechSynthesis.cancel();
+      }
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
@@ -281,9 +272,6 @@ function AudioMode() {
       });
     }
   }, [currentIndex, isPlaying]);
-
-  // Enregistrement par réplique
-  const [recordingReplicaId, setRecordingReplicaId] = useState(null);
 
   const startReplicaRecording = async (replicaId) => {
     try {
@@ -395,8 +383,6 @@ function AudioMode() {
     });
   };
 
-  // ==================== MOTEURS LECTURE AUDIO ====================
-
   const speakSynth = async (text, characterId) => {
     await ensureAudioUnlocked();
 
@@ -472,7 +458,7 @@ function AudioMode() {
           } catch (e) {}
         }
       }
-      if (speechSynthesis && typeof speechSynthesis.getVoices === "function") {
+      if (typeof window !== "undefined" && window.speechSynthesis) {
         speechSynthesis.getVoices();
       }
       setAudioUnlocked(true);
@@ -481,7 +467,6 @@ function AudioMode() {
     }
   };
 
-  // Google Cloud TTS (Premium)
   const speakPremium = async (replicaId) => {
     const res = await fetchTtsAudioUrl(id, replicaId);
     if (!res.ok) {
@@ -516,9 +501,7 @@ function AudioMode() {
     });
   };
 
-  // 📍 POINT 4 & 6 : Moteur audio unifié avec arrêt systématique et isolation Premium
   const speak = async (text, characterId, replicaId = null) => {
-    // Stop préventif des lectures en cours pour éviter tout mélange
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -532,18 +515,15 @@ function AudioMode() {
 
     const cleanedForDecision = cleanTextForSpeech(text || "");
 
-    // A) Enregistrement vocal local par réplique
     if (replicaId && replicaRecordings[replicaId]?.data) {
       return await playReplicaRecording(replicaId);
     }
 
-    // B) Enregistrement vocal par personnage
     const mode = voiceMode[characterId] || "synth";
     if (mode === "recorded" && characterRecordings[characterId]?.audioUrl) {
       return await speakRecorded(characterId);
     }
 
-    // C) PROFIL PREMIUM : Exclusivité Google Cloud TTS (Pas de synthèse navigateur !)
     if (isPremium) {
       if (replicaId && premiumLocks[characterId]) {
         const played = await speakPremium(replicaId);
@@ -555,11 +535,9 @@ function AudioMode() {
       return;
     }
 
-    // D) PROFIL STANDARD : Synthèse vocale locale du navigateur
     return await speakSynth(cleanedForDecision, characterId);
   };
 
-  // 📍 POINT 5 : Arrêt instantané de tous les flux audio
   const stop = () => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -580,7 +558,6 @@ function AudioMode() {
     setWaitingForClick(false);
   };
 
-  // 📍 POINT 6 : Lecture globale avec réinitialisation
   const playAll = async (startIndex = currentIndex) => {
     if (!currentScript?.replicas) return;
 
@@ -599,7 +576,6 @@ function AudioMode() {
       setCurrentIndex(i);
       const replica = currentScript.replicas[i];
 
-      // Mode italienne
       if (hiddenCharacters.has(replica.character_id)) {
         setWaitingForClick(true);
         waitingRef.current = true;
@@ -733,64 +709,76 @@ function AudioMode() {
   });
 
   return (
-    <div className="min-h-screen bg-amber-50 pb-48">
-      {/* Header */}
+    <div className="min-h-screen bg-amber-50 pb-52">
+      {/* Header Sticky avec titre et bouton explicite pour les Voix */}
       <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 shadow-lg sticky top-0 z-30">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => window.history.back()}
-              className="flex items-center gap-2 px-4 py-2 bg-black hover:bg-gray-900 text-white rounded-lg transition font-medium border border-gray-700"
+              className="flex items-center gap-1.5 px-3 py-2 bg-black/60 hover:bg-black text-white rounded-xl transition text-xs font-semibold border border-white/20 flex-shrink-0"
             >
-              <span className="text-xl">←</span>
-              <span className="text-sm">Retour au texte</span>
+              <span className="text-base">←</span>
+              <span className="hidden sm:inline">Retour au texte</span>
             </button>
 
-            <div>
-              <h2 className="text-gold-400 text-lg font-semibold flex items-center gap-2">
-                🔊 Mode Audio
+            <div className="min-w-0">
+              <h2 className="text-gold-400 text-base sm:text-lg font-bold truncate flex items-center gap-2">
+                <span>🔊</span>
+                <span>Mode Audio</span>
               </h2>
-              <p className="text-gray-300 text-xs">{title}</p>
+              <p className="text-gray-300 text-xs truncate">{title}</p>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowSettings(!showSettings)}
-              className={`p-2 rounded-lg transition ${
-                showSettings
-                  ? "bg-gold-500 text-dark"
-                  : "bg-white/20 text-white"
-              }`}
-            >
-              ⚙️
-            </button>
-          </div>
+          {/* 📍 POINT 3 : Bouton d'ouverture explicite avec texte clair */}
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
+              showSettings
+                ? "bg-gold-500 text-dark border-gold-400 font-extrabold"
+                : "bg-gray-800 text-gold-400 border-gold-500/40 hover:bg-gray-700"
+            }`}
+          >
+            <span className="text-sm">🎙️</span>
+            <span>Voix partenaire</span>
+            <span className="text-[10px]">{showSettings ? "▲" : "▼"}</span>
+          </button>
         </div>
 
         {/* Barre de progression */}
-        <div className="mt-3 h-1 bg-white/20 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gold-500 transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
+        <div className="mt-3 max-w-5xl mx-auto">
+          <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gold-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <p className="text-gray-300 text-[11px] mt-1 text-center font-mono">
+            Réplique {currentIndex + 1} / {replicas.length}
+          </p>
         </div>
-        <p className="text-gray-400 text-xs mt-1 text-center">
-          Réplique {currentIndex + 1} / {replicas.length}
-        </p>
       </div>
 
-      {/* PARAMÈTRES VOIX */}
+      {/* 📍 POINT 3 : PANNEAU RÉGLAGES FERMÉ PAR DÉFAUT */}
       {showSettings && (
-        <div className="bg-white border-b border-gray-200 p-4 shadow-md">
-          <h3 className="font-semibold text-gray-800 mb-3">
-            🔊 Configuration des voix du partenaire
-          </h3>
+        <div className="bg-white border-b-2 border-gold-500/30 p-4 shadow-xl max-w-5xl mx-auto animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+              <span>🎙️</span> Configuration des voix du partenaire
+            </h3>
+            <button
+              onClick={() => setShowSettings(false)}
+              className="text-xs text-gray-500 hover:text-gray-800 font-bold"
+            >
+              ✕ Fermer
+            </button>
+          </div>
 
           {isPremium ? (
-            /* 🟢 CAS 1 : PROFIL PREMIUM — Uniquement Google Cloud TTS */
-            <div className="p-3 bg-amber-50 border-l-4 border-amber-500 rounded space-y-3">
-              <p className="text-sm text-amber-900 font-bold">
+            /* CAS PREMIUM */
+            <div className="p-3.5 bg-amber-50 border-l-4 border-amber-500 rounded-xl space-y-3">
+              <p className="text-xs text-amber-900 font-bold">
                 ✨ Voix Premium Google Cloud TTS (verrouillage par personnage) :
               </p>
 
@@ -804,24 +792,23 @@ function AudioMode() {
               ))}
 
               {ttsUsage && (
-                <p className="text-xs text-gray-500 pt-2 border-t border-amber-200">
+                <p className="text-[11px] text-gray-500 pt-2 border-t border-amber-200 font-mono">
                   Quota du mois : {ttsUsage.used.toLocaleString("fr-FR")} /{" "}
                   {ttsUsage.limit.toLocaleString("fr-FR")} caractères
                 </p>
               )}
             </div>
           ) : (
-            /* 🔵 CAS 2 : PROFIL STANDARD — Lisibilité optimale du menu déroulant (POINT 3) */
-            <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded space-y-4">
-              <p className="text-sm text-blue-900 font-bold">
+            /* CAS STANDARD : Lisibilité optimale */
+            <div className="p-3.5 bg-blue-50/80 border-l-4 border-blue-500 rounded-xl space-y-4">
+              <p className="text-xs text-blue-900 font-bold">
                 🔊 Voix locales de votre appareil (Standard) :
               </p>
 
-              {/* Vitesse */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-gray-600 text-sm">Vitesse</span>
-                  <span className="text-primary-700 font-semibold">
+                  <span className="text-gray-700 text-xs font-semibold">Vitesse de lecture</span>
+                  <span className="text-primary-700 font-bold text-xs">
                     {rate}x
                   </span>
                 </div>
@@ -832,12 +819,11 @@ function AudioMode() {
                   step="0.1"
                   value={rate}
                   onChange={(e) => setRate(parseFloat(e.target.value))}
-                  className="w-full accent-primary-600"
+                  className="w-full accent-primary-600 cursor-pointer"
                 />
               </div>
 
-              {/* Voix par personnage (Lisible) */}
-              {voices.all?.length > 1 && (
+              {voices.all?.length > 0 && (
                 <div className="space-y-2">
                   {characters.map((char) => (
                     <div key={char.id} className="flex items-center gap-2">
@@ -845,10 +831,9 @@ function AudioMode() {
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: char.color }}
                       />
-                      <span className="text-gray-700 text-sm w-24 truncate">
+                      <span className="text-gray-800 text-xs font-bold w-24 truncate">
                         {char.name}
                       </span>
-                      {/* 📍 POINT 3 : Classes text-gray-900 bg-white ajoutées */}
                       <select
                         value={characterVoices[char.id] || ""}
                         onChange={(e) =>
@@ -879,9 +864,9 @@ function AudioMode() {
       )}
 
       {/* Mode italienne */}
-      <div className="p-3 bg-amber-100 border-b border-amber-200">
-        <p className="text-xs text-amber-800 mb-2 font-semibold">
-          🎭 Mode italienne : cliquez pour masquer vos répliques
+      <div className="p-3 bg-amber-100/90 border-b border-amber-200 max-w-5xl mx-auto">
+        <p className="text-xs text-amber-900 mb-2 font-bold flex items-center gap-1.5">
+          <span>🎭</span> Mode italienne : cliquez sur un personnage pour masquer ses répliques
         </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {characters.map((char) => {
@@ -893,40 +878,33 @@ function AudioMode() {
               <button
                 key={char.id}
                 onClick={() => toggleHideCharacter(char.id)}
-                className={`flex items-center gap-1 px-3 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition shadow
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm
                   ${
                     isHidden
-                      ? "bg-gray-400 text-white ring-2 ring-red-500"
+                      ? "bg-gray-700 text-white ring-2 ring-red-500"
                       : "text-white"
                   }`}
                 style={!isHidden ? { backgroundColor: char.color } : {}}
               >
                 {isHidden ? "🙈" : "👁️"} {char.name}
                 {hasRecording && currentMode === "recorded" && (
-                  <span className="text-xs">🎙️</span>
+                  <span className="text-[10px]">🎙️</span>
                 )}
               </button>
             );
           })}
         </div>
-        {hiddenCharacters.size > 0 && (
-          <p className="text-xs text-amber-700 mt-2">
-            ℹ️ Vos répliques seront masquées. Cliquez dessus quand c'est votre
-            tour !
-          </p>
-        )}
       </div>
 
       {/* Indicateur d'attente */}
       {waitingForClick && (
-        <div className="bg-green-500 text-white p-3 text-center animate-pulse sticky top-[120px] z-20 shadow-md">
-          <p className="font-bold">🎭 C'est à vous !</p>
-          <p className="text-sm">Cliquez sur votre bulle pour continuer</p>
+        <div className="bg-emerald-600 text-white p-3 text-center animate-pulse sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm">
+          🎭 C'est votre tour ! Cliquez sur votre réplique pour continuer.
         </div>
       )}
 
       {/* Liste des répliques */}
-      <div className="p-4 space-y-3">
+      <div className="p-4 space-y-3 max-w-5xl mx-auto">
         {replicas.map((replica, index) => {
           const character = characters.find(
             (c) => c.id === replica.character_id
@@ -972,88 +950,91 @@ function AudioMode() {
         })}
       </div>
 
-      {/* 📍 POINT 5 : PANNEAU DE CONTRÔLE ANCRÉ EN BAS (FIXED STICKY) */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-black border-t-2 border-red-800 shadow-2xl overflow-hidden pb-2">
-        <div className="absolute inset-0 opacity-20 bg-gradient-to-b from-red-900/20 to-black pointer-events-none" />
-
+      {/* 📍 POINTS 1 & 2 : PANNEAU DE CONTRÔLE CLAIR AVEC TOUS LES BOUTONS EXPLICITES */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-gold-500 shadow-[0_-8px_25px_rgba(0,0,0,0.15)] pb-3 pt-2">
         {premiumNotice && (
-          <div className="bg-amber-500 text-black px-4 py-1 text-xs font-bold text-center">
+          <div className="bg-amber-500 text-black px-4 py-1 text-xs font-bold text-center mb-1">
             ⚠️ {premiumNotice}
           </div>
         )}
 
-        <div className="px-4 py-2 bg-black/80 border-b border-red-900/50">
-          <div className="flex items-center gap-3 relative z-10 max-w-2xl mx-auto">
-            <div
-              className={`text-2xl ${
-                isPlaying && !waitingForClick ? "animate-pulse" : ""
-              }`}
-            >
-              {waitingForClick ? "🎭" : isPlaying ? "🔊" : "⏸️"}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-bold truncate">
-                {characters.find(
-                  (c) => c.id === replicas[currentIndex]?.character_id
-                )?.name || "-"}
+        <div className="max-w-4xl mx-auto px-4">
+          {/* Info réplique courante */}
+          <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-gray-200">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: characters.find((c) => c.id === replicas[currentIndex]?.character_id)?.color || "#D97706" }} />
+              <p className="text-gray-900 font-extrabold text-xs sm:text-sm truncate">
+                {characters.find((c) => c.id === replicas[currentIndex]?.character_id)?.name || "-"}
               </p>
-              <p className="text-gray-400 text-xs truncate">
-                {waitingForClick
-                  ? "À vous de jouer !"
-                  : (stripHtml(replicas[currentIndex]?.text || "").substring(
-                      0,
-                      45
-                    ) || "") + "..."}
+              <span className="text-gray-400 text-xs">•</span>
+              <p className="text-gray-600 text-xs truncate max-w-[200px] sm:max-w-md">
+                {waitingForClick ? "À vous !" : (stripHtml(replicas[currentIndex]?.text || "").substring(0, 40) + "...")}
               </p>
             </div>
-            <span className="text-red-400 text-sm font-bold drop-shadow">
+            <span className="text-gold-600 font-mono font-bold text-xs flex-shrink-0 bg-gold-50 px-2 py-0.5 rounded-md border border-gold-200">
               {currentIndex + 1}/{replicas.length}
             </span>
           </div>
-        </div>
 
-        <div className="px-4 py-2 relative z-10 max-w-2xl mx-auto">
-          <div className="flex items-center justify-center gap-6 sm:gap-10">
-            <button
-              onClick={stop}
-              title="Arrêter"
-              className="text-2xl text-white/60 hover:text-white transition active:scale-90"
-            >
-              ⏹️
-            </button>
-            <button
-              onClick={goToPrevious}
-              disabled={currentIndex === 0}
-              title="Réplique précédente"
-              className="text-2xl text-white/60 hover:text-white transition disabled:opacity-30 active:scale-90"
-            >
-              ⏮️
-            </button>
-            <button
-              onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
-              title={isPlaying ? "Pause" : "Lecture"}
-              className="text-5xl text-emerald-500 hover:text-emerald-400 transition transform active:scale-95"
-            >
-              {isPlaying ? "⏸️" : "▶️"}
-            </button>
-            <button
-              onClick={goToNext}
-              disabled={currentIndex === replicas.length - 1}
-              title="Réplique suivante"
-              className="text-2xl text-white/60 hover:text-white transition disabled:opacity-30 active:scale-90"
-            >
-              ⏭️
-            </button>
+          {/* 📍 POINT 1 : BARRE DE BOUTONS COMPLETE AVEC LIBELLÉS ET TOUS LES CONTRÔLES */}
+          <div className="flex items-center justify-center gap-2 sm:gap-6">
+            {/* 1. Recommencer */}
             <button
               onClick={() => {
                 stop();
                 setCurrentIndex(0);
                 setTimeout(() => playAll(0), 100);
               }}
-              title="Recommencer"
-              className="text-2xl text-white/60 hover:text-white transition active:scale-90"
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 transition active:scale-95"
+              title="Recommencer depuis le début"
             >
-              🔄
+              <span className="text-xl">🔄</span>
+              <span className="text-[10px] font-bold">Début</span>
+            </button>
+
+            {/* 2. Précédent */}
+            <button
+              onClick={goToPrevious}
+              disabled={currentIndex === 0}
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 disabled:opacity-30 transition active:scale-95"
+              title="Réplique précédente"
+            >
+              <span className="text-xl">⏮️</span>
+              <span className="text-[10px] font-bold">Recul</span>
+            </button>
+
+            {/* 3. PLAY / PAUSE CENTRAL (GRAND) */}
+            <button
+              onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
+              className={`flex items-center justify-center w-14 h-14 rounded-2xl text-2xl text-white shadow-lg transition-all transform active:scale-95 ${
+                isPlaying
+                  ? "bg-amber-600 hover:bg-amber-500 ring-4 ring-amber-300"
+                  : "bg-emerald-600 hover:bg-emerald-500 ring-4 ring-emerald-300"
+              }`}
+              title={isPlaying ? "Mettre en pause" : "Lancer la lecture"}
+            >
+              {isPlaying ? "⏸️" : "▶️"}
+            </button>
+
+            {/* 4. Suivant */}
+            <button
+              onClick={goToNext}
+              disabled={currentIndex === replicas.length - 1}
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 disabled:opacity-30 transition active:scale-95"
+              title="Réplique suivante"
+            >
+              <span className="text-xl">⏭️</span>
+              <span className="text-[10px] font-bold">Avance</span>
+            </button>
+
+            {/* 5. Arrêter */}
+            <button
+              onClick={stop}
+              className="flex flex-col items-center gap-0.5 p-2 text-red-600 hover:text-red-700 transition active:scale-95"
+              title="Arrêter la lecture"
+            >
+              <span className="text-xl">⏹️</span>
+              <span className="text-[10px] font-bold">Stop</span>
             </button>
           </div>
         </div>
@@ -1062,9 +1043,6 @@ function AudioMode() {
   );
 }
 
-/**
- * Bulle Audio
- */
 const AudioBubble = forwardRef(
   (
     {
@@ -1178,21 +1156,21 @@ const AudioBubble = forwardRef(
                 <>
                   <button
                     onClick={() => playReplicaRecording(replica.id)}
-                    className="flex items-center justify-center gap-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
-                    ▶️ Écouter ma prise
+                    ▶️ Prise
                   </button>
                   <button
                     onClick={() => deleteReplicaRecording(replica.id)}
-                    className="flex items-center justify-center gap-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
                     🗑️ Supprimer
                   </button>
                 </>
               ) : recordingReplicaId === replica.id ? (
                 <div className="w-full flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
-                  <span className="text-red-600 font-bold animate-pulse flex items-center gap-2">
-                    🔴 {recordingDuration}s
+                  <span className="text-red-600 font-bold animate-pulse flex items-center gap-2 text-xs">
+                    🔴 Enregistrement : {recordingDuration}s
                   </span>
                   <button
                     onClick={() => {
@@ -1202,15 +1180,15 @@ const AudioBubble = forwardRef(
                         character?.name || "Inconnu"
                       );
                     }}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95"
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
-                    ⏹️ Finir
+                    ⏹️ Valider
                   </button>
                 </div>
               ) : (
                 <button
                   onClick={() => startReplicaRecording(replica.id)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-sm font-semibold shadow-md transition active:scale-95 w-full sm:w-auto text-xs"
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                 >
                   🎤 Enregistrer ma voix
                 </button>
