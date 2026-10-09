@@ -648,21 +648,19 @@ function ScriptDetail() {
                   </span>
                 </button>
 
-                {/* BOUTON COACH IA - AFFICHÉ UNIQUEMENT POUR LES MEMBRES PREMIUM */}
-                {isPremium && (
-                  <button
-                    onClick={(e) => handleCoachClick(e, char.id)}
-                    title={`Coaching IA pour ${char.name}`}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
-                    style={{
-                      background:
-                        "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
-                    }}
-                  >
-                    <span className="text-lg">✨</span>
-                    <span className="hidden sm:inline text-sm">Coach</span>
-                  </button>
-                )}
+                {/* BOUTON COACH IA AVEC PROTECTION PREMIUM */}
+                <button
+                  onClick={(e) => handleCoachClick(e, char.id)}
+                  title={`Coaching IA pour ${char.name}`}
+                  className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
+                  }}
+                >
+                  <span className="text-lg">✨</span>
+                  <span className="hidden sm:inline text-sm">Coach</span>
+                </button>
               </div>
             ))}
           </div>
