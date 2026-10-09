@@ -682,6 +682,9 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
 
+  // Onglet actif sur la page d'accueil : 'scripts' (par défaut), 'director' (consignes) ou 'library' (bibliothèque)
+  const [activeHomeTab, setActiveHomeTab] = useState("scripts");
+
   // État pour verrouiller l'ordre (empêcher drag & drop accidentel)
   const [orderLocked, setOrderLocked] = useState(() => {
     try {
@@ -1183,45 +1186,150 @@ function Home() {
       {/* Styles for mes-saynetes hero moved to src/styles/mes-saynetes.css */}
       {/* Boutons d'action (déplacé sous Bibliothèque publique) */}
 
-      {/* Section Consignes Metteur en Scène - Expandable */}
-      <DirectorNotesSection
-        notes={directorNotes}
-        onUpload={handleUploadDirectorNote}
-        onDelete={handleDeleteDirectorNote}
-        onViewDocument={handleViewDocument}
-        uploading={uploadingNote}
-        error={uploadError}
-        expanded={directorNotesExpanded}
-        onToggleExpand={() => setDirectorNotesExpanded(!directorNotesExpanded)}
-      />
+      {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
+      <div className="mb-6 p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
+        <h2 className="text-white font-bold text-lg mb-1 flex items-center gap-2 font-display">
+          <span>🎭</span> Bienvenue sur RépliCoach !
+        </h2>
+        <p className="text-gray-400 text-xs mb-4">
+          Choisissez votre mode d'utilisation pour accéder rapidement à vos
+          textes :
+        </p>
 
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Carte 1 : Comédien indépendant -> /upload */}
+          <Link
+            to="/upload"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-gold-500 rounded-xl transition-all duration-200 group shadow-md hover:shadow-gold-500/10 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-gold-400 font-bold text-sm flex items-center gap-2">
+                  <span>👤</span> Comédien indépendant
+                </p>
+                <span className="text-gold-400 text-base transform group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </div>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Importez jusqu'à <strong>2 textes personnels</strong>{" "}
+                gratuitement.
+              </p>
+            </div>
+            <span className="text-[10px] text-gold-500/70 mt-3 font-semibold uppercase tracking-wider">
+              Importer un fichier
+            </span>
+          </Link>
+
+          {/* Carte 2 : En troupe / Atelier -> /shared */}
+          <Link
+            to="/shared"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-500 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/10 flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-primary-300 font-bold text-sm flex items-center gap-2">
+                  <span>👥</span> En troupe / Atelier
+                </p>
+                <span className="text-primary-300 text-base transform group-hover:translate-x-1 transition-transform">
+                  →
+                </span>
+              </div>
+              <p className="text-gray-300 text-xs leading-relaxed">
+                Saisissez le code fourni par votre metteur en scène pour accéder
+                aux pièces.
+              </p>
+            </div>
+            <span className="text-[10px] text-primary-400/70 mt-3 font-semibold uppercase tracking-wider">
+              Accéder aux Troupes
+            </span>
+          </Link>
+        </div>
+      </div>
+      {/* 🧭 BARRE DE NAVIGATION ET FILTRES D'ONGLETS */}
+      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm">
+        <button
+          onClick={() => setActiveHomeTab("scripts")}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+            activeHomeTab === "scripts"
+              ? "bg-gold-500 text-black shadow-lg shadow-gold-500/10 font-bold"
+              : "text-gray-400 hover:text-white hover:bg-gray-800/60"
+          }`}
+        >
+          <span>🎭</span>
+          <span>Mes textes</span>
+          <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full font-mono">
+            {filteredScripts.length}
+          </span>
+        </button>
+
+        <button
+          onClick={() => setActiveHomeTab("director")}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+            activeHomeTab === "director"
+              ? "bg-primary-600 text-white shadow-lg shadow-primary-500/20 font-bold"
+              : "text-gray-400 hover:text-white hover:bg-gray-800/60"
+          }`}
+        >
+          <span>📁</span>
+          <span>Consignes</span>
+        </button>
+
+        <button
+          onClick={() => setActiveHomeTab("library")}
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+            activeHomeTab === "library"
+              ? "bg-amber-600 text-white shadow-lg shadow-amber-500/20 font-bold"
+              : "text-gray-400 hover:text-white hover:bg-gray-800/60"
+          }`}
+        >
+          <span>📚</span>
+          <span>Bibliothèque</span>
+        </button>
+      </div>
+
+      {/* ---------------------------------------------------- */}
+      {/* AFFICHAGE CONDITIONNEL SELON L'ONGLET SÉLECTIONNÉ     */}
+      {/* ---------------------------------------------------- */}
+
+      {/* 1. VUE : MES TEXTES (SAYNÈTES & DND) */}
+      {activeHomeTab === "scripts" && (
+        <div>
+          {/* Insérez ici la section existante de recherche, filtres par tags et la liste des scripts / DndContext */}
+        </div>
+      )}
+
+      {/* 2. VUE : CONSIGNES DU METTEUR EN SCÈNE */}
+      {activeHomeTab === "director" && (
+        <div className="space-y-4 animate-fade-in">
+          <DirectorNotesSection
+            directorNotes={directorNotes}
+            onDeleteNote={handleDeleteDirectorNote}
+            onViewNoteDoc={setViewingDocument}
+            onOpenTroupeSelector={(files) => {
+              setPendingFiles(files);
+              setShowTroupeSelector(true);
+            }}
+            userRole={userRole}
+            userId={user?.id}
+          />
+        </div>
+      )}
+
+      {/* 3. VUE : BIBLIOTHÈQUE PUBLIQUE */}
+      {activeHomeTab === "library" && (
+        <div className="space-y-4 animate-fade-in">
+          <PublicLibrarySection
+            publicLibraryScripts={publicLibraryScripts}
+            importingPublicScript={importingPublicScript}
+            onImportPublicScript={handleImportPublicScript}
+            onViewPublicDoc={setViewingDocument}
+          />
+        </div>
+      )}
       {/* Bouton + Nouveau texte (déplacé plus bas) */}
 
       {/* Bibliothèque publique */}
-      <PublicLibrary
-        onAddPersonalAudio={(audio) => {
-          // Optimistic update: show the new audio immediately
-          setPersonalAudios((prev) => [...prev, audio]);
-          setAudioImportMsg({
-            type: "info",
-            text: `Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.`,
-          });
-          setTimeout(() => setAudioImportMsg(null), 3500);
-
-          // Then reconcile with server authoritative data after a short delay
-          (async () => {
-            try {
-              await new Promise((r) => setTimeout(r, 900));
-              const audios = await fetchPersonalAudios(user.id);
-              // If fetch succeeds, replace local list to avoid duplicates/races
-              setPersonalAudios(audios || []);
-            } catch (e) {
-              // keep optimistic state if fetch fails
-              console.warn("Reconcile personal audios failed:", e);
-            }
-          })();
-        }}
-      />
 
       {/* Bouton 'Nouveau texte' — bloc vert aligné à gauche (comme Consignes/Bibliothèque) */}
       <div className="mb-4">
