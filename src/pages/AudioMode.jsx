@@ -1,3 +1,4 @@
+// src/pages/AudioMode.jsx
 import { useEffect, useState, useRef, forwardRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
@@ -70,7 +71,7 @@ function cleanTextForSpeech(text) {
     .replace(/[\s]*[-–—]+[\s]*$/g, "")
     .replace(/[\s]+[-–—]+[\s]+/g, " ")
     .replace(/[*_#~`•·]/g, "")
-    .replace(/^['"«»']+|['"«»']+$ /g, "")
+    .replace(/^['"«»']+|['"«»']+\$/g, "")
     .replace(/\.{4,}/g, "...")
     .replace(/\s+/g, " ")
     .trim();
@@ -81,43 +82,35 @@ function AudioMode() {
   const { user, isPremium } = useAuthStore();
   const { currentScript, loading, fetchScript } = useScriptStore();
 
-  // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
   const [ttsUsage, setTtsUsage] = useState(null);
   const [premiumNotice, setPremiumNotice] = useState("");
 
-  // Voix synthétiques
   const [voices, setVoices] = useState({ male: [], female: [], all: [] });
   const [characterVoices, setCharacterVoices] = useState({});
   const [characterGenders, setCharacterGenders] = useState({});
 
-  // Voix enregistrées
   const [characterRecordings, setCharacterRecordings] = useState({});
   const [replicaRecordings, setReplicaRecordings] = useState({});
   const [voiceMode, setVoiceMode] = useState({});
 
-  // Enregistrement réplique
   const [recordingReplicaId, setRecordingReplicaId] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
-  // Lecture
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [rate, setRate] = useState(1);
   const [femalePitch, setFemalePitch] = useState(1.8);
   const [malePitch, setMalePitch] = useState(0.5);
 
-  // Mode italienne
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
   const [waitingForClick, setWaitingForClick] = useState(false);
 
-  // UI : 📍 POINT 3 : Fermé par défaut sur TOUS les écrans
   const [showSettings, setShowSettings] = useState(false);
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
   const [tempRevealedReplicas, setTempRevealedReplicas] = useState({});
 
-  // Refs
   const playingRef = useRef(false);
   const waitingRef = useRef(false);
   const currentReplicaRef = useRef(null);
@@ -128,7 +121,6 @@ function AudioMode() {
   const audioPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
 
-  // Charger le statut Premium
   useEffect(() => {
     if (!isPremium || !id) return;
     let cancelled = false;
@@ -709,10 +701,11 @@ function AudioMode() {
   });
 
   return (
-    <div className="min-h-screen bg-amber-50 pb-52">
+    /* 📍 POINT 5 : Layout Responsif Pleine Page (w-full max-w-7xl mx-auto) */
+    <div className="min-h-screen bg-amber-50 pb-52 w-full">
       {/* Header Sticky avec titre et bouton explicite pour les Voix */}
       <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 shadow-lg sticky top-0 z-30">
-        <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto px-4">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => window.history.back()}
@@ -723,7 +716,7 @@ function AudioMode() {
             </button>
 
             <div className="min-w-0">
-              <h2 className="text-gold-400 text-base sm:text-lg font-bold truncate flex items-center gap-2">
+              <h2 className="text-amber-400 text-base sm:text-lg font-bold truncate flex items-center gap-2">
                 <span>🔊</span>
                 <span>Mode Audio</span>
               </h2>
@@ -736,8 +729,8 @@ function AudioMode() {
             onClick={() => setShowSettings(!showSettings)}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
               showSettings
-                ? "bg-gold-500 text-dark border-gold-400 font-extrabold"
-                : "bg-gray-800 text-gold-400 border-gold-500/40 hover:bg-gray-700"
+                ? "bg-amber-500 text-black border-amber-400 font-extrabold"
+                : "bg-gray-800 text-amber-400 border-amber-500/40 hover:bg-gray-700"
             }`}
           >
             <span className="text-sm">🎙️</span>
@@ -747,10 +740,10 @@ function AudioMode() {
         </div>
 
         {/* Barre de progression */}
-        <div className="mt-3 max-w-5xl mx-auto">
+        <div className="mt-3 max-w-7xl mx-auto px-4">
           <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
             <div
-              className="h-full bg-gold-500 transition-all duration-300"
+              className="h-full bg-amber-400 transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -760,16 +753,16 @@ function AudioMode() {
         </div>
       </div>
 
-      {/* 📍 POINT 3 : PANNEAU RÉGLAGES FERMÉ PAR DÉFAUT */}
+      {/* 📍 POINT 3 : PANNEAU RÉGLAGES FERMÉ PAR DÉFAUT (Fermeture facile) */}
       {showSettings && (
-        <div className="bg-white border-b-2 border-gold-500/30 p-4 shadow-xl max-w-5xl mx-auto animate-fade-in">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+        <div className="bg-white border-b-2 border-amber-500/30 p-4 sm:p-6 shadow-xl max-w-7xl mx-auto animate-fade-in my-2 rounded-2xl">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900 text-sm sm:text-base flex items-center gap-2">
               <span>🎙️</span> Configuration des voix du partenaire
             </h3>
             <button
               onClick={() => setShowSettings(false)}
-              className="text-xs text-gray-500 hover:text-gray-800 font-bold"
+              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition"
             >
               ✕ Fermer
             </button>
@@ -777,8 +770,8 @@ function AudioMode() {
 
           {isPremium ? (
             /* CAS PREMIUM */
-            <div className="p-3.5 bg-amber-50 border-l-4 border-amber-500 rounded-xl space-y-3">
-              <p className="text-xs text-amber-900 font-bold">
+            <div className="p-4 bg-amber-50/80 border-l-4 border-amber-500 rounded-xl space-y-4">
+              <p className="text-xs sm:text-sm text-amber-900 font-bold">
                 ✨ Voix Premium Google Cloud TTS (verrouillage par personnage) :
               </p>
 
@@ -799,9 +792,9 @@ function AudioMode() {
               )}
             </div>
           ) : (
-            /* CAS STANDARD : Lisibilité optimale */
-            <div className="p-3.5 bg-blue-50/80 border-l-4 border-blue-500 rounded-xl space-y-4">
-              <p className="text-xs text-blue-900 font-bold">
+            /* CAS STANDARD */
+            <div className="p-4 bg-blue-50/80 border-l-4 border-blue-500 rounded-xl space-y-4">
+              <p className="text-xs sm:text-sm text-blue-900 font-bold">
                 🔊 Voix locales de votre appareil (Standard) :
               </p>
 
@@ -831,7 +824,7 @@ function AudioMode() {
                         className="w-3 h-3 rounded-full flex-shrink-0"
                         style={{ backgroundColor: char.color }}
                       />
-                      <span className="text-gray-800 text-xs font-bold w-24 truncate">
+                      <span className="text-gray-800 text-xs font-bold w-28 truncate">
                         {char.name}
                       </span>
                       <select
@@ -864,7 +857,7 @@ function AudioMode() {
       )}
 
       {/* Mode italienne */}
-      <div className="p-3 bg-amber-100/90 border-b border-amber-200 max-w-5xl mx-auto">
+      <div className="p-3 bg-amber-100/90 border-b border-amber-200 max-w-7xl mx-auto my-2 rounded-xl">
         <p className="text-xs text-amber-900 mb-2 font-bold flex items-center gap-1.5">
           <span>🎭</span> Mode italienne : cliquez sur un personnage pour masquer ses répliques
         </p>
@@ -898,13 +891,13 @@ function AudioMode() {
 
       {/* Indicateur d'attente */}
       {waitingForClick && (
-        <div className="bg-emerald-600 text-white p-3 text-center animate-pulse sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm">
+        <div className="bg-emerald-600 text-white p-3 text-center animate-pulse sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm max-w-7xl mx-auto rounded-xl">
           🎭 C'est votre tour ! Cliquez sur votre réplique pour continuer.
         </div>
       )}
 
-      {/* Liste des répliques */}
-      <div className="p-4 space-y-3 max-w-5xl mx-auto">
+      {/* Liste des répliques (Responsive sur Desktop) */}
+      <div className="p-4 space-y-4 max-w-7xl mx-auto">
         {replicas.map((replica, index) => {
           const character = characters.find(
             (c) => c.id === replica.character_id
@@ -950,8 +943,8 @@ function AudioMode() {
         })}
       </div>
 
-      {/* 📍 POINTS 1 & 2 : PANNEAU DE CONTRÔLE CLAIR AVEC TOUS LES BOUTONS EXPLICITES */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t-2 border-gold-500 shadow-[0_-8px_25px_rgba(0,0,0,0.15)] pb-3 pt-2">
+      {/* 📍 POINT 6 : PANNEAU DE CONTRÔLE CLAIR, DEBONNAIRE ET VISIBLE AVEC TOUS LES BOUTONS (PLAY, PAUSE, RECUL, AVANCE, STOP) */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t-2 border-amber-500 shadow-[0_-8px_30px_rgba(0,0,0,0.2)] pb-4 pt-2.5">
         {premiumNotice && (
           <div className="bg-amber-500 text-black px-4 py-1 text-xs font-bold text-center mb-1">
             ⚠️ {premiumNotice}
@@ -962,22 +955,37 @@ function AudioMode() {
           {/* Info réplique courante */}
           <div className="flex items-center justify-between gap-3 mb-2 pb-2 border-b border-gray-200">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: characters.find((c) => c.id === replicas[currentIndex]?.character_id)?.color || "#D97706" }} />
+              <span
+                className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+                style={{
+                  backgroundColor:
+                    characters.find(
+                      (c) => c.id === replicas[currentIndex]?.character_id
+                    )?.color || "#D97706",
+                }}
+              />
               <p className="text-gray-900 font-extrabold text-xs sm:text-sm truncate">
-                {characters.find((c) => c.id === replicas[currentIndex]?.character_id)?.name || "-"}
+                {characters.find(
+                  (c) => c.id === replicas[currentIndex]?.character_id
+                )?.name || "-"}
               </p>
               <span className="text-gray-400 text-xs">•</span>
               <p className="text-gray-600 text-xs truncate max-w-[200px] sm:max-w-md">
-                {waitingForClick ? "À vous !" : (stripHtml(replicas[currentIndex]?.text || "").substring(0, 40) + "...")}
+                {waitingForClick
+                  ? "À vous de jouer !"
+                  : (stripHtml(replicas[currentIndex]?.text || "").substring(
+                      0,
+                      40
+                    ) || "") + "..."}
               </p>
             </div>
-            <span className="text-gold-600 font-mono font-bold text-xs flex-shrink-0 bg-gold-50 px-2 py-0.5 rounded-md border border-gold-200">
-              {currentIndex + 1}/{replicas.length}
+            <span className="text-amber-600 font-mono font-bold text-xs flex-shrink-0 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200">
+              {currentIndex + 1} / {replicas.length}
             </span>
           </div>
 
-          {/* 📍 POINT 1 : BARRE DE BOUTONS COMPLETE AVEC LIBELLÉS ET TOUS LES CONTRÔLES */}
-          <div className="flex items-center justify-center gap-2 sm:gap-6">
+          {/* 📍 POINT 6 : BARRE COMPLÈTE DE 5 BOUTONS DE CONTRÔLE (REPLAY, PREV, PLAY/PAUSE, NEXT, STOP) */}
+          <div className="flex items-center justify-center gap-3 sm:gap-8">
             {/* 1. Recommencer */}
             <button
               onClick={() => {
@@ -985,7 +993,7 @@ function AudioMode() {
                 setCurrentIndex(0);
                 setTimeout(() => playAll(0), 100);
               }}
-              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 transition active:scale-95"
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-amber-600 transition active:scale-95"
               title="Recommencer depuis le début"
             >
               <span className="text-xl">🔄</span>
@@ -996,14 +1004,14 @@ function AudioMode() {
             <button
               onClick={goToPrevious}
               disabled={currentIndex === 0}
-              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 disabled:opacity-30 transition active:scale-95"
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-amber-600 disabled:opacity-30 transition active:scale-95"
               title="Réplique précédente"
             >
               <span className="text-xl">⏮️</span>
               <span className="text-[10px] font-bold">Recul</span>
             </button>
 
-            {/* 3. PLAY / PAUSE CENTRAL (GRAND) */}
+            {/* 3. GRAND BOUTON CENTRAL PLAY / PAUSE */}
             <button
               onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
               className={`flex items-center justify-center w-14 h-14 rounded-2xl text-2xl text-white shadow-lg transition-all transform active:scale-95 ${
@@ -1020,7 +1028,7 @@ function AudioMode() {
             <button
               onClick={goToNext}
               disabled={currentIndex === replicas.length - 1}
-              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-gold-600 disabled:opacity-30 transition active:scale-95"
+              className="flex flex-col items-center gap-0.5 p-2 text-gray-700 hover:text-amber-600 disabled:opacity-30 transition active:scale-95"
               title="Réplique suivante"
             >
               <span className="text-xl">⏭️</span>
@@ -1080,7 +1088,7 @@ const AudioBubble = forwardRef(
           isRight ? "ml-auto max-w-[85%]" : "mr-auto max-w-[85%]"
         } ${
           isCurrent
-            ? "ring-4 ring-gold-500 shadow-xl scale-[1.01]"
+            ? "ring-4 ring-amber-400 shadow-xl scale-[1.01]"
             : "opacity-90 hover:opacity-100"
         }`}
         style={{
@@ -1202,5 +1210,4 @@ const AudioBubble = forwardRef(
 );
 
 AudioBubble.displayName = "AudioBubble";
-
 export default AudioMode;

@@ -1,3 +1,4 @@
+// src/pages/Home.jsx
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
@@ -44,6 +45,9 @@ import { CSS } from "@dnd-kit/utilities";
 import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
+/**
+ * Section Consignes Metteur en Scène (Sécurisée & Responsive)
+ */
 function DirectorNotesSection({
   notes = [],
   onUpload,
@@ -86,16 +90,16 @@ function DirectorNotesSection({
         className="menu-director cursor-pointer transition group flex items-center justify-between p-2"
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition">
+          <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center group-hover:bg-amber-500/20 transition">
             <span className="text-2xl">📁</span>
           </div>
           <div>
-            <h3 className="section-title text-white text-base font-bold">
+            <h3 className="section-title text-white text-base sm:text-lg font-bold">
               Consignes du metteur en scène
             </h3>
             <p className="text-gray-400 text-xs mt-0.5">
               {safeNotes.length > 0 ? (
-                <span className="font-bold text-yellow-400">
+                <span className="font-bold text-amber-400">
                   {safeNotes.length} document{safeNotes.length > 1 ? "s" : ""}
                 </span>
               ) : (
@@ -118,7 +122,7 @@ function DirectorNotesSection({
           onDragOver={handleDrag}
           onDrop={handleDrop}
           className={`mt-4 pt-4 border-t border-gray-800 transition ${
-            dragActive ? "bg-yellow-500/10 border-dashed border-yellow-500 rounded-xl p-4" : ""
+            dragActive ? "bg-amber-500/10 border-dashed border-amber-500 rounded-xl p-4" : ""
           }`}
         >
           {error && (
@@ -181,6 +185,9 @@ function DirectorNotesSection({
   );
 }
 
+/**
+ * Composant principal Home (Pleine page responsive sur Desktop)
+ */
 function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -533,10 +540,10 @@ function Home() {
   }
 
   return (
-    /* 📍 POINT 4 : Layout Responsive Pleine Page (w-full max-w-7xl) */
+    /* 📍 POINT 2 : Layout Responsive Pleine Page (w-full max-w-7xl mx-auto) */
     <div className="p-4 sm:p-6 lg:p-8 pb-24 w-full max-w-7xl mx-auto">
-      {/* BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
-      <div className="mb-6 p-5 sm:p-6 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
+      {/* 🎭 1. BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH (POINT 1 : Hover states harmonieux) */}
+      <div className="mb-6 p-5 sm:p-6 bg-gray-900/95 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
         <h2 className="text-white font-bold text-lg sm:text-xl mb-1 flex items-center gap-2 font-display">
           <span>🎭</span> Bienvenue sur RépliCoach !
         </h2>
@@ -545,17 +552,17 @@ function Home() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Carte 1 : Comédien indépendant */}
+          {/* Carte 1 : Comédien indépendant (Hover state ambre/or harmonieux) */}
           <Link
             to="/upload"
-            className="p-5 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-gold-500 rounded-xl transition-all duration-200 group shadow-md hover:shadow-gold-500/10 flex flex-col justify-between"
+            className="p-5 bg-gray-800/90 hover:bg-gray-800 border border-amber-500/30 hover:border-amber-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-amber-500/15 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-gold-400 font-bold text-sm sm:text-base flex items-center gap-2">
+                <p className="text-amber-400 font-bold text-sm sm:text-base flex items-center gap-2 group-hover:text-amber-300 transition">
                   <span>👤</span> Comédien indépendant
                 </p>
-                <span className="text-gold-400 text-lg transform group-hover:translate-x-1 transition-transform">
+                <span className="text-amber-400 text-lg transform group-hover:translate-x-1.5 transition-transform">
                   →
                 </span>
               </div>
@@ -563,22 +570,22 @@ function Home() {
                 Importez jusqu'à <strong>2 textes personnels</strong> gratuitement.
               </p>
             </div>
-            <span className="text-[11px] text-gold-500/80 mt-4 font-semibold uppercase tracking-wider">
+            <span className="text-[11px] text-amber-500/80 mt-4 font-semibold uppercase tracking-wider group-hover:text-amber-400 transition">
               Importer un fichier
             </span>
           </Link>
 
-          {/* Carte 2 : En troupe / Atelier */}
+          {/* Carte 2 : En troupe / Atelier (Hover state bordeaux/primaire élégant) */}
           <Link
             to="/shared"
-            className="p-5 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-500 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/10 flex flex-col justify-between"
+            className="p-5 bg-gray-800/90 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/15 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-primary-300 font-bold text-sm sm:text-base flex items-center gap-2">
+                <p className="text-primary-300 font-bold text-sm sm:text-base flex items-center gap-2 group-hover:text-primary-200 transition">
                   <span>👥</span> En troupe / Atelier
                 </p>
-                <span className="text-primary-300 text-lg transform group-hover:translate-x-1 transition-transform">
+                <span className="text-primary-300 text-lg transform group-hover:translate-x-1.5 transition-transform">
                   →
                 </span>
               </div>
@@ -586,7 +593,7 @@ function Home() {
                 Saisissez le code fourni par votre metteur en scène pour accéder aux pièces.
               </p>
             </div>
-            <span className="text-[11px] text-primary-400/80 mt-4 font-semibold uppercase tracking-wider">
+            <span className="text-[11px] text-primary-400/80 mt-4 font-semibold uppercase tracking-wider group-hover:text-primary-300 transition">
               Accéder aux Troupes
             </span>
           </Link>
@@ -594,12 +601,12 @@ function Home() {
       </div>
 
       {/* BARRE D'ONGLETS Navigation */}
-      <div className="flex gap-2 sm:gap-4 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto sm:mx-0">
+      <div className="flex gap-2 sm:gap-4 mb-6 p-1.5 bg-gray-900/90 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto sm:mx-0">
         <button
           onClick={() => setActiveHomeTab("scripts")}
           className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
             activeHomeTab === "scripts"
-              ? "bg-gold-500 text-black shadow-lg shadow-gold-500/10 font-bold"
+              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
@@ -614,7 +621,7 @@ function Home() {
           onClick={() => setActiveHomeTab("director")}
           className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
             activeHomeTab === "director"
-              ? "bg-primary-600 text-white shadow-lg shadow-primary-500/20 font-bold"
+              ? "bg-primary-700 text-white shadow-lg shadow-primary-500/20 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
@@ -641,13 +648,13 @@ function Home() {
       {/* 1. ONGLET : MES TEXTES */}
       {activeHomeTab === "scripts" && (
         <div className="space-y-5">
-          {/* Accès rapide au texte récent */}
+          {/* Accès rapide au texte récent (POINT 3 : Design lisible & élégant) */}
           {recentScript && scripts?.some((s) => s.id === recentScript.scriptId) && (
             <button
               onClick={() => handleOpenScript(recentScript.scriptId)}
-              className="w-full p-4 sm:p-5 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
+              className="w-full p-4 sm:p-5 bg-gray-800/90 hover:bg-gray-800 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
             >
-              <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform flex-shrink-0">
+              <div className="w-12 h-12 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
                 <span className="text-2xl">⚡</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -655,7 +662,7 @@ function Home() {
                   <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
                     Accès rapide
                   </span>
-                  <span className="text-amber-500/50 text-[10px]">
+                  <span className="text-gray-400 text-[10px]">
                     • {recentScript.count} accès
                   </span>
                 </div>
@@ -663,7 +670,7 @@ function Home() {
                   {recentScript.title}
                 </h3>
               </div>
-              <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
+              <span className="text-amber-400 text-xl group-hover:translate-x-1.5 transition-transform">
                 →
               </span>
             </button>
@@ -687,7 +694,7 @@ function Home() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher parmi mes saynètes..."
-                className="w-full p-3 pl-10 pr-10 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500 text-sm"
+                className="w-full p-3 pl-10 pr-10 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 text-sm"
               />
               {searchQuery && (
                 <button
@@ -713,7 +720,7 @@ function Home() {
             )}
           </div>
 
-          {/* Liste des saynètes - Responsive Grid sur Desktop */}
+          {/* Liste des saynètes - Responsive Grid 3 Colonnes sur Desktop (POINT 3 : Cartes lisibles bg-gray-800/90) */}
           {localScripts.length === 0 ? (
             <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-8">
               <p className="text-5xl mb-3">📄</p>
@@ -776,9 +783,9 @@ function Home() {
 
               <DragOverlay>
                 {activeScript ? (
-                  <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
+                  <div className="card shadow-2xl ring-2 ring-amber-500 opacity-90 p-4 bg-gray-800 rounded-xl">
                     <div className="flex items-center gap-3">
-                      <span className="text-gold-500 font-bold text-lg">
+                      <span className="text-amber-400 font-bold text-lg">
                         #{activeScript.display_order}
                       </span>
                       <h3 className="font-semibold text-white">{activeScript.title}</h3>
@@ -909,11 +916,15 @@ function Home() {
         </div>
       )}
 
+      {/* 📍 POINT 4 : Bouton Flottant FAB couleur Bordeaux / Wine avec + en blanc gras */}
       <FloatingActionButton />
     </div>
   );
 }
 
+/**
+ * Carte de saynète (POINT 3 : Fond gris sombre lisible bg-gray-800/90)
+ */
 function SortableScriptCard({
   script,
   index,
@@ -937,7 +948,7 @@ function SortableScriptCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="card hover:border-gold-500/50 transition cursor-pointer group bg-gray-900 border border-gray-800 p-4 rounded-2xl shadow-md h-full flex flex-col justify-between"
+      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-5 rounded-2xl shadow-md h-full flex flex-col justify-between"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-3">
@@ -946,15 +957,18 @@ function SortableScriptCard({
               <button
                 {...attributes}
                 {...listeners}
-                className="touch-none text-gray-500 hover:text-gold-500 p-1 cursor-grab active:cursor-grabbing text-base"
+                className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-base"
               >
                 ⋮⋮
               </button>
             )}
-            <div className="w-8 h-8 bg-gold-500/10 border border-gold-500/30 rounded-lg flex items-center justify-center text-gold-400 font-bold text-xs flex-shrink-0">
+            <div className="w-8 h-8 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
               #{index + 1}
             </div>
-            <h3 onClick={() => onOpen(script.id)} className="font-bold text-white text-sm truncate group-hover:text-gold-400 transition cursor-pointer">
+            <h3
+              onClick={() => onOpen(script.id)}
+              className="font-bold text-white text-base truncate group-hover:text-amber-300 transition cursor-pointer"
+            >
               {script.title}
             </h3>
           </div>
@@ -965,7 +979,7 @@ function SortableScriptCard({
                 e.stopPropagation();
                 onManageTags(script);
               }}
-              className="p-1.5 text-gray-500 hover:text-gold-400 hover:bg-gray-800 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700/80 rounded-lg transition"
               title="Tags"
             >
               🏷️
@@ -975,7 +989,7 @@ function SortableScriptCard({
                 e.stopPropagation();
                 onShare(script);
               }}
-              className="p-1.5 text-gray-500 hover:text-primary-400 hover:bg-gray-800 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700/80 rounded-lg transition"
               title="Partager"
             >
               👥
@@ -985,7 +999,7 @@ function SortableScriptCard({
                 e.stopPropagation();
                 onDelete(script.id);
               }}
-              className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
               title="Supprimer"
             >
               🗑️
@@ -994,20 +1008,20 @@ function SortableScriptCard({
         </div>
 
         <div onClick={() => onOpen(script.id)} className="cursor-pointer space-y-2">
-          <div className="flex items-center gap-2 text-gray-400 text-xs flex-wrap">
-            <span>{script.characters?.length || 0} pers.</span>
+          <div className="flex items-center gap-2 text-gray-300 text-xs flex-wrap">
+            <span className="bg-gray-700/60 px-2 py-0.5 rounded-md">{script.characters?.length || 0} pers.</span>
             <span>•</span>
-            <span>{script.replicas?.length || 0} répl.</span>
+            <span className="bg-gray-700/60 px-2 py-0.5 rounded-md">{script.replicas?.length || 0} répl.</span>
             {notesCount > 0 && (
               <>
                 <span>•</span>
-                <span className="text-amber-400 font-medium">📝 {notesCount}</span>
+                <span className="text-amber-400 font-semibold">📝 {notesCount}</span>
               </>
             )}
           </div>
 
           {script.tags && script.tags.length > 0 && (
-            <div>
+            <div className="pt-1">
               <ScriptTagBadges tags={script.tags} />
             </div>
           )}
@@ -1031,7 +1045,7 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-gray-800/80 border border-blue-500/30 rounded-xl p-3.5 shadow-md flex items-center gap-3"
+      className="bg-gray-800/90 border border-blue-500/30 rounded-2xl p-4 shadow-md flex items-center gap-3"
     >
       {!orderLocked && (
         <button
@@ -1043,18 +1057,18 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
         </button>
       )}
 
-      <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 text-sm flex-shrink-0">
+      <div className="w-9 h-9 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 text-sm flex-shrink-0">
         🎵
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-medium truncate">{audio.title || audio.file_name}</p>
+        <p className="text-white text-xs font-semibold truncate">{audio.title || audio.file_name}</p>
         <audio src={audioUrl} controls className="w-full h-7 mt-1" />
       </div>
 
       <button
         onClick={() => onDelete(audio.id, audio.audio_path)}
-        className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+        className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
       >
         🗑️
       </button>
