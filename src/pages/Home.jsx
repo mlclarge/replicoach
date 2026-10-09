@@ -1,4 +1,3 @@
-// src/pages/Home.jsx
 import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
@@ -46,7 +45,7 @@ import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
 /**
- * Section Consignes Metteur en Scène (Sécurisée & Responsive)
+ * Section Consignes Metteur en Scène (Sécurisée)
  */
 function DirectorNotesSection({
   notes = [],
@@ -84,22 +83,22 @@ function DirectorNotesSection({
   );
 
   return (
-    <div className="mb-6 bg-gray-900/90 border border-gray-800 rounded-2xl p-5 shadow-xl">
+    <div className="mb-6 bg-gray-900/90 border border-gray-800 rounded-2xl p-4 shadow-xl">
       <div
         onClick={onToggleExpand}
         className="menu-director cursor-pointer transition group flex items-center justify-between p-2"
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center group-hover:bg-amber-500/20 transition">
+          <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition">
             <span className="text-2xl">📁</span>
           </div>
           <div>
-            <h3 className="section-title text-white text-base sm:text-lg font-bold">
+            <h3 className="section-title text-white text-base font-bold">
               Consignes du metteur en scène
             </h3>
             <p className="text-gray-400 text-xs mt-0.5">
               {safeNotes.length > 0 ? (
-                <span className="font-bold text-amber-400">
+                <span className="font-bold text-yellow-400">
                   {safeNotes.length} document{safeNotes.length > 1 ? "s" : ""}
                 </span>
               ) : (
@@ -122,7 +121,7 @@ function DirectorNotesSection({
           onDragOver={handleDrag}
           onDrop={handleDrop}
           className={`mt-4 pt-4 border-t border-gray-800 transition ${
-            dragActive ? "bg-amber-500/10 border-dashed border-amber-500 rounded-xl p-4" : ""
+            dragActive ? "bg-yellow-500/10 border-dashed border-yellow-500 rounded-xl p-4" : ""
           }`}
         >
           {error && (
@@ -146,11 +145,11 @@ function DirectorNotesSection({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {safeNotes.map((note) => (
                 <div
                   key={note.id}
-                  className="flex items-center justify-between p-3.5 bg-gray-800/60 rounded-xl border border-gray-700/50 hover:border-gray-600 transition"
+                  className="flex items-center justify-between p-3 bg-gray-800/60 rounded-xl border border-gray-700/50 hover:border-gray-600 transition"
                 >
                   <div
                     onClick={() => onViewDocument && onViewDocument(note)}
@@ -186,7 +185,7 @@ function DirectorNotesSection({
 }
 
 /**
- * Composant principal Home (Pleine page responsive sur Desktop)
+ * Composant principal Home
  */
 function Home() {
   const navigate = useNavigate();
@@ -206,9 +205,13 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({});
 
+  // Navigation par onglets ('scripts', 'director', 'library')
   const [activeHomeTab, setActiveHomeTab] = useState("scripts");
+
+  // Rôle utilisateur
   const [userRole, setUserRole] = useState("member");
 
+  // Ordre verrouillé
   const [orderLocked, setOrderLocked] = useState(() => {
     try {
       return localStorage.getItem("replicoach-order-locked") === "true";
@@ -217,6 +220,7 @@ function Home() {
     }
   });
 
+  // Consignes Metteur en scène
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(true);
   const [directorNotes, setDirectorNotes] = useState([]);
   const [uploadingNote, setUploadingNote] = useState(false);
@@ -225,21 +229,26 @@ function Home() {
   const [pendingFiles, setPendingFiles] = useState(null);
   const [uploadTroupes, setUploadTroupes] = useState([]);
 
+  // Documents
   const [viewingDocument, setViewingDocument] = useState(null);
 
+  // Partage
   const [scriptToShare, setScriptToShare] = useState(null);
   const [shareTroupes, setShareTroupes] = useState([]);
   const [sharingLoading, setSharingLoading] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(null);
   const [shareError, setShareError] = useState(null);
 
+  // Tags
   const [userTags, setUserTags] = useState([]);
   const [scriptTagsMap, setScriptTagsMap] = useState({});
   const [selectedTagFilter, setSelectedTagFilter] = useState(null);
   const [managingTagsFor, setManagingTagsFor] = useState(null);
 
+  // Accès rapide
   const [recentScript, setRecentScript] = useState(null);
 
+  // Audios
   const [personalAudios, setPersonalAudios] = useState([]);
   const [audioImportMsg, setAudioImportMsg] = useState(null);
 
@@ -540,101 +549,101 @@ function Home() {
   }
 
   return (
-    /* 📍 POINT 2 : Layout Responsive Pleine Page (w-full max-w-7xl mx-auto) */
-    <div className="p-4 sm:p-6 lg:p-8 pb-24 w-full max-w-7xl mx-auto">
-      {/* 🎭 1. BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH (POINT 1 : Hover states harmonieux) */}
-      <div className="mb-6 p-5 sm:p-6 bg-gray-900/95 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
-        <h2 className="text-white font-bold text-lg sm:text-xl mb-1 flex items-center gap-2 font-display">
+    /* Responsivité pleine page Desktop identique aux pages /profile et /script/[id] */
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
+      {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
+      <div className="mb-6 p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
+        <h2 className="text-white font-bold text-lg mb-1 flex items-center gap-2 font-display">
           <span>🎭</span> Bienvenue sur RépliCoach !
         </h2>
-        <p className="text-gray-400 text-xs sm:text-sm mb-4">
+        <p className="text-gray-400 text-xs mb-4">
           Choisissez votre mode d'utilisation pour accéder rapidement à vos textes :
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Carte 1 : Comédien indépendant (Hover state ambre/or harmonieux) */}
+          {/* Carte 1 : Comédien indépendant */}
           <Link
             to="/upload"
-            className="p-5 bg-gray-800/90 hover:bg-gray-800 border border-amber-500/30 hover:border-amber-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-amber-500/15 flex flex-col justify-between"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-amber-400 hover:shadow-amber-500/15 rounded-xl transition-all duration-200 group shadow-md flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-amber-400 font-bold text-sm sm:text-base flex items-center gap-2 group-hover:text-amber-300 transition">
+                <p className="text-gold-400 font-bold text-sm flex items-center gap-2">
                   <span>👤</span> Comédien indépendant
                 </p>
-                <span className="text-amber-400 text-lg transform group-hover:translate-x-1.5 transition-transform">
+                <span className="text-gold-400 text-base transform group-hover:translate-x-1 transition-transform">
                   →
                 </span>
               </div>
-              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
+              <p className="text-gray-300 text-xs leading-relaxed">
                 Importez jusqu'à <strong>2 textes personnels</strong> gratuitement.
               </p>
             </div>
-            <span className="text-[11px] text-amber-500/80 mt-4 font-semibold uppercase tracking-wider group-hover:text-amber-400 transition">
+            <span className="text-[10px] text-gold-500/70 mt-3 font-semibold uppercase tracking-wider">
               Importer un fichier
             </span>
           </Link>
 
-          {/* Carte 2 : En troupe / Atelier (Hover state bordeaux/primaire élégant) */}
+          {/* Carte 2 : En troupe / Atelier */}
           <Link
             to="/shared"
-            className="p-5 bg-gray-800/90 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/15 flex flex-col justify-between"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 hover:shadow-primary-500/15 rounded-xl transition-all duration-200 group shadow-md flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-primary-300 font-bold text-sm sm:text-base flex items-center gap-2 group-hover:text-primary-200 transition">
+                <p className="text-primary-300 font-bold text-sm flex items-center gap-2">
                   <span>👥</span> En troupe / Atelier
                 </p>
-                <span className="text-primary-300 text-lg transform group-hover:translate-x-1.5 transition-transform">
+                <span className="text-primary-300 text-base transform group-hover:translate-x-1 transition-transform">
                   →
                 </span>
               </div>
-              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed">
+              <p className="text-gray-300 text-xs leading-relaxed">
                 Saisissez le code fourni par votre metteur en scène pour accéder aux pièces.
               </p>
             </div>
-            <span className="text-[11px] text-primary-400/80 mt-4 font-semibold uppercase tracking-wider group-hover:text-primary-300 transition">
+            <span className="text-[10px] text-primary-400/70 mt-3 font-semibold uppercase tracking-wider">
               Accéder aux Troupes
             </span>
           </Link>
         </div>
       </div>
 
-      {/* BARRE D'ONGLETS Navigation */}
-      <div className="flex gap-2 sm:gap-4 mb-6 p-1.5 bg-gray-900/90 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto sm:mx-0">
+      {/* 🧭 BARRE D'ONGLETS Navigation */}
+      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto">
         <button
           onClick={() => setActiveHomeTab("scripts")}
-          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
             activeHomeTab === "scripts"
-              ? "bg-amber-500 text-black shadow-lg shadow-amber-500/10 font-bold"
+              ? "bg-gold-500 text-black shadow-lg shadow-gold-500/10 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
           <span>🎭</span>
           <span>Mes textes</span>
-          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-full font-mono">
+          <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full font-mono">
             {scripts?.length || 0}
           </span>
         </button>
 
         <button
           onClick={() => setActiveHomeTab("director")}
-          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
             activeHomeTab === "director"
-              ? "bg-primary-700 text-white shadow-lg shadow-primary-500/20 font-bold"
+              ? "bg-primary-600 text-white shadow-lg shadow-primary-500/20 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
           <span>📁</span>
           <span>Consignes</span>
-          <span className="text-[10px] bg-black/20 px-2 py-0.5 rounded-full font-mono">
+          <span className="text-[10px] bg-black/20 px-1.5 py-0.5 rounded-full font-mono">
             {(directorNotes || []).length}
           </span>
         </button>
 
         <button
           onClick={() => setActiveHomeTab("library")}
-          className={`flex-1 py-2.5 px-4 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
             activeHomeTab === "library"
               ? "bg-amber-600 text-white shadow-lg shadow-amber-500/20 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
@@ -647,14 +656,14 @@ function Home() {
 
       {/* 1. ONGLET : MES TEXTES */}
       {activeHomeTab === "scripts" && (
-        <div className="space-y-5">
-          {/* Accès rapide au texte récent (POINT 3 : Design lisible & élégant) */}
+        <div className="space-y-4">
+          {/* Accès rapide au texte récent */}
           {recentScript && scripts?.some((s) => s.id === recentScript.scriptId) && (
             <button
               onClick={() => handleOpenScript(recentScript.scriptId)}
-              className="w-full p-4 sm:p-5 bg-gray-800/90 hover:bg-gray-800 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
+              className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
             >
-              <div className="w-12 h-12 bg-amber-500/20 border border-amber-500/40 rounded-xl flex items-center justify-center shadow-md group-hover:scale-105 transition-transform flex-shrink-0">
+              <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                 <span className="text-2xl">⚡</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -662,15 +671,15 @@ function Home() {
                   <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
                     Accès rapide
                   </span>
-                  <span className="text-gray-400 text-[10px]">
-                    • {recentScript.count} accès
+                  <span className="text-amber-500/50 text-[10px]">
+                    • {recentScript.count} fois
                   </span>
                 </div>
-                <h3 className="text-white font-bold text-base sm:text-lg truncate group-hover:text-amber-300 transition">
+                <h3 className="text-white font-bold text-base truncate group-hover:text-amber-300 transition">
                   {recentScript.title}
                 </h3>
               </div>
-              <span className="text-amber-400 text-xl group-hover:translate-x-1.5 transition-transform">
+              <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
                 →
               </span>
             </button>
@@ -685,50 +694,62 @@ function Home() {
             />
           )}
 
-          {/* Recherche locale & Filtres */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full sm:max-w-md">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">📣</span>
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Rechercher parmi mes saynètes..."
-                className="w-full p-3 pl-10 pr-10 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-amber-500 text-sm"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+          {/* Recherche locale */}
+          <div className="relative max-w-xl mx-auto">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">📣</span>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Rechercher parmi mes saynètes..."
+              className="w-full p-3 pl-10 pr-10 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            )}
+          </div>
 
-            {localScripts.length > 1 && !selectedTagFilter && (
+          {/* Option de verrouillage */}
+          {localScripts.length > 1 && !selectedTagFilter && (
+            <div className="flex items-center justify-between py-1">
+              <p className="text-gray-500 text-xs flex items-center gap-1">
+                {orderLocked ? (
+                  <>
+                    <span>🔒</span> Ordre verrouillé
+                  </>
+                ) : (
+                  <>
+                    <span>💡</span> Glissez-déposez pour réorganiser
+                  </>
+                )}
+              </p>
               <button
                 onClick={toggleOrderLock}
-                className={`px-3.5 py-2 rounded-xl text-xs font-medium transition flex items-center gap-1.5 ${
+                className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
                   orderLocked
                     ? "bg-green-500/20 text-green-400 border border-green-500/50"
                     : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white"
                 }`}
               >
-                {orderLocked ? "🔓 Ordre verrouillé" : "🔒 Verrouiller l'ordre"}
+                {orderLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller"}
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
-          {/* Liste des saynètes - Responsive Grid 3 Colonnes sur Desktop (POINT 3 : Cartes lisibles bg-gray-800/90) */}
+          {/* Liste des saynètes en grille responsive */}
           {localScripts.length === 0 ? (
-            <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-8">
-              <p className="text-5xl mb-3">📄</p>
-              <p className="text-gray-300 font-bold text-base">Aucun texte pour le moment</p>
-              <p className="text-gray-500 text-xs mt-1">
-                Importez votre premier fichier pour commencer à répéter !
+            <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+              <p className="text-4xl mb-3">📄</p>
+              <p className="text-gray-400 text-sm">Aucun texte pour le moment</p>
+              <p className="text-gray-600 text-xs mt-1">
+                Importez votre premier fichier pour commencer !
               </p>
-              <Link to="/upload" className="btn-gold mt-5 inline-block text-xs py-2.5 px-5">
+              <Link to="/upload" className="btn-gold mt-4 inline-block text-xs py-2 px-4">
                 📤 Importer un texte
               </Link>
             </div>
@@ -783,9 +804,9 @@ function Home() {
 
               <DragOverlay>
                 {activeScript ? (
-                  <div className="card shadow-2xl ring-2 ring-amber-500 opacity-90 p-4 bg-gray-800 rounded-xl">
+                  <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
                     <div className="flex items-center gap-3">
-                      <span className="text-amber-400 font-bold text-lg">
+                      <span className="text-gold-500 font-bold text-lg">
                         #{activeScript.display_order}
                       </span>
                       <h3 className="font-semibold text-white">{activeScript.title}</h3>
@@ -840,7 +861,7 @@ function Home() {
         </div>
       )}
 
-      {/* Modales */}
+      {/* Modale de confirmation suppression */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-gray-800 shadow-2xl">
@@ -861,10 +882,12 @@ function Home() {
         </div>
       )}
 
+      {/* Viewer Document */}
       {viewingDocument && (
         <DocumentViewer document={viewingDocument} onClose={() => setViewingDocument(null)} />
       )}
 
+      {/* Modale Partage */}
       {scriptToShare && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl max-w-sm w-full border border-gray-800 p-6 shadow-2xl">
@@ -896,6 +919,7 @@ function Home() {
         </div>
       )}
 
+      {/* Modale Tags */}
       {managingTagsFor && (
         <ScriptTagsModal
           scriptId={managingTagsFor.id}
@@ -909,6 +933,7 @@ function Home() {
         />
       )}
 
+      {/* Notifications Audio */}
       {audioImportMsg && (
         <div className="fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-2xl flex items-center justify-between">
           <span>{audioImportMsg.text}</span>
@@ -916,14 +941,13 @@ function Home() {
         </div>
       )}
 
-      {/* 📍 POINT 4 : Bouton Flottant FAB couleur Bordeaux / Wine avec + en blanc gras */}
       <FloatingActionButton />
     </div>
   );
 }
 
 /**
- * Carte de saynète (POINT 3 : Fond gris sombre lisible bg-gray-800/90)
+ * Composants auxiliaires pour la liste DnD (Cartes avec fond gris ardoise élégant)
  */
 function SortableScriptCard({
   script,
@@ -948,83 +972,80 @@ function SortableScriptCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-5 rounded-2xl shadow-md h-full flex flex-col justify-between"
+      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md hover:shadow-amber-500/10 flex flex-col justify-between"
     >
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {!orderLocked && (
-              <button
-                {...attributes}
-                {...listeners}
-                className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-base"
-              >
-                ⋮⋮
-              </button>
-            )}
-            <div className="w-8 h-8 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
-              #{index + 1}
-            </div>
-            <h3
-              onClick={() => onOpen(script.id)}
-              className="font-bold text-white text-base truncate group-hover:text-amber-300 transition cursor-pointer"
-            >
-              {script.title}
-            </h3>
+      <div className="flex items-center gap-3">
+        {!orderLocked && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-lg"
+          >
+            ⋮⋮
+          </button>
+        )}
+
+        <div onClick={() => onOpen(script.id)} className="flex-1 flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
+            #{index + 1}
           </div>
 
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onManageTags(script);
-              }}
-              className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700/80 rounded-lg transition"
-              title="Tags"
-            >
-              🏷️
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onShare(script);
-              }}
-              className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700/80 rounded-lg transition"
-              title="Partager"
-            >
-              👥
-            </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(script.id);
-              }}
-              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-              title="Supprimer"
-            >
-              🗑️
-            </button>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-white text-sm truncate group-hover:text-amber-300 transition">
+              {script.title}
+            </h3>
+
+            <div className="flex items-center gap-2 mt-1 text-gray-300 text-xs flex-wrap">
+              <span>{script.characters?.length || 0} pers.</span>
+              <span>•</span>
+              <span>{script.replicas?.length || 0} répl.</span>
+              {notesCount > 0 && (
+                <>
+                  <span>•</span>
+                  <span className="text-amber-400 font-medium">📝 {notesCount}</span>
+                </>
+              )}
+            </div>
+
+            {script.tags && script.tags.length > 0 && (
+              <div className="mt-2">
+                <ScriptTagBadges tags={script.tags} />
+              </div>
+            )}
           </div>
         </div>
 
-        <div onClick={() => onOpen(script.id)} className="cursor-pointer space-y-2">
-          <div className="flex items-center gap-2 text-gray-300 text-xs flex-wrap">
-            <span className="bg-gray-700/60 px-2 py-0.5 rounded-md">{script.characters?.length || 0} pers.</span>
-            <span>•</span>
-            <span className="bg-gray-700/60 px-2 py-0.5 rounded-md">{script.replicas?.length || 0} répl.</span>
-            {notesCount > 0 && (
-              <>
-                <span>•</span>
-                <span className="text-amber-400 font-semibold">📝 {notesCount}</span>
-              </>
-            )}
-          </div>
-
-          {script.tags && script.tags.length > 0 && (
-            <div className="pt-1">
-              <ScriptTagBadges tags={script.tags} />
-            </div>
-          )}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onManageTags(script);
+            }}
+            className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition"
+            title="Tags"
+          >
+            🏷️
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onShare(script);
+            }}
+            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700 rounded-lg transition"
+            title="Partager"
+          >
+            👥
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(script.id);
+            }}
+            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+            title="Supprimer"
+          >
+            🗑️
+          </button>
         </div>
       </div>
     </div>
@@ -1045,33 +1066,35 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-gray-800/90 border border-blue-500/30 rounded-2xl p-4 shadow-md flex items-center gap-3"
+      className="bg-gray-800/90 border border-blue-500/30 rounded-xl p-3 shadow-md"
     >
-      {!orderLocked && (
+      <div className="flex items-center gap-3">
+        {!orderLocked && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="touch-none text-gray-500 hover:text-blue-400 p-1 cursor-grab active:cursor-grabbing text-lg"
+          >
+            ⋮⋮
+          </button>
+        )}
+
+        <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 text-sm">
+          🎵
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-white text-xs font-medium truncate">{audio.title || audio.file_name}</p>
+          <audio src={audioUrl} controls className="w-full h-7 mt-1" />
+        </div>
+
         <button
-          {...attributes}
-          {...listeners}
-          className="touch-none text-gray-500 hover:text-blue-400 p-1 cursor-grab active:cursor-grabbing text-base"
+          onClick={() => onDelete(audio.id, audio.audio_path)}
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
         >
-          ⋮⋮
+          🗑️
         </button>
-      )}
-
-      <div className="w-9 h-9 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 text-sm flex-shrink-0">
-        🎵
       </div>
-
-      <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-semibold truncate">{audio.title || audio.file_name}</p>
-        <audio src={audioUrl} controls className="w-full h-7 mt-1" />
-      </div>
-
-      <button
-        onClick={() => onDelete(audio.id, audio.audio_path)}
-        className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-      >
-        🗑️
-      </button>
     </div>
   );
 }
