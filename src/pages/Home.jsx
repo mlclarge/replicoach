@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
@@ -145,7 +145,7 @@ function DirectorNotesSection({
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
               {safeNotes.map((note) => (
                 <div
                   key={note.id}
@@ -189,6 +189,7 @@ function DirectorNotesSection({
  */
 function Home() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuthStore();
   const {
     scripts,
@@ -210,6 +211,17 @@ function Home() {
 
   // Rôle utilisateur
   const [userRole, setUserRole] = useState("member");
+
+  // Détection de l'onglet actif via l'URL (hash ou paramètre ?tab=library)
+  useEffect(() => {
+    if (location.hash === "#library" || location.search.includes("tab=library")) {
+      setActiveHomeTab("library");
+    } else if (location.hash === "#director" || location.search.includes("tab=director")) {
+      setActiveHomeTab("director");
+    } else if (location.hash === "#scripts" || location.search.includes("tab=scripts")) {
+      setActiveHomeTab("scripts");
+    }
+  }, [location]);
 
   // Ordre verrouillé
   const [orderLocked, setOrderLocked] = useState(() => {
@@ -549,8 +561,7 @@ function Home() {
   }
 
   return (
-    /* Responsivité pleine page Desktop identique aux pages /profile et /script/[id] */
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
+    <div className="p-4 pb-24 w-full max-w-7xl mx-auto sm:px-6 lg:px-8">
       {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
       <div className="mb-6 p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
         <h2 className="text-white font-bold text-lg mb-1 flex items-center gap-2 font-display">
@@ -564,7 +575,7 @@ function Home() {
           {/* Carte 1 : Comédien indépendant */}
           <Link
             to="/upload"
-            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-amber-400 hover:shadow-amber-500/15 rounded-xl transition-all duration-200 group shadow-md flex flex-col justify-between"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-amber-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-amber-500/15 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -587,7 +598,7 @@ function Home() {
           {/* Carte 2 : En troupe / Atelier */}
           <Link
             to="/shared"
-            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 hover:shadow-primary-500/15 rounded-xl transition-all duration-200 group shadow-md flex flex-col justify-between"
+            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/15 flex flex-col justify-between"
           >
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -610,7 +621,7 @@ function Home() {
       </div>
 
       {/* 🧭 BARRE D'ONGLETS Navigation */}
-      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto">
+      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm">
         <button
           onClick={() => setActiveHomeTab("scripts")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -695,7 +706,7 @@ function Home() {
           )}
 
           {/* Recherche locale */}
-          <div className="relative max-w-xl mx-auto">
+          <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">📣</span>
             <input
               type="text"
@@ -741,7 +752,7 @@ function Home() {
             </div>
           )}
 
-          {/* Liste des saynètes en grille responsive */}
+          {/* Liste des saynètes */}
           {localScripts.length === 0 ? (
             <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
               <p className="text-4xl mb-3">📄</p>
@@ -947,7 +958,7 @@ function Home() {
 }
 
 /**
- * Composants auxiliaires pour la liste DnD (Cartes avec fond gris ardoise élégant)
+ * Composants auxiliaires pour la liste DnD
  */
 function SortableScriptCard({
   script,
@@ -972,26 +983,26 @@ function SortableScriptCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md hover:shadow-amber-500/10 flex flex-col justify-between"
+      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md flex flex-col justify-between"
     >
       <div className="flex items-center gap-3">
         {!orderLocked && (
           <button
             {...attributes}
             {...listeners}
-            className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-lg"
+            className="touch-none text-gray-500 hover:text-gold-500 p-1 cursor-grab active:cursor-grabbing text-lg"
           >
             ⋮⋮
           </button>
         )}
 
         <div onClick={() => onOpen(script.id)} className="flex-1 flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
+          <div className="w-10 h-10 bg-gold-500/10 border border-gold-500/30 rounded-xl flex items-center justify-center text-gold-400 font-bold text-xs flex-shrink-0">
             #{index + 1}
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white text-sm truncate group-hover:text-amber-300 transition">
+            <h3 className="font-bold text-white text-base truncate group-hover:text-amber-400 transition">
               {script.title}
             </h3>
 
@@ -1021,7 +1032,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onManageTags(script);
             }}
-            className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-gold-400 hover:bg-gray-700/60 rounded-lg transition"
             title="Tags"
           >
             🏷️
@@ -1031,7 +1042,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onShare(script);
             }}
-            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700/60 rounded-lg transition"
             title="Partager"
           >
             👥
@@ -1041,7 +1052,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onDelete(script.id);
             }}
-            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition"
             title="Supprimer"
           >
             🗑️
@@ -1066,7 +1077,7 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-gray-800/90 border border-blue-500/30 rounded-xl p-3 shadow-md"
+      className="bg-gray-800/80 border border-blue-500/30 rounded-xl p-3 shadow-md"
     >
       <div className="flex items-center gap-3">
         {!orderLocked && (
@@ -1090,7 +1101,7 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
 
         <button
           onClick={() => onDelete(audio.id, audio.audio_path)}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+          className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
         >
           🗑️
         </button>
