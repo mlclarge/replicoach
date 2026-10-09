@@ -59,6 +59,7 @@ function App() {
             <Route path="/script/:id/audio" element={<AudioMode />} />
             <Route path="/shared" element={<Shared />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/free-recordings" element={<FreeRecordings />} />
             <Route path="/recordings" element={<FreeRecordings />} />
           </Route>
 
