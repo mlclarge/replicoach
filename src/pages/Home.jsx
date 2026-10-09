@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
+  getUserRole, // 👈 AJOUTÉ ICI
   uploadDirectorNote,
   fetchDirectorNotes,
   deleteDirectorNote,
@@ -671,21 +672,20 @@ function Home() {
     loading,
     fetchScripts,
     deleteScript,
-    updateScriptOrder,
+    updatesScriptOrder,
     countNotesForScripts,
   } = useScriptStore();
 
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
-  // `sortBy` retiré : tri toujours par `display_order`
-  const [searchQuery, setSearchQuery] = useState(""); // Recherche par titre
+  const [searchQuery, setSearchQuery] = useState("");
   const [activeId, setActiveId] = useState(null);
-  const [notesCounts, setNotesCounts] = useState({}); // Compteur de notes par script
+  const [notesCounts, setNotesCounts] = useState({});
 
-  // Onglet actif sur la page d'accueil : 'scripts' (par défaut), 'director' (consignes) ou 'library' (bibliothèque)
+  // 1. État pour l'onglet actif (Mes textes / Consignes / Bibliothèque) - UNE SEULE FOIS
   const [activeHomeTab, setActiveHomeTab] = useState("scripts");
 
-  // État pour verrouiller l'ordre (empêcher drag & drop accidentel)
+  // 2. État pour verrouiller l'ordre
   const [orderLocked, setOrderLocked] = useState(() => {
     try {
       return localStorage.getItem("replicoach-order-locked") === "true";
@@ -693,6 +693,19 @@ function Home() {
       return false;
     }
   });
+
+  // 3. État pour le rôle utilisateur (member, director, dev, admin)
+  const [userRole, setUserRole] = useState("member");
+
+  useEffect(() => {
+    if (user?.id) {
+      getUserRole(user.id)
+        .then((role) => setUserRole(role || "member"))
+        .catch(() => setUserRole("member"));
+    }
+  }, [user?.id]);
+
+  // ⚠️ LA SUITE DE VOTRE CODE CONTINUE ICI (sans l'accolade } de fermeture)
 
   // Toggle verrouillage avec persistance
   const toggleOrderLock = () => {
