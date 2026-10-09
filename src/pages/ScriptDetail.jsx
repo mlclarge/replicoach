@@ -2794,7 +2794,7 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
       await onAdd(selectedReplicaId, text.trim(), noteType);
     } catch (err) {
       console.error("Erreur:", err);
-    } fontally {
+    } finally {
       setSaving(false);
     }
   };
