@@ -3,8 +3,8 @@ import { Link } from "react-router-dom";
 
 /**
  * 🎭 FloatingActionButton - Bouton flottant Speed Dial Bordeaux / Wine
- * - Restaure le menu dépliable à 4 actions
- * - Bouton principal bordeaux avec + blanc en gras
+ * Restaure le menu dépliable à 4 actions
+ * Bouton principal bordeaux avec + blanc en gras
  */
 function FloatingActionButton() {
   const [isOpen, setIsOpen] = useState(false);
@@ -39,7 +39,7 @@ function FloatingActionButton() {
               </div>
             </Link>
 
-            {/* Option 2 : Rejoindre une troupe */}
+            {/* Option 2 : Troupes & Partages */}
             <Link
               to="/shared"
               onClick={() => setIsOpen(false)}
@@ -53,9 +53,9 @@ function FloatingActionButton() {
               </div>
             </Link>
 
-            {/* Option 3 : Studio & Auto-enregistrement */}
+            {/* Option 3 : Studio / Enregistrement (FreeRecordings.jsx) */}
             <Link
-              to="/upload"
+              to="/free-recordings"
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-3 bg-gray-900 border border-gold-500/40 text-white px-4 py-2.5 rounded-xl shadow-xl hover:bg-gray-800 transition group"
             >

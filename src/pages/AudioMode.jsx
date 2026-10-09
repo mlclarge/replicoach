@@ -128,6 +128,9 @@ function AudioMode() {
   const audioPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
 
+  // 🚀 CACHE & PRÉCHARGEMENT AUDIO PREMIUM (Optimisation latence entre répliques)
+  const ttsCacheRef = useRef({}); // Cache : { [replicaId]: { url, audio, usage } }
+
   // Charger le statut Premium
   useEffect(() => {
     if (!isPremium || !id) return;
@@ -467,24 +470,51 @@ function AudioMode() {
     }
   };
 
+  // ⚡ PRÉCHARGEMENT DE LA RÉPLIQUE SUIVANTE (Anticipation TTS pour latence 0ms)
+  const preloadNextTts = async (nextReplica) => {
+    if (!nextReplica || ttsCacheRef.current[nextReplica.id]) return;
+
+    try {
+      const res = await fetchTtsAudioUrl(id, nextReplica.id);
+      if (res.ok && res.url) {
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.src = res.url;
+        ttsCacheRef.current[nextReplica.id] = { res, audio };
+      }
+    } catch (e) {
+      console.warn("Erreur préchargement TTS:", e);
+    }
+  };
+
+  // Google Cloud TTS (Premium) avec Cache et Préchargement
   const speakPremium = async (replicaId) => {
-    const res = await fetchTtsAudioUrl(id, replicaId);
-    if (!res.ok) {
-      setPremiumNotice(
-        "Veuillez vérifier vos voix Premium verrouillées pour ce script."
-      );
-      return false;
+    let cached = ttsCacheRef.current[replicaId];
+
+    if (!cached) {
+      const res = await fetchTtsAudioUrl(id, replicaId);
+      if (!res.ok) {
+        setPremiumNotice(
+          "Veuillez vérifier vos voix Premium verrouillées pour ce script."
+        );
+        return false;
+      }
+      const audio = new Audio();
+      audio.preload = "auto";
+      audio.src = res.url;
+      cached = { res, audio };
+      ttsCacheRef.current[replicaId] = cached;
     }
 
     setPremiumNotice("");
-    if (res.usage) setTtsUsage(res.usage);
+    if (cached.res?.usage) setTtsUsage(cached.res.usage);
 
     try {
       await ensureAudioUnlocked();
     } catch (e) {}
 
     return await new Promise((resolve) => {
-      const audio = new Audio(res.url);
+      const audio = cached.audio || new Audio(cached.res.url);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
 
@@ -501,7 +531,7 @@ function AudioMode() {
     });
   };
 
-  const speak = async (text, characterId, replicaId = null) => {
+  const speak = async (text, characterId, replicaId = null, nextReplica = null) => {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -526,6 +556,11 @@ function AudioMode() {
 
     if (isPremium) {
       if (replicaId && premiumLocks[characterId]) {
+        // Lancé en arrière-plan : Précharger la réplique suivante immédiatement
+        if (nextReplica && premiumLocks[nextReplica.character_id]) {
+          preloadNextTts(nextReplica);
+        }
+
         const played = await speakPremium(replicaId);
         if (played) return;
       }
@@ -575,6 +610,7 @@ function AudioMode() {
 
       setCurrentIndex(i);
       const replica = currentScript.replicas[i];
+      const nextReplica = currentScript.replicas[i + 1] || null;
 
       if (hiddenCharacters.has(replica.character_id)) {
         setWaitingForClick(true);
@@ -589,7 +625,7 @@ function AudioMode() {
         continue;
       }
 
-      await speak(replica.text, replica.character_id, replica.id);
+      await speak(replica.text, replica.character_id, replica.id, nextReplica);
     }
 
     setIsPlaying(false);
@@ -948,8 +984,8 @@ function AudioMode() {
         })}
       </div>
 
-      {/* BARRE DE CONTRÔLE AUDIO FIXE EN BAS (STICKY PLAYER) */}
-      <div className="fixed bottom-16 sm:bottom-16 left-0 right-0 z-40 bg-white border-t-2 border-gold-500 shadow-[0_-8px_30px_rgba(0,0,0,0.2)] py-2 px-4">
+      {/* 📍 BARRE DE CONTRÔLE AUDIO FIXE EN BAS (STAY CLEAR OF FOOTER NAV ON DESKTOP: bottom-16 md:bottom-20) */}
+      <div className="fixed bottom-16 md:bottom-20 left-0 right-0 z-40 bg-white border-t-2 border-gold-500 shadow-[0_-8px_30px_rgba(0,0,0,0.25)] py-2.5 px-4">
         {premiumNotice && (
           <div className="bg-amber-500 text-black px-4 py-1 text-xs font-bold text-center mb-1 rounded-md">
             ⚠️ {premiumNotice}
