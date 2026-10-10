@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
@@ -145,7 +145,7 @@ function DirectorNotesSection({
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {safeNotes.map((note) => (
                 <div
                   key={note.id}
@@ -189,7 +189,6 @@ function DirectorNotesSection({
  */
 function Home() {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuthStore();
   const {
     scripts,
@@ -211,17 +210,6 @@ function Home() {
 
   // Rôle utilisateur
   const [userRole, setUserRole] = useState("member");
-
-  // Détection de l'onglet actif via l'URL (hash ou paramètre ?tab=library)
-  useEffect(() => {
-    if (location.hash === "#library" || location.search.includes("tab=library")) {
-      setActiveHomeTab("library");
-    } else if (location.hash === "#director" || location.search.includes("tab=director")) {
-      setActiveHomeTab("director");
-    } else if (location.hash === "#scripts" || location.search.includes("tab=scripts")) {
-      setActiveHomeTab("scripts");
-    }
-  }, [location]);
 
   // Ordre verrouillé
   const [orderLocked, setOrderLocked] = useState(() => {
@@ -561,67 +549,125 @@ function Home() {
   }
 
   return (
-    <div className="p-4 pb-24 w-full max-w-7xl mx-auto sm:px-6 lg:px-8">
+    /* Responsivité pleine page Desktop identique aux pages /profile et /script/[id] */
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
       {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
-      <div className="mb-6 p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl backdrop-blur-sm">
-        <h2 className="text-white font-bold text-lg mb-1 flex items-center gap-2 font-display">
-          <span>🎭</span> Bienvenue sur RépliCoach !
-        </h2>
-        <p className="text-gray-400 text-xs mb-4">
-          Choisissez votre mode d'utilisation pour accéder rapidement à vos textes :
-        </p>
+      <div className="mb-8 p-5 sm:p-6 bg-gradient-to-b from-gray-900/95 to-gray-950/95 border border-gray-800 rounded-3xl shadow-2xl backdrop-blur-md">
+        <div className="text-center max-w-2xl mx-auto mb-6 space-y-1.5">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border border-amber-500/30 rounded-full text-xs font-bold text-amber-300 uppercase tracking-widest mb-1 shadow-inner">
+            <span>🎭</span> Application de mémorisation théâtrale
+          </div>
+          <h2 className="text-white font-extrabold text-2xl sm:text-3xl font-display tracking-tight">
+            Bienvenue sur RépliCoach !
+          </h2>
+          <p className="text-gray-400 text-xs sm:text-sm">
+            Choisissez votre parcours pour accéder rapidement à vos textes et répétitions :
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Carte 1 : Comédien indépendant */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* CARTE 1 : COMÉDIEN INDÉPENDANT (Thème Or / Ambre / Ardoise) */}
           <Link
             to="/upload"
-            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-gold-500/30 hover:border-amber-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-amber-500/15 flex flex-col justify-between"
+            className="relative bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-amber-950/30 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-amber-500/20 flex flex-col justify-between overflow-hidden"
           >
+            {/* Effet lumineux d'arrière-plan */}
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/20 transition-all" />
+
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-gold-400 font-bold text-sm flex items-center gap-2">
-                  <span>👤</span> Comédien indépendant
-                </p>
-                <span className="text-gold-400 text-base transform group-hover:translate-x-1 transition-transform">
-                  →
+              {/* Badge & Titre */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                  <span>👤</span> Comédien Indépendant
+                </span>
+                <span className="text-xs text-amber-400 font-semibold group-hover:translate-x-1 transition-transform">
+                  Solo →
                 </span>
               </div>
-              <p className="text-gray-300 text-xs leading-relaxed">
-                Importez jusqu'à <strong>2 textes personnels</strong> gratuitement.
+
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-amber-300 transition-colors">
+                Travaillez vos textes personnels
+              </h3>
+              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-4">
+                Importez directement vos pièces personnelles, scripts ou livrets pour répéter vos répliques en toute autonomie.
               </p>
+
+              {/* Bullet points */}
+              <ul className="space-y-2 text-xs sm:text-sm text-gray-300 mb-6">
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span> Importation PDF, TXT ou Scan photo
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span> Audio, italienne & mémorisation interactive
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-amber-400 font-bold">✓</span> Espace de travail 100 % privé
+                </li>
+              </ul>
             </div>
-            <span className="text-[10px] text-gold-500/70 mt-3 font-semibold uppercase tracking-wider">
-              Importer un fichier
-            </span>
+
+            {/* Bouton CTA */}
+            <div className="mt-2 pt-3 border-t border-amber-500/20">
+              <span className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 group-hover:from-amber-400 group-hover:to-amber-500 text-gray-950 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                <span>➕ Importer un texte</span>
+                <span>→</span>
+              </span>
+            </div>
           </Link>
 
-          {/* Carte 2 : En troupe / Atelier */}
+          {/* CARTE 2 : EN TROUPE / ATELIER (Thème Bordeaux Théâtre / Pourpre) */}
           <Link
             to="/shared"
-            className="p-4 bg-gray-800/80 hover:bg-gray-800 border border-primary-500/30 hover:border-primary-400 rounded-xl transition-all duration-200 group shadow-md hover:shadow-primary-500/15 flex flex-col justify-between"
+            className="relative bg-gradient-to-br from-primary-950/90 via-gray-900 to-purple-950/90 border-2 border-purple-500/60 hover:border-purple-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-purple-500/20 flex flex-col justify-between overflow-hidden"
           >
+            {/* Effet lumineux d'arrière-plan */}
+            <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
+
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-primary-300 font-bold text-sm flex items-center gap-2">
-                  <span>👥</span> En troupe / Atelier
-                </p>
-                <span className="text-primary-300 text-base transform group-hover:translate-x-1 transition-transform">
-                  →
+              {/* Badge & Titre */}
+              <div className="flex items-center justify-between mb-4">
+                <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                  <span>👥</span> Troupe & Atelier
+                </span>
+                <span className="text-xs text-purple-300 font-semibold group-hover:translate-x-1 transition-transform">
+                  Espace Partagé →
                 </span>
               </div>
-              <p className="text-gray-300 text-xs leading-relaxed">
-                Saisissez le code fourni par votre metteur en scène pour accéder aux pièces.
+
+              <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">
+                Espace Partagé & Metteur en Scène
+              </h3>
+              <p className="text-purple-100/70 text-xs sm:text-sm leading-relaxed mb-4">
+                Accédez aux pièces partagées par votre metteuse/metteur en scène à l'aide d'un code de troupe ou gérez vos groupes.
               </p>
+
+              {/* Bullet points */}
+              <ul className="space-y-2 text-xs sm:text-sm text-purple-100/80 mb-6">
+                <li className="flex items-center gap-2">
+                  <span className="text-purple-400 font-bold">✓</span> Connexion par code de troupe sécurisé
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-purple-400 font-bold">✓</span> Consignes & notes de mise en scène
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="text-purple-400 font-bold">✓</span> Synchronisation des rôles distribués
+                </li>
+              </ul>
             </div>
-            <span className="text-[10px] text-primary-400/70 mt-3 font-semibold uppercase tracking-wider">
-              Accéder aux Troupes
-            </span>
+
+            {/* Bouton CTA */}
+            <div className="mt-2 pt-3 border-t border-purple-500/20">
+              <span className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-primary-700 group-hover:from-purple-500 group-hover:to-primary-600 text-white rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                <span>🎭 Accéder à mes Troupes</span>
+                <span>→</span>
+              </span>
+            </div>
           </Link>
         </div>
       </div>
 
       {/* 🧭 BARRE D'ONGLETS Navigation */}
-      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm">
+      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto">
         <button
           onClick={() => setActiveHomeTab("scripts")}
           className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
@@ -706,7 +752,7 @@ function Home() {
           )}
 
           {/* Recherche locale */}
-          <div className="relative">
+          <div className="relative max-w-xl mx-auto">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">📣</span>
             <input
               type="text"
@@ -752,7 +798,7 @@ function Home() {
             </div>
           )}
 
-          {/* Liste des saynètes */}
+          {/* Liste des saynètes en grille responsive */}
           {localScripts.length === 0 ? (
             <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
               <p className="text-4xl mb-3">📄</p>
@@ -958,7 +1004,7 @@ function Home() {
 }
 
 /**
- * Composants auxiliaires pour la liste DnD
+ * Composants auxiliaires pour la liste DnD (Cartes avec fond gris ardoise élégant)
  */
 function SortableScriptCard({
   script,
@@ -983,26 +1029,26 @@ function SortableScriptCard({
     <div
       ref={setNodeRef}
       style={style}
-      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md flex flex-col justify-between"
+      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md hover:shadow-amber-500/10 flex flex-col justify-between"
     >
       <div className="flex items-center gap-3">
         {!orderLocked && (
           <button
             {...attributes}
             {...listeners}
-            className="touch-none text-gray-500 hover:text-gold-500 p-1 cursor-grab active:cursor-grabbing text-lg"
+            className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-lg"
           >
             ⋮⋮
           </button>
         )}
 
         <div onClick={() => onOpen(script.id)} className="flex-1 flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-gold-500/10 border border-gold-500/30 rounded-xl flex items-center justify-center text-gold-400 font-bold text-xs flex-shrink-0">
+          <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
             #{index + 1}
           </div>
 
           <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-white text-base truncate group-hover:text-amber-400 transition">
+            <h3 className="font-semibold text-white text-sm truncate group-hover:text-amber-300 transition">
               {script.title}
             </h3>
 
@@ -1032,7 +1078,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onManageTags(script);
             }}
-            className="p-1.5 text-gray-400 hover:text-gold-400 hover:bg-gray-700/60 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition"
             title="Tags"
           >
             🏷️
@@ -1042,7 +1088,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onShare(script);
             }}
-            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700/60 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700 rounded-lg transition"
             title="Partager"
           >
             👥
@@ -1052,7 +1098,7 @@ function SortableScriptCard({
               e.stopPropagation();
               onDelete(script.id);
             }}
-            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/20 rounded-lg transition"
+            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
             title="Supprimer"
           >
             🗑️
@@ -1077,7 +1123,7 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     <div
       ref={setNodeRef}
       style={style}
-      className="bg-gray-800/80 border border-blue-500/30 rounded-xl p-3 shadow-md"
+      className="bg-gray-800/90 border border-blue-500/30 rounded-xl p-3 shadow-md"
     >
       <div className="flex items-center gap-3">
         {!orderLocked && (
@@ -1101,7 +1147,7 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
 
         <button
           onClick={() => onDelete(audio.id, audio.audio_path)}
-          className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
+          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
         >
           🗑️
         </button>
