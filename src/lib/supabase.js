@@ -300,7 +300,7 @@ export const fetchSharedScripts = async (userId) => {
   if (!userId) return [];
 
   try {
-    // 1. Récupérer les troupes de l'utilisateur
+    // 1. Récupérer les troupes dont l'utilisateur est membre
     const { data: memberTroupes, error: troupeErr } = await supabase
       .from("troupe_members")
       .select("troupe_id")
@@ -323,23 +323,26 @@ export const fetchSharedScripts = async (userId) => {
     const scriptIds = [...new Set(sharedList.map((s) => s.script_id).filter(Boolean))];
     if (scriptIds.length === 0) return [];
 
-    // 3. Charger les scripts et leurs données
+    // 3. Charger les scripts (sans embed)
     const { data: scriptsData, error: scriptsErr } = await supabase
       .from("scripts")
-      .select(`
-        id,
-        title,
-        author,
-        full_text,
-        user_id,
-        characters (*),
-        replicas (*)
-      `)
+      .select("id, title, author, full_text, user_id")
       .in("id", scriptIds);
 
     if (scriptsErr) throw scriptsErr;
 
-    // 4. Charger les noms des troupes
+    // 4. Charger les personnages et répliques séparément (évite PGRST201)
+    const { data: charactersData } = await supabase
+      .from("characters")
+      .select("*")
+      .in("script_id", scriptIds);
+
+    const { data: replicasData } = await supabase
+      .from("replicas")
+      .select("*")
+      .in("script_id", scriptIds);
+
+    // 5. Charger les noms des troupes
     const { data: troupesData } = await supabase
       .from("troupes")
       .select("id, name")
@@ -348,10 +351,28 @@ export const fetchSharedScripts = async (userId) => {
     const troupeMap = {};
     (troupesData || []).forEach((t) => { troupeMap[t.id] = t.name; });
 
-    const scriptMap = {};
-    (scriptsData || []).forEach((s) => { scriptMap[s.id] = s; });
+    const charMap = {};
+    (charactersData || []).forEach((c) => {
+      if (!charMap[c.script_id]) charMap[c.script_id] = [];
+      charMap[c.script_id].push(c);
+    });
 
-    // 5. Recomposer le résultat final
+    const repMap = {};
+    (replicasData || []).forEach((r) => {
+      if (!repMap[r.script_id]) repMap[r.script_id] = [];
+      repMap[r.script_id].push(r);
+    });
+
+    const scriptMap = {};
+    (scriptsData || []).forEach((s) => {
+      scriptMap[s.id] = {
+        ...s,
+        characters: charMap[s.id] || [],
+        replicas: repMap[s.id] || [],
+      };
+    });
+
+    // 6. Recomposer le résultat final
     return sharedList
       .map((item) => ({
         id: item.id,
@@ -626,13 +647,10 @@ export const fetchScriptsWithTags = async (userId) => {
 export const copySharedScript = async (originalScriptId, troupeId, userId) => {
   console.log("🔄 Début copie script:", { originalScriptId, troupeId, userId });
 
+  // 1. Récupérer le script original
   const { data: original, error: fetchError } = await supabase
     .from("scripts")
-    .select(`
-      *,
-      characters (*),
-      replicas (*)
-    `)
+    .select("*")
     .eq("id", originalScriptId)
     .single();
 
@@ -640,8 +658,21 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     console.error("❌ Erreur fetch script original:", fetchError);
     throw fetchError;
   }
+
+  // 2. Charger personnages et répliques séparément (sans embed pour éviter PGRST201)
+  const { data: originalCharacters } = await supabase
+    .from("characters")
+    .select("*")
+    .eq("script_id", originalScriptId);
+
+  const { data: originalReplicas } = await supabase
+    .from("replicas")
+    .select("*")
+    .eq("script_id", originalScriptId);
+
   console.log("✅ Script original récupéré:", original.title);
 
+  // 3. Créer la copie du script
   const scriptData = {
     user_id: userId,
     title: `${original.title} (copie)`,
@@ -663,8 +694,9 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
   }
   console.log("✅ Nouveau script créé:", newScript.id);
 
+  // 4. Copier les personnages
   const characterMap = {};
-  for (const char of original.characters || []) {
+  for (const char of originalCharacters || []) {
     const charData = {
       script_id: newScript.id,
       name: char.name,
@@ -684,9 +716,10 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     characterMap[char.id] = newChar.id;
   }
 
-  const replicasToInsert = (original.replicas || []).map((rep) => ({
+  // 5. Copier les répliques
+  const replicasToInsert = (originalReplicas || []).map((rep) => ({
     script_id: newScript.id,
-    character_id: characterMap[rep.character_id],
+    character_id: characterMap[rep.character_id] || null,
     order_index: rep.order_index,
     text: rep.text,
     text_gaps: rep.text_gaps,
