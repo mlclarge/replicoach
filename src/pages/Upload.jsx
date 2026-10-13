@@ -136,7 +136,6 @@ export default function Upload() {
     const script = await createScript({
       user_id: user?.id,
       title: scriptTitle || "Sans titre",
-      author: scriptAuthor || "Auteur inconnu",
       full_text: rawText || "",
       original_filename: fileName || "document.pdf",
       pdf_url: filePath || null,
@@ -460,9 +459,9 @@ export default function Upload() {
                   Standard
                 </span>
               </div>
-              <h3 className="font-bold text-white text-sm">Importer un fichier</h3>
+              <h3 className="font-bold text-white text-sm">📄 Fichier numérique</h3>
               <p className="text-gray-400 text-xs mt-1 leading-snug">
-                PDF numérique, Word (.docx) ou texte brut (.txt).
+                PDF informatisé, Word (.docx) ou TXT. Lecture instantanée à 100%.
               </p>
             </div>
             <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
@@ -485,7 +484,7 @@ export default function Upload() {
                   Standard
                 </span>
               </div>
-              <h3 className="font-bold text-white text-sm">Coller un texte</h3>
+              <h3 className="font-bold text-white text-sm">📋 Copier / Coller</h3>
               <p className="text-gray-400 text-xs mt-1 leading-snug">
                 Copiez-collez vos répliques directement depuis votre presse-papier.
               </p>
@@ -510,9 +509,9 @@ export default function Upload() {
                   Standard
                 </span>
               </div>
-              <h3 className="font-bold text-white text-sm">Scan Classique</h3>
+              <h3 className="font-bold text-white text-sm">📸 Scan classique (OCR)</h3>
               <p className="text-gray-400 text-xs mt-1 leading-snug">
-                Rapide et gratuit • Vous indiquez les personnages.
+                Photos de livrets ou PDF scannés. Indication optionnelle des rôles.
               </p>
             </div>
             <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
@@ -536,10 +535,10 @@ export default function Upload() {
                 </span>
               </div>
               <h3 className="font-bold text-white text-sm group-hover:text-amber-300">
-                Scan Premium
+                ✨ Scan Premium IA
               </h3>
               <p className="text-amber-200/70 text-xs mt-1 leading-snug">
-                Personnages détectés automatiquement • PDF scannés acceptés.
+                Analyse intelligente Gemini Vision. Détection 100% auto des rôles & scènes.
               </p>
             </div>
             <span className="text-xs font-bold text-amber-400 mt-3 flex items-center gap-1">
