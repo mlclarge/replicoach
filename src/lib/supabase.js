@@ -326,7 +326,7 @@ export const fetchSharedScripts = async (userId) => {
     // 3. Charger les scripts (sans embed)
     const { data: scriptsData, error: scriptsErr } = await supabase
       .from("scripts")
-      .select("id, title, author, full_text, user_id")
+      .select("id, title, full_text, user_id")
       .in("id", scriptIds);
 
     if (scriptsErr) throw scriptsErr;
