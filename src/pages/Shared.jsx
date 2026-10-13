@@ -157,6 +157,24 @@ export default function Shared() {
     }
   };
 
+  // Supprimer / Retirer un texte partagé
+  const handleUnshareScript = async (script, troupeId) => {
+    if (!confirm(`Voulez-vous supprimer le partage de "${script.title}" pour cette troupe ?`)) return;
+    setActionLoading(true);
+    setError(null);
+    try {
+      await unshareScript(script.id, troupeId);
+      setSuccess(`Le partage de "${script.title}" a été supprimé.`);
+      await loadData();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err) {
+      console.error("Erreur suppression partage:", err);
+      setError(err.message || "Erreur lors de la suppression du partage.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   // Copier un texte partagé dans ses propres textes
   const handleCopyScript = async (script, troupeId) => {
     if (!user) return;
@@ -297,21 +315,39 @@ export default function Shared() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {sharedScripts.map((item) => {
                 const script = item.scripts || item;
-                const troupeName = item.troupes?.name || "Troupe";
+                const troupeName = item.troupe_name || item.troupes?.name || "Troupe";
+                const canDeleteShared = user && (
+                  ADMIN_EMAILS.includes(user.email?.toLowerCase()) ||
+                  isPremium ||
+                  item.shared_by === user.id ||
+                  script.user_id === user.id ||
+                  troupes.some((t) => t.id === item.troupe_id && (t.role === "admin" || t.owner_id === user.id))
+                );
 
                 return (
                   <div
                     key={item.id || script.id}
-                    className="p-5 bg-gradient-to-br from-gray-900 to-gray-900/90 border border-gray-800 hover:border-amber-500/50 rounded-2xl shadow-xl transition duration-200 flex flex-col justify-between space-y-4 group"
+                    className="p-5 bg-gradient-to-br from-gray-900 to-gray-900/90 border border-gray-800 hover:border-amber-500/50 rounded-2xl shadow-xl transition duration-200 flex flex-col justify-between space-y-4 group relative"
                   >
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="px-2.5 py-1 bg-purple-900/40 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider">
                           🎭 {troupeName}
                         </span>
-                        <span className="text-xs text-gray-500 font-mono">
-                          {script.replicas?.length || 0} répl.
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 font-mono">
+                            {script.replicas?.length || 0} répl.
+                          </span>
+                          {canDeleteShared && (
+                            <button
+                              onClick={() => handleUnshareScript(script, item.troupe_id)}
+                              className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/20 rounded-lg transition"
+                              title="Supprimer ce texte partagé"
+                            >
+                              🗑️
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <h3 className="text-lg font-extrabold text-white group-hover:text-amber-400 transition-colors line-clamp-1">

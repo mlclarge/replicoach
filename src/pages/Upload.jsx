@@ -143,12 +143,20 @@ export default function Upload() {
 
     const scriptId = script.id || script.script_id;
 
-    // 2. Création des personnages
+    // Palette de couleurs distinctes par personnage
+    const CHARACTER_COLORS = [
+      "#8B1538", "#2563EB", "#059669", "#D97706", "#7C3AED",
+      "#DC2626", "#0891B2", "#4F46E5", "#DB2777", "#65A30D"
+    ];
+
+    // 2. Création des personnages avec couleurs uniques
     const characterMap = {};
     if (Array.isArray(parsedCharacters)) {
-      for (const char of parsedCharacters) {
-        const charName = typeof char === "string" ? char : char.name;
-        const charColor = typeof char === "object" && char.color ? char.color : "#6366F1";
+      for (let idx = 0; idx < parsedCharacters.length; idx++) {
+        const char = parsedCharacters[idx];
+        const charName = typeof char === "string" ? char : char?.name;
+        const defaultColor = CHARACTER_COLORS[idx % CHARACTER_COLORS.length];
+        const charColor = (typeof char === "object" && char?.color) ? char.color : defaultColor;
         if (charName) {
           const createdChar = await addCharacter(scriptId, {
             name: charName.toUpperCase(),
