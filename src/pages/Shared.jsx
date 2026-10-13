@@ -10,31 +10,38 @@ import {
   leaveTroupe,
   deleteTroupe,
   shareScript,
+  unshareScript,
   copySharedScript,
-  getUserRole,
+  isUserTroupeAdmin,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import TroupeDocuments from "../components/TroupeDocuments";
 import TroupeVideos from "../components/TroupeVideos";
+import PremiumGateModal from "../components/PremiumGateModal";
 
-// Liste des emails autorisés à créer des troupes
-const ADMIN_EMAILS = ["moz2611@gmail.com", "consulting@mauricelargeron.com"];
+const ADMIN_EMAILS = [
+  "moz2611@gmail.com",
+  "consulting@mauricelargeron.com",
+];
 
-function Shared() {
+export default function Shared() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isPremium } = useAuthStore();
   const { scripts, fetchScripts } = useScriptStore();
 
-  const [userRole, setUserRole] = useState("member");
+  // Autoriser la création de troupe pour tous les abonnés Premium ou admins
+  const canCreateTroupe = user && (isPremium || ADMIN_EMAILS.includes(user.email?.toLowerCase()));
+
   const [loading, setLoading] = useState(true);
   const [troupes, setTroupes] = useState([]);
   const [sharedScripts, setSharedScripts] = useState([]);
-  const [activeTab, setActiveTab] = useState("shared"); // shared, troupes, share
+  const [activeTab, setActiveTab] = useState("shared"); // "shared" | "troupes"
 
-  // Modals
+  // Modales
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [selectedScript, setSelectedScript] = useState(null);
 
   // Formulaires
@@ -46,720 +53,532 @@ function Shared() {
   const [createdTroupeCode, setCreatedTroupeCode] = useState(null);
   const [deleteTroupeConfirm, setDeleteTroupeConfirm] = useState(null);
   const [expandedTroupe, setExpandedTroupe] = useState(null);
+  const [copyingScriptId, setCopyingScriptId] = useState(null);
 
-  // Mode sélection pour copie en lot
-  const [selectionMode, setSelectionMode] = useState(false);
-  const [selectedScripts, setSelectedScripts] = useState([]);
-
-  // 🔒 Seuls Metteur en scène (director), Dev, Admin et e-mails autorisés créent des troupes
-  const canCreateTroupe =
-    userRole === "director" ||
-    userRole === "dev" ||
-    userRole === "admin" ||
-    (user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase()));
+  const loadData = async () => {
+    if (!user?.id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [troupesData, sharedData] = await Promise.all([
+        fetchUserTroupes(user.id).catch((e) => {
+          console.error("Erreur fetchUserTroupes:", e);
+          return [];
+        }),
+        fetchSharedScripts(user.id).catch((e) => {
+          console.error("Erreur fetchSharedScripts:", e);
+          return [];
+        }),
+      ]);
+      setTroupes(troupesData || []);
+      setSharedScripts(sharedData || []);
+    } catch (err) {
+      console.error("Erreur chargement données Shared:", err);
+      setError("Impossible de charger vos troupes et textes partagés.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadData();
   }, [user?.id]);
 
-  const loadData = async () => {
-    if (!user?.id) {
-      setLoading(false);
+  // Créer une troupe
+  const handleCreateTroupe = async () => {
+    if (!newTroupeName.trim() || !user) return;
+
+    if (!canCreateTroupe) {
+      setShowPremiumModal(true);
       return;
     }
 
-    setLoading(true);
+    setActionLoading(true);
+    setError(null);
+
     try {
-      const role = await getUserRole(user.id);
-      setUserRole(role);
-
-      const userTroupes = await fetchUserTroupes(user.id);
-      setTroupes(userTroupes || []);
-
-      const shared = await fetchSharedScripts(user.id);
-      setSharedScripts(shared || []);
-
-      await fetchScripts(user.id);
+      const newTroupe = await createTroupe(newTroupeName.trim(), user.id);
+      setCreatedTroupeCode(newTroupe.code || newTroupe.id);
+      setNewTroupeName("");
+      setSuccess("Troupe créée avec succès !");
+      await loadData();
     } catch (err) {
-      console.error("Erreur chargement données Shared:", err);
-      setTroupes([]);
-      setSharedScripts([]);
+      console.error("Erreur création troupe:", err);
+      setError(err.message || "Erreur lors de la création de la troupe.");
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
+  // Rejoindre une troupe
   const handleJoinTroupe = async () => {
     if (!joinCode.trim() || !user) return;
     setActionLoading(true);
     setError(null);
+
     try {
       await joinTroupe(joinCode.trim(), user.id);
       setSuccess("Vous avez rejoint la troupe !");
       setJoinCode("");
       setShowJoinModal(false);
-      loadData();
+      await loadData();
     } catch (err) {
-      setError(err.message || "Impossible de rejoindre cette troupe");
+      console.error("Erreur rejoindre troupe:", err);
+      setError(err.message || "Code de troupe invalide ou erreur de réseau.");
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleCreateTroupe = async () => {
-    if (!newTroupeName.trim() || !user) return;
-    setActionLoading(true);
-    setError(null);
-    try {
-      const troupe = await createTroupe(newTroupeName.trim(), user.id);
-      setCreatedTroupeCode(troupe.code);
-      setNewTroupeName("");
-      loadData();
-    } catch (err) {
-      setError(err.message || "Erreur lors de la création");
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  const closeCreateModal = () => {
-    setShowCreateModal(false);
-    setCreatedTroupeCode(null);
-    setNewTroupeName("");
-    setError(null);
-  };
-
+  // Quitter une troupe
   const handleLeaveTroupe = async (troupeId) => {
-    if (!confirm("Voulez-vous vraiment quitter cette troupe ?")) return;
+    if (!confirm("Voulez-vous vraiment quitter cette troupe ?") || !user) return;
     try {
       await leaveTroupe(troupeId, user.id);
-      loadData();
+      await loadData();
     } catch (err) {
       alert("Erreur: " + err.message);
     }
   };
 
+  // Supprimer une troupe
   const handleDeleteTroupe = async () => {
     if (!deleteTroupeConfirm) return;
     setActionLoading(true);
     try {
       await deleteTroupe(deleteTroupeConfirm.id);
       setDeleteTroupeConfirm(null);
-      loadData();
+      setSuccess("Troupe supprimée !");
+      await loadData();
     } catch (err) {
-      alert("Erreur lors de la suppression: " + err.message);
+      alert("Erreur: " + err.message);
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleShareScript = async (scriptId, troupeId) => {
-    setActionLoading(true);
-    setError(null);
+  // Copier un texte partagé dans ses propres textes
+  const handleCopyScript = async (script, troupeId) => {
+    if (!user) return;
+    setCopyingScriptId(script.id);
     try {
-      await shareScript(scriptId, troupeId, user.id);
-      setSuccess("Texte partagé avec succès !");
-      setShowShareModal(false);
-      loadData();
+      await copySharedScript(script.id, troupeId, user.id);
+      setSuccess(`Le texte "${script.title}" a été copié dans vos textes personnels !`);
+      await fetchScripts(user.id);
+      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      setError(err.message || "Erreur lors du partage");
+      console.error("Erreur copie script:", err);
+      alert("Erreur lors de la copie du texte : " + err.message);
     } finally {
-      setActionLoading(false);
+      setCopyingScriptId(null);
     }
   };
 
   const copyTroupeCode = (code) => {
-    navigator.clipboard.writeText(code);
-    setSuccess("Code copié : " + code);
-    setTimeout(() => setSuccess(null), 2000);
-  };
-
-  const toggleScriptSelection = (scriptId) => {
-    setSelectedScripts((prev) =>
-      prev.includes(scriptId)
-        ? prev.filter((id) => id !== scriptId)
-        : [...prev, scriptId],
-    );
-  };
-
-  const handleBulkCopy = async () => {
-    if (selectedScripts.length === 0) return;
-    const count = selectedScripts.length;
-    if (
-      !confirm(
-        `Copier ${count} texte${count > 1 ? "s" : ""} dans "Mes textes" ?`,
-      )
-    )
-      return;
-
-    setActionLoading(true);
-    setError(null);
-    let successCount = 0;
-    let errorCount = 0;
-
-    for (const scriptId of selectedScripts) {
-      try {
-        const item = sharedScripts.find((s) => s.scripts?.id === scriptId);
-        if (!item) continue;
-        await copySharedScript(item.scripts.id, item.troupe_id, user.id);
-        successCount++;
-      } catch (err) {
-        console.error("Erreur copie script:", scriptId, err);
-        errorCount++;
-      }
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(code);
+      setSuccess("Code copié : " + code);
+      setTimeout(() => setSuccess(null), 2000);
     }
-
-    await fetchScripts(user.id);
-
-    if (errorCount === 0) {
-      setSuccess(
-        `✅ ${successCount} texte${successCount > 1 ? "s" : ""} copié${successCount > 1 ? "s" : ""} avec succès !`,
-      );
-    } else {
-      setError(
-        `⚠️ ${successCount} copié${successCount > 1 ? "s" : ""}, ${errorCount} erreur${errorCount > 1 ? "s" : ""}`,
-      );
-    }
-
-    setSelectedScripts([]);
-    setSelectionMode(false);
-    setActionLoading(false);
-
-    setTimeout(() => {
-      setSuccess(null);
-      setError(null);
-    }, 3000);
   };
 
   if (loading) {
     return (
-      <div className="flex justify-center py-12">
-        <Loader />
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <Loader size="lg" />
+        <p className="text-gray-400 text-sm font-medium animate-pulse">
+          Chargement de votre espace troupe...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="p-4 pb-24 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-display text-gold-500 mb-4">
-        👥 Partage & Troupes
-      </h1>
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4 space-y-6">
+      
+      {/* EN-TÊTE PRINCIPAL */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white flex items-center gap-2 tracking-tight">
+            <span>👥</span> Partage & Troupes
+          </h1>
+          <p className="text-gray-400 text-xs sm:text-sm mt-1">
+            Répétez en groupe, partagez vos textes et accédez aux consignes de votre metteur en scène.
+          </p>
+        </div>
 
-      {/* Messages */}
+        {/* Boutons d'action rapide */}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+          <button
+            onClick={() => setShowJoinModal(true)}
+            className="flex-1 sm:flex-none px-4 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded-xl text-xs sm:text-sm font-bold text-white transition flex items-center justify-center gap-2 shadow-md"
+          >
+            <span>🔑</span> Rejoindre une troupe
+          </button>
+
+          {canCreateTroupe ? (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 rounded-xl text-xs sm:text-sm font-extrabold transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10"
+            >
+              <span>✨</span> Créer une troupe
+            </button>
+          ) : (
+            <button
+              onClick={() => setShowPremiumModal(true)}
+              className="flex-1 sm:flex-none px-4 py-2.5 bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 rounded-xl text-xs sm:text-sm font-bold text-purple-200 transition flex items-center justify-center gap-2"
+            >
+              <span>👑</span> Créer une troupe (Premium)
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* MESSAGES DE SUCCÈS OU D'ERREUR */}
       {success && (
-        <div className="mb-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
-          <p className="text-green-400 text-sm">{success}</p>
+        <div className="p-4 bg-emerald-500/10 border border-emerald-500/50 rounded-xl flex items-center justify-between text-emerald-300 text-sm font-medium animate-fadeIn">
+          <span className="flex items-center gap-2"><span>✅</span> {success}</span>
+          <button onClick={() => setSuccess(null)} className="text-emerald-400 hover:text-white">✕</button>
         </div>
       )}
 
       {error && (
-        <div className="mb-4 p-3 bg-red-500/10 border border-red-500 rounded-lg flex justify-between items-center">
-          <p className="text-red-400 text-sm">{error}</p>
-          <button
-            onClick={() => setError(null)}
-            className="text-red-300 text-xs underline"
-          >
-            Fermer
-          </button>
+        <div className="p-4 bg-rose-500/10 border border-rose-500/50 rounded-xl flex items-center justify-between text-rose-300 text-sm font-medium animate-fadeIn">
+          <span className="flex items-center gap-2"><span>⚠️</span> {error}</span>
+          <button onClick={() => setError(null)} className="text-rose-400 hover:text-white">✕</button>
         </div>
       )}
 
-      {/* Onglets */}
-      <div className="flex gap-2 mb-6">
+      {/* BARRE D'ONGLETS */}
+      <div className="flex gap-2 p-1.5 bg-gray-900/90 rounded-2xl border border-gray-800 max-w-xl mx-auto backdrop-blur-sm">
         <button
           onClick={() => setActiveTab("shared")}
-          className={`flex-1 py-2.5 rounded-xl font-semibold transition text-sm ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
             activeTab === "shared"
-              ? "bg-primary-700 text-white"
-              : "bg-gray-800 text-gray-400"
+              ? "bg-amber-500 text-gray-950 shadow-lg shadow-amber-500/10"
+              : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
-          📜 Reçus ({sharedScripts.length})
+          <span>📜</span> Textes partagés ({sharedScripts.length})
         </button>
+
         <button
           onClick={() => setActiveTab("troupes")}
-          className={`flex-1 py-2.5 rounded-xl font-semibold transition text-sm ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-2 ${
             activeTab === "troupes"
-              ? "bg-primary-700 text-white"
-              : "bg-gray-800 text-gray-400"
+              ? "bg-purple-600 text-white shadow-lg shadow-purple-600/20"
+              : "text-gray-400 hover:text-white hover:bg-gray-800/60"
           }`}
         >
-          🎭 Troupes ({troupes.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("share")}
-          className={`flex-1 py-2.5 rounded-xl font-semibold transition text-sm ${
-            activeTab === "share"
-              ? "bg-primary-700 text-white"
-              : "bg-gray-800 text-gray-400"
-          }`}
-        >
-          📤 Partager
+          <span>🎭</span> Mes Troupes ({troupes.length})
         </button>
       </div>
 
-      {/* TAB 1: Scripts reçus */}
+      {/* CONTENU ONGLET 1 : TEXTES PARTAGÉS */}
       {activeTab === "shared" && (
-        <div>
+        <div className="space-y-4">
           {sharedScripts.length === 0 ? (
-            <div className="text-center py-12 bg-gray-800/40 rounded-2xl p-6 border border-gray-700/50">
-              <span className="text-5xl block mb-3">🎭</span>
-              <h3 className="text-white font-bold text-lg mb-2">
-                Aucun texte partagé pour l'instant
-              </h3>
-              <p className="text-gray-400 text-xs mb-6 max-w-md mx-auto">
-                Rejoignez une troupe de théâtre avec le code transmis par votre
-                metteur en scène pour accéder immédiatement aux pièces
-                partagées.
+            <div className="text-center py-12 px-4 bg-gray-900/60 border border-gray-800 rounded-2xl max-w-xl mx-auto space-y-4">
+              <span className="text-5xl block">🎭</span>
+              <h3 className="text-lg font-bold text-white">Aucun texte partagé pour le moment</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md mx-auto">
+                Lorsque votre metteur en scène ou un membre de votre troupe partage un texte, il apparaîtra ici pour vous permettre de le copier dans vos textes personnels.
               </p>
-              <button
-                onClick={() => setShowJoinModal(true)}
-                className="btn-gold"
-              >
-                🔑 Saisir mon code de troupe
-              </button>
+              <div className="pt-2 flex justify-center gap-3">
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-xl text-xs font-bold border border-gray-700 transition"
+                >
+                  🔑 Saisir un code de troupe
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-gray-400">
-                  💡 Copiez un texte pour le personnaliser sans affecter
-                  l'original
-                </p>
-                {!selectionMode ? (
-                  <button
-                    onClick={() => setSelectionMode(true)}
-                    className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 rounded-lg text-xs font-medium transition"
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sharedScripts.map((item) => {
+                const script = item.scripts || item;
+                const troupeName = item.troupes?.name || "Troupe";
+
+                return (
+                  <div
+                    key={item.id || script.id}
+                    className="p-5 bg-gradient-to-br from-gray-900 to-gray-900/90 border border-gray-800 hover:border-amber-500/50 rounded-2xl shadow-xl transition duration-200 flex flex-col justify-between space-y-4 group"
                   >
-                    ☑️ Sélectionner
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="px-2.5 py-1 bg-purple-900/40 text-purple-300 border border-purple-500/30 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                          🎭 {troupeName}
+                        </span>
+                        <span className="text-xs text-gray-500 font-mono">
+                          {script.replicas?.length || 0} répl.
+                        </span>
+                      </div>
+
+                      <h3 className="text-lg font-extrabold text-white group-hover:text-amber-400 transition-colors line-clamp-1">
+                        {script.title}
+                      </h3>
+
+                      <p className="text-gray-400 text-xs mt-1">
+                        {script.characters?.length || 0} personnage(s) distribué(s)
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleCopyScript(script, item.troupe_id)}
+                      disabled={copyingScriptId === script.id}
+                      className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {copyingScriptId === script.id ? (
+                        "⏳ Copie en cours..."
+                      ) : (
+                        <>
+                          <span>📥</span> Copier dans mes textes personnels
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CONTENU ONGLET 2 : MES TROUPES */}
+      {activeTab === "troupes" && (
+        <div className="space-y-6">
+          {troupes.length === 0 ? (
+            <div className="text-center py-12 px-4 bg-gray-900/60 border border-gray-800 rounded-2xl max-w-xl mx-auto space-y-4">
+              <span className="text-5xl block">🎪</span>
+              <h3 className="text-lg font-bold text-white">Vous ne faites partie d'aucune troupe</h3>
+              <p className="text-gray-400 text-xs sm:text-sm leading-relaxed max-w-md mx-auto">
+                Rejoignez une troupe existante avec le code fourni par votre metteur en scène, ou créez votre propre troupe.
+              </p>
+              <div className="pt-2 flex flex-wrap justify-center gap-3">
+                <button
+                  onClick={() => setShowJoinModal(true)}
+                  className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-white text-xs font-bold rounded-xl border border-gray-700 transition"
+                >
+                  🔑 Saisir mon code de troupe
+                </button>
+
+                {canCreateTroupe ? (
+                  <button
+                    onClick={() => setShowCreateModal(true)}
+                    className="px-4 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 text-xs font-extrabold rounded-xl transition shadow-md"
+                  >
+                    ✨ Créer une nouvelle troupe
                   </button>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setSelectionMode(false);
-                        setSelectedScripts([]);
-                      }}
-                      className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs font-medium transition"
-                    >
-                      Annuler
-                    </button>
-                    {selectedScripts.length > 0 && (
-                      <button
-                        onClick={handleBulkCopy}
-                        disabled={actionLoading}
-                        className="px-3 py-1.5 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg text-xs font-bold transition disabled:opacity-50"
-                      >
-                        📋 Copier ({selectedScripts.length})
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    onClick={() => setShowPremiumModal(true)}
+                    className="px-4 py-2.5 bg-purple-950 hover:bg-purple-900 border border-purple-500/50 text-purple-200 text-xs font-bold rounded-xl transition"
+                  >
+                    👑 Créer une troupe (Premium)
+                  </button>
                 )}
               </div>
-
-              {sharedScripts.map((item) => (
-                <div
-                  key={item.id}
-                  className={`card transition ${
-                    selectionMode && selectedScripts.includes(item.scripts?.id)
-                      ? "border-gold-500 bg-gold-500/5"
-                      : "hover:border-primary-500"
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    {selectionMode && (
-                      <div className="flex-shrink-0">
-                        <input
-                          type="checkbox"
-                          checked={selectedScripts.includes(item.scripts?.id)}
-                          onChange={() =>
-                            toggleScriptSelection(item.scripts?.id)
-                          }
-                          className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-gold-500 cursor-pointer"
-                        />
-                      </div>
-                    )}
-
-                    <div
-                      className="flex-1 flex items-center gap-4 cursor-pointer"
-                      onClick={() =>
-                        !selectionMode &&
-                        navigate(`/script/${item.scripts?.id}`)
-                      }
-                    >
-                      <div className="w-12 h-12 bg-primary-500/20 rounded-lg flex items-center justify-center">
-                        <span className="text-2xl">📜</span>
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold text-white">
-                          {item.scripts?.title || "Sans titre"}
-                        </h3>
-                        <p className="text-gray-500 text-xs">
-                          via {item.troupes?.name} •{" "}
-                          {item.scripts?.characters?.length || 0} personnages
-                        </p>
-                      </div>
-                    </div>
-
-                    {!selectionMode && (
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (
-                            !confirm(
-                              "Créer une copie personnelle de ce texte ?",
-                            )
-                          )
-                            return;
-                          setActionLoading(true);
-                          setError(null);
-                          try {
-                            await copySharedScript(
-                              item.scripts?.id,
-                              item.troupe_id,
-                              user.id,
-                            );
-                            await fetchScripts(user.id);
-                            setSuccess(
-                              'Copie créée ! Retrouvez-la dans "Mes textes"',
-                            );
-                            setTimeout(() => navigate("/"), 1200);
-                          } catch (err) {
-                            setError(
-                              "Erreur lors de la copie : " +
-                                (err.message || "Erreur"),
-                            );
-                          } finally {
-                            setActionLoading(false);
-                          }
-                        }}
-                        disabled={actionLoading}
-                        className="p-2 bg-gold-500 hover:bg-gold-400 text-dark rounded-lg font-semibold text-xs transition disabled:opacity-50"
-                        title="Créer ma copie personnelle"
-                      >
-                        📋 Copier
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 2: Mes troupes */}
-      {activeTab === "troupes" && (
-        <div>
-          {/* Bloc d'action pour rejoindre */}
-          <div className="p-4 bg-gray-800/90 rounded-2xl border border-primary-500/30 mb-6 shadow-xl">
-            <div className="flex items-center gap-3 mb-3">
-              <span className="text-2xl">🔑</span>
-              <div>
-                <h2 className="text-white font-bold text-base">
-                  Rejoindre une troupe
-                </h2>
-                <p className="text-gray-400 text-xs">
-                  Saisissez le code de troupe à 8 caractères transmis par votre
-                  metteur en scène
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowJoinModal(true)}
-              className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl transition flex items-center justify-center gap-2"
-            >
-              <span>🔑 Saisir mon code de troupe</span>
-            </button>
-          </div>
-
-          {/* Option réservée au Metteur en Scène / Dev */}
-          {canCreateTroupe && (
-            <div className="mb-6 p-4 bg-gold-500/10 border border-gold-500/30 rounded-2xl flex items-center justify-between">
-              <div>
-                <p className="text-gold-400 font-bold text-sm">
-                  Espace Metteur en Scène
-                </p>
-                <p className="text-gray-400 text-xs">
-                  Créer et gérer une nouvelle troupe
-                </p>
-              </div>
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="btn-gold py-2 px-4 text-xs"
-              >
-                ➕ Créer une troupe
-              </button>
-            </div>
-          )}
-
-          {/* Liste des troupes de l'utilisateur */}
-          {troupes.length === 0 ? (
-            <div className="text-center py-8">
-              <span className="text-5xl mb-4 block">🎭</span>
-              <p className="text-gray-400">
-                Vous n'êtes dans aucune troupe pour le moment
-              </p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {troupes.map((troupe) => (
-                <div
-                  key={troupe.id}
-                  className="bg-gray-800/80 rounded-xl p-4 border border-gray-700"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-gold-500/20 rounded-xl flex items-center justify-center">
-                        <span className="text-2xl">🎭</span>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-white">
-                          {troupe.name}
-                        </h3>
-                        <p className="text-gray-500 text-xs">
-                          {troupe.role === "owner"
-                            ? "👑 Créateur"
-                            : "👤 Membre"}
-                        </p>
-                      </div>
-                    </div>
+            <div className="space-y-6">
+              {troupes.map((troupe) => {
+                const isAdmin = troupe.role === "admin" || troupe.owner_id === user?.id;
+                const isExpanded = expandedTroupe === troupe.id;
 
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => copyTroupeCode(troupe.code)}
-                        className="px-3 py-1.5 bg-primary-600/30 hover:bg-primary-600/50 rounded-lg text-xs font-mono text-primary-300 border border-primary-500/30 transition flex items-center gap-1.5"
-                        title="Cliquer pour copier le code"
-                      >
-                        <span>📋</span>
-                        <span>{troupe.code}</span>
-                      </button>
-
-                      {troupe.role !== "owner" && (
-                        <button
-                          onClick={() => handleLeaveTroupe(troupe.id)}
-                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-                          title="Quitter la troupe"
-                        >
-                          🚪
-                        </button>
-                      )}
-
-                      {troupe.role === "owner" && (
-                        <button
-                          onClick={() => setDeleteTroupeConfirm(troupe)}
-                          className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-                          title="Supprimer la troupe"
-                        >
-                          🗑️
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() =>
-                      setExpandedTroupe(
-                        expandedTroupe === troupe.id ? null : troupe.id,
-                      )
-                    }
-                    className="mt-3 w-full py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-xs text-gray-300 transition flex items-center justify-center gap-2"
+                return (
+                  <div
+                    key={troupe.id}
+                    className="bg-gray-900/90 border border-gray-800 hover:border-purple-500/40 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl transition"
                   >
-                    <span>📋</span>
-                    <span>Consignes & Vidéos</span>
-                    <span>{expandedTroupe === troupe.id ? "▲" : "▼"}</span>
-                  </button>
-
-                  {expandedTroupe === troupe.id && (
-                    <div className="mt-4 pt-4 border-t border-gray-700 space-y-6">
-                      <TroupeDocuments
-                        troupeId={troupe.id}
-                        userId={user.id}
-                        troupeName={troupe.name}
-                      />
-                      <div className="pt-4 border-t border-gray-700">
-                        <TroupeVideos
-                          troupeId={troupe.id}
-                          userId={user.id}
-                          troupeName={troupe.name}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* TAB 3: Partager mes textes */}
-      {activeTab === "share" && (
-        <div>
-          {troupes.length === 0 ? (
-            <div className="text-center py-8">
-              <span className="text-5xl mb-4 block">🎭</span>
-              <p className="text-gray-400 mb-4">Rejoignez d'abord une troupe</p>
-              <button
-                onClick={() => setActiveTab("troupes")}
-                className="btn-gold"
-              >
-                Gérer mes troupes
-              </button>
-            </div>
-          ) : scripts.length === 0 ? (
-            <div className="text-center py-8">
-              <span className="text-5xl mb-4 block">📄</span>
-              <p className="text-gray-400 mb-4">Aucun texte à partager</p>
-              <Link to="/upload" className="btn-gold">
-                Importer un texte
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {scripts.map((script) => (
-                <div key={script.id} className="card">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-2xl">📜</span>
+                    {/* Entête de la troupe */}
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-gray-800 pb-4">
                       <div>
-                        <h3 className="font-semibold text-white">
-                          {script.title}
-                        </h3>
-                        <p className="text-gray-500 text-xs">
-                          {script.characters?.length || 0} personnages
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xl">🎭</span>
+                          <h3 className="text-xl font-bold text-white">{troupe.name}</h3>
+                          {isAdmin && (
+                            <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-[10px] font-bold uppercase">
+                              Metteur en scène
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-400 text-xs flex items-center gap-2 mt-1">
+                          Code d'invitation : <code className="px-2 py-0.5 bg-black/60 text-amber-400 rounded font-mono font-bold text-xs select-all">{troupe.code}</code>
+                          <button
+                            onClick={() => copyTroupeCode(troupe.code)}
+                            className="text-gray-400 hover:text-amber-400 text-xs underline"
+                            title="Copier le code"
+                          >
+                            Copier
+                          </button>
                         </p>
                       </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                        <button
+                          onClick={() => setExpandedTroupe(isExpanded ? null : troupe.id)}
+                          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-bold rounded-xl border border-gray-700 transition flex items-center gap-1.5"
+                        >
+                          <span>📁</span>
+                          <span>{isExpanded ? "Masquer l'espace" : "Consignes & Médias"}</span>
+                        </button>
+
+                        {isAdmin ? (
+                          <button
+                            onClick={() => setDeleteTroupeConfirm(troupe)}
+                            className="p-2 text-rose-400 hover:bg-rose-500/20 rounded-xl transition"
+                            title="Supprimer la troupe"
+                          >
+                            🗑️
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleLeaveTroupe(troupe.id)}
+                            className="px-3 py-1.5 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/30 text-rose-300 text-xs font-bold rounded-xl transition"
+                          >
+                            Quitter
+                          </button>
+                        )}
+                      </div>
                     </div>
 
-                    <button
-                      onClick={() => {
-                        setSelectedScript(script);
-                        setShowShareModal(true);
-                      }}
-                      className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg text-xs font-medium transition"
-                    >
-                      📤 Partager
-                    </button>
+                    {/* Section repliable des consignes et vidéos de la troupe */}
+                    {isExpanded && (
+                      <div className="space-y-6 pt-2 border-t border-gray-800/80 animate-fadeIn">
+                        <TroupeDocuments troupeId={troupe.id} userId={user?.id} troupeName={troupe.name} />
+                        <TroupeVideos troupeId={troupe.id} userId={user?.id} troupeName={troupe.name} />
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Modale Rejoindre */}
+      {/* MODALE REJOINDRIA TROUPE */}
       {showJoinModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-              🔑 Rejoindre une troupe
-            </h3>
-            <p className="text-gray-400 text-xs mb-4">
-              Entrez le code à 8 caractères fourni par votre metteur en scène
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>🔑</span> Rejoindre une troupe
+              </h3>
+              <button onClick={() => setShowJoinModal(false)} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+
+            <p className="text-gray-300 text-xs leading-relaxed">
+              Saisissez le code d'invitation à 8 caractères fourni par votre metteur en scène pour accéder aux textes distribués et aux consignes de jeu.
             </p>
 
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              placeholder="ABCD1234"
-              className="w-full p-3 text-center text-lg font-mono tracking-widest uppercase bg-gray-800 border border-gray-700 rounded-xl text-white mb-4 focus:border-gold-500 focus:outline-none"
-              maxLength={8}
-              autoFocus
-            />
+            <div>
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                Code de troupe *
+              </label>
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                placeholder="Ex: TRP8X2A1"
+                className="w-full bg-gray-800 border border-gray-600 focus:border-amber-500 rounded-xl p-3.5 text-white font-mono text-center tracking-widest text-lg focus:outline-none transition uppercase"
+                autoFocus
+                maxLength={10}
+              />
+            </div>
 
-            {error && <p className="text-red-400 text-xs mb-4">{error}</p>}
-
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowJoinModal(false)}
-                className="btn-secondary flex-1 py-2.5"
+                className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-xl transition"
               >
                 Annuler
               </button>
               <button
                 onClick={handleJoinTroupe}
-                className="btn-gold flex-1 py-2.5 disabled:opacity-50"
-                disabled={joinCode.length < 8 || actionLoading}
+                disabled={!joinCode.trim() || actionLoading}
+                className={`flex-1 py-3 font-extrabold text-xs rounded-xl transition shadow-lg ${
+                  joinCode.trim() && !actionLoading
+                    ? "bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-amber-500/20"
+                    : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                }`}
               >
-                {actionLoading ? "..." : "Rejoindre"}
+                {actionLoading ? "⏳ Vérification..." : "Rejoindre →"}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modale Créer Troupe */}
+      {/* MODALE CRÉATION TROUPE */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gold-500/30 rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <span>✨</span> Créer une troupe
+              </h3>
+              <button onClick={() => { setShowCreateModal(false); setCreatedTroupeCode(null); }} className="text-gray-400 hover:text-white">✕</button>
+            </div>
+
             {createdTroupeCode ? (
-              <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-3 bg-green-500/20 rounded-full flex items-center justify-center">
-                  <span className="text-4xl">✓</span>
-                </div>
-                <h3 className="text-lg font-bold text-white mb-2">
-                  Troupe créée !
-                </h3>
-                <p className="text-gray-400 text-xs mb-4">
-                  Partagez ce code avec les comédiens de votre troupe :
-                </p>
-                <div className="bg-primary-600/20 border border-primary-500/50 rounded-xl p-4 mb-4">
-                  <p className="text-3xl font-mono font-bold text-primary-300 tracking-widest">
-                    {createdTroupeCode}
-                  </p>
+              <div className="space-y-4 text-center py-2">
+                <span className="text-4xl block">🎉</span>
+                <h4 className="text-base font-bold text-emerald-400">Troupe créée avec succès !</h4>
+                <p className="text-gray-300 text-xs">Voici votre code d'invitation à transmettre à vos comédiens :</p>
+                <div className="p-4 bg-black/60 border border-amber-500/50 rounded-xl flex items-center justify-between gap-2">
+                  <code className="text-2xl font-mono font-bold text-amber-400 tracking-widest">{createdTroupeCode}</code>
+                  <button
+                    onClick={() => copyTroupeCode(createdTroupeCode)}
+                    className="px-3 py-1.5 bg-amber-500 text-gray-950 font-bold text-xs rounded-lg hover:bg-amber-400 transition"
+                  >
+                    Copier
+                  </button>
                 </div>
                 <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(createdTroupeCode);
-                    setSuccess("Code copié !");
-                    setTimeout(() => setSuccess(null), 2000);
-                  }}
-                  className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-semibold text-xs transition mb-3"
-                >
-                  📋 Copier le code
-                </button>
-                <button
-                  onClick={closeCreateModal}
-                  className="btn-secondary w-full py-2"
+                  onClick={() => { setShowCreateModal(false); setCreatedTroupeCode(null); }}
+                  className="w-full py-3 bg-gray-800 hover:bg-gray-700 text-white font-bold text-xs rounded-xl transition mt-2"
                 >
                   Fermer
                 </button>
               </div>
             ) : (
               <>
-                <h3 className="text-lg font-bold text-white mb-2">
-                  ➕ Créer une troupe
-                </h3>
-                <p className="text-gray-400 text-xs mb-4">
-                  Donnez un nom à votre troupe. Un code unique à 8 caractères
-                  sera généré.
+                <p className="text-gray-300 text-xs leading-relaxed">
+                  En tant que metteur en scène ou abonné Premium, vous pouvez créer une troupe pour distribuer des textes et partager des consignes de jeu.
                 </p>
-                <input
-                  type="text"
-                  value={newTroupeName}
-                  onChange={(e) => setNewTroupeName(e.target.value)}
-                  placeholder="Ex: Troupe Molière"
-                  className="w-full p-3 bg-gray-800 border border-gray-700 rounded-xl text-white mb-4 text-sm focus:border-gold-500 focus:outline-none"
-                  maxLength={50}
-                  autoFocus
-                />
-                {error && <p className="text-red-400 text-xs mb-4">{error}</p>}
-                <div className="flex gap-3">
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                    Nom de la troupe *
+                  </label>
+                  <input
+                    type="text"
+                    value={newTroupeName}
+                    onChange={(e) => setNewTroupeName(e.target.value)}
+                    placeholder="Ex: Troupe du Théâtre Molière"
+                    className="w-full bg-gray-800 border border-gray-600 focus:border-amber-500 rounded-xl p-3.5 text-white text-sm focus:outline-none transition"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
                   <button
-                    onClick={closeCreateModal}
-                    className="btn-secondary flex-1 py-2.5"
+                    onClick={() => setShowCreateModal(false)}
+                    className="flex-1 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-xl transition"
                   >
                     Annuler
                   </button>
                   <button
                     onClick={handleCreateTroupe}
-                    className="btn-gold flex-1 py-2.5 disabled:opacity-50"
                     disabled={!newTroupeName.trim() || actionLoading}
+                    className={`flex-1 py-3 font-extrabold text-xs rounded-xl transition shadow-lg ${
+                      newTroupeName.trim() && !actionLoading
+                        ? "bg-amber-500 hover:bg-amber-400 text-gray-950 shadow-amber-500/20"
+                        : "bg-gray-800 text-gray-500 cursor-not-allowed"
+                    }`}
                   >
-                    {actionLoading ? "..." : "✓ Créer"}
+                    {actionLoading ? "⏳ Création..." : "Créer la troupe →"}
                   </button>
                 </div>
               </>
@@ -768,73 +587,41 @@ function Shared() {
         </div>
       )}
 
-      {/* Modale Partager un script */}
-      {showShareModal && selectedScript && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-gray-700 rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-lg font-bold text-white mb-2">
-              📤 Partager "{selectedScript.title}"
-            </h3>
-            <p className="text-gray-400 text-xs mb-4">
-              Choisissez la troupe avec laquelle partager ce texte :
-            </p>
-            <div className="space-y-2 mb-4">
-              {troupes.map((troupe) => (
-                <button
-                  key={troupe.id}
-                  onClick={() =>
-                    handleShareScript(selectedScript.id, troupe.id)
-                  }
-                  disabled={actionLoading}
-                  className="w-full p-3 bg-gray-800 hover:bg-primary-600 rounded-xl text-left transition flex items-center justify-between text-sm"
-                >
-                  <span className="text-white font-medium">{troupe.name}</span>
-                  <span className="text-primary-400">→</span>
-                </button>
-              ))}
-            </div>
-            {error && <p className="text-red-400 text-xs mb-4">{error}</p>}
-            <button
-              onClick={() => setShowShareModal(false)}
-              className="btn-secondary w-full py-2.5"
-            >
-              Annuler
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modale Supprimer Troupe */}
+      {/* CONFIRMATION DE SUPPRESSION DE TROUPE */}
       {deleteTroupeConfirm && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 border border-red-500/30 rounded-2xl p-6 max-w-sm w-full text-center">
-            <span className="text-4xl block mb-2">🗑️</span>
-            <h3 className="text-lg font-bold text-white mb-2">
-              Supprimer la troupe ?
-            </h3>
-            <p className="text-gray-300 text-sm mb-4">
-              {deleteTroupeConfirm.name}
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-lg font-bold text-white">Supprimer {deleteTroupeConfirm.name} ?</h3>
+            <p className="text-rose-400 text-xs leading-relaxed">
+              ⚠️ Cette action est irréversible. Tous les partages et documents associés à cette troupe seront supprimés.
             </p>
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setDeleteTroupeConfirm(null)}
-                className="btn-secondary flex-1 py-2.5"
+                className="flex-1 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold text-xs rounded-xl transition"
               >
                 Annuler
               </button>
               <button
                 onClick={handleDeleteTroupe}
                 disabled={actionLoading}
-                className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl flex-1 py-2.5 transition"
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs rounded-xl transition shadow-lg shadow-rose-600/20"
               >
-                Supprimer
+                {actionLoading ? "⏳..." : "Supprimer"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* MODALE PAYWALL PREMIUM */}
+      {showPremiumModal && (
+        <PremiumGateModal
+          featureKey="DIRECTOR_ADVANCED"
+          onClose={() => setShowPremiumModal(false)}
+        />
+      )}
+
     </div>
   );
 }
-
-export default Shared;
