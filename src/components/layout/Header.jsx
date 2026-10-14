@@ -15,10 +15,18 @@ export default function Header() {
     navigate("/login");
   };
 
+  const handleLogoClick = () => {
+    window.scrollTo(0, 0);
+  };
+
   return (
     <header className="bg-gradient-to-r from-primary-900 via-primary-800 to-primary-950 text-white px-4 py-3 flex items-center justify-between relative shadow-lg border-b border-primary-700/50 z-40">
       {/* Logo cliquable vers l'accueil avec sous-titre */}
-      <Link to="/" className="hover:opacity-90 transition active:scale-95 flex items-center gap-2.5">
+      <Link
+        to="/"
+        onClick={handleLogoClick}
+        className="hover:opacity-90 transition active:scale-95 flex items-center gap-2.5 cursor-pointer"
+      >
         <span className="text-2xl sm:text-3xl">🎭</span>
         <div>
           <h1 className="text-lg sm:text-xl font-display font-bold text-white leading-none flex items-center gap-1.5">
