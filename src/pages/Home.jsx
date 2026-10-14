@@ -24,23 +24,6 @@ import {
   ScriptTagBadges,
   TagFilter,
 } from "../components/TagManager";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
@@ -190,81 +173,26 @@ function DirectorNotesSection({
 function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const {
-    scripts,
-    loading,
-    fetchScripts,
-    deleteScript,
-    updateScriptOrder,
-    countNotesForScripts,
-  } = useScriptStore();
-
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [localScripts, setLocalScripts] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeId, setActiveId] = useState(null);
-  const [notesCounts, setNotesCounts] = useState({});
+  const { scripts, loading, fetchScripts } = useScriptStore();
 
   // Navigation par onglets ('scripts', 'director', 'library')
   const [activeHomeTab, setActiveHomeTab] = useState("scripts");
-
-  // Rôle utilisateur
-  const [userRole, setUserRole] = useState("member");
-
-  // Ordre verrouillé
-  const [orderLocked, setOrderLocked] = useState(() => {
-    try {
-      return localStorage.getItem("replicoach-order-locked") === "true";
-    } catch {
-      return false;
-    }
-  });
 
   // Consignes Metteur en scène
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(true);
   const [directorNotes, setDirectorNotes] = useState([]);
   const [uploadingNote, setUploadingNote] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [showTroupeSelector, setShowTroupeSelector] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState(null);
   const [uploadTroupes, setUploadTroupes] = useState([]);
 
   // Documents
   const [viewingDocument, setViewingDocument] = useState(null);
 
-  // Partage
-  const [scriptToShare, setScriptToShare] = useState(null);
-  const [shareTroupes, setShareTroupes] = useState([]);
-  const [sharingLoading, setSharingLoading] = useState(false);
-  const [shareSuccess, setShareSuccess] = useState(null);
-  const [shareError, setShareError] = useState(null);
-
-  // Tags
-  const [userTags, setUserTags] = useState([]);
-  const [scriptTagsMap, setScriptTagsMap] = useState({});
-  const [selectedTagFilter, setSelectedTagFilter] = useState(null);
-  const [managingTagsFor, setManagingTagsFor] = useState(null);
-
-  // Accès rapide
-  const [recentScript, setRecentScript] = useState(null);
-
-  // Audios
-  const [personalAudios, setPersonalAudios] = useState([]);
-  const [audioImportMsg, setAudioImportMsg] = useState(null);
-
   useEffect(() => {
     if (user?.id) {
-      getUserRole(user.id)
-        .then((role) => setUserRole(role || "member"))
-        .catch(() => setUserRole("member"));
-
       fetchScripts(user.id);
       loadDirectorNotes();
       loadUploadTroupes();
-      loadNotesCounts();
-      loadUserTags();
-      loadRecentScript();
-      loadPersonalAudios();
     }
   }, [user?.id]);
 
@@ -290,215 +218,14 @@ function Home() {
     }
   };
 
-  const loadNotesCounts = async () => {
-    if (!user?.id) return;
-    try {
-      const counts = await countNotesForScripts(user.id);
-      setNotesCounts(counts || {});
-    } catch (err) {
-      console.error("Erreur notes counts:", err);
-    }
-  };
-
-  const loadUserTags = async () => {
-    if (!user?.id) return;
-    try {
-      const tags = await fetchUserTags(user.id);
-      setUserTags(Array.isArray(tags) ? tags : []);
-    } catch (err) {
-      console.error("Erreur tags:", err);
-    }
-  };
-
-  const loadRecentScript = () => {
-    try {
-      const stored = localStorage.getItem("replicoach_recent_script");
-      if (stored) setRecentScript(JSON.parse(stored));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const loadPersonalAudios = async () => {
-    if (!user?.id) return;
-    try {
-      const audios = await fetchPersonalAudios(user.id);
-      setPersonalAudios(Array.isArray(audios) ? audios : []);
-    } catch (err) {
-      console.error("Erreur audios:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (Array.isArray(scripts)) {
-      let filtered = [...scripts];
-
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        filtered = filtered.filter((s) => s.title?.toLowerCase().includes(q));
-      }
-
-      if (selectedTagFilter) {
-        filtered = filtered.filter((s) => {
-          const tags = scriptTagsMap[s.id] || [];
-          return tags.some((t) => t.id === selectedTagFilter);
-        });
-      }
-
-      setLocalScripts(filtered);
-    } else {
-      setLocalScripts([]);
-    }
-  }, [scripts, searchQuery, selectedTagFilter, scriptTagsMap]);
-
-  useEffect(() => {
-    loadScriptsTags();
-  }, [scripts]);
-
-  const loadScriptsTags = async () => {
-    if (!Array.isArray(scripts) || scripts.length === 0) return;
-    const map = {};
-    for (const script of scripts) {
-      try {
-        const tags = await fetchScriptTags(script.id);
-        map[script.id] = tags || [];
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    setScriptTagsMap(map);
-  };
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: orderLocked ? 999999 : 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragStart = (event) => {
-    if (orderLocked) return;
-    setActiveId(event.active.id);
-  };
-
-  const handleDragEnd = async (event) => {
-    setActiveId(null);
-    if (orderLocked) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = localScripts.findIndex((s) => s.id === active.id);
-    const newIndex = localScripts.findIndex((s) => s.id === over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const reordered = arrayMove(localScripts, oldIndex, newIndex);
-      setLocalScripts(reordered);
-
-      const itemsToUpdate = reordered.map((s, idx) => ({
-        id: s.id,
-        display_order: idx + 1,
-      }));
-
-      try {
-        await updateScriptOrder(itemsToUpdate);
-      } catch (err) {
-        console.error("Erreur ordre:", err);
-      }
-    }
-  };
-
-  const toggleOrderLock = () => {
-    const next = !orderLocked;
-    setOrderLocked(next);
-    try {
-      localStorage.setItem("replicoach-order-locked", String(next));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const handleDelete = (scriptId) => setDeleteConfirm(scriptId);
-
-  const confirmDelete = async () => {
-    if (!deleteConfirm) return;
-    try {
-      await deleteScript(deleteConfirm);
-      setDeleteConfirm(null);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleOpenScript = (scriptId) => {
-    const targetScript = scripts.find((s) => s.id === scriptId);
-    if (targetScript) {
-      const existing = recentScript && recentScript.scriptId === scriptId ? recentScript.count || 0 : 0;
-      const updated = {
-        scriptId,
-        title: targetScript.title,
-        lastAccess: new Date().toISOString(),
-        count: existing + 1,
-      };
-      localStorage.setItem("replicoach_recent_script", JSON.stringify(updated));
-      setRecentScript(updated);
-    }
-    navigate(`/script/${scriptId}`);
-  };
-
-  const handleOpenShare = async (script) => {
-    setScriptToShare(script);
-    setShareSuccess(null);
-    setShareError(null);
-    setSharingLoading(true);
-    try {
-      const troupes = await fetchUserTroupes(user.id);
-      setShareTroupes(troupes || []);
-    } catch (err) {
-      console.error(err);
-      setShareTroupes([]);
-    } finally {
-      setSharingLoading(false);
-    }
-  };
-
-  const handleConfirmShare = async (troupeId) => {
-    if (!scriptToShare || !user) return;
-    setSharingLoading(true);
-    setShareError(null);
-    try {
-      await shareScriptToTroupe(scriptToShare.id, troupeId, user.id);
-      setShareSuccess("Texte partagé avec succès !");
-      setTimeout(() => setScriptToShare(null), 1500);
-    } catch (err) {
-      setShareError(err.message || "Erreur lors du partage");
-    } finally {
-      setSharingLoading(false);
-    }
-  };
-
   const handleUploadDirectorNote = async (files) => {
     if (!user) return;
-    if (uploadTroupes.length > 0) {
-      setPendingFiles(Array.from(files));
-      setShowTroupeSelector(true);
-    } else {
-      await doUploadDirectorNotes(Array.from(files), null);
-    }
-  };
-
-  const doUploadDirectorNotes = async (files, troupeId) => {
     setUploadingNote(true);
     setUploadError(null);
     try {
       for (const file of files) {
-        await uploadDirectorNote(file, user.id, troupeId);
+        await uploadDirectorNote(file, user.id, null);
       }
-      setShowTroupeSelector(false);
-      setPendingFiles(null);
       await loadDirectorNotes();
     } catch (err) {
       console.error(err);
@@ -528,18 +255,6 @@ function Home() {
     });
   };
 
-  const handleDeleteAudio = async (audioId, audioPath) => {
-    if (!confirm("Supprimer cet audio personnel ?")) return;
-    try {
-      await deletePersonalAudio(audioId, audioPath);
-      setPersonalAudios((prev) => prev.filter((a) => a.id !== audioId));
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const activeScript = activeId ? localScripts.find((s) => s.id === activeId) : null;
-
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -549,128 +264,13 @@ function Home() {
   }
 
   return (
-    /* Responsivité pleine page Desktop identique aux pages /profile et /script/[id] */
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
-      {/* 🎭 BLOC D'ACCUEIL : BIENVENUE SUR REPLICOACH */}
-      <div className="mb-8 p-5 sm:p-6 bg-gradient-to-b from-gray-900/95 to-gray-950/95 border border-gray-800 rounded-3xl shadow-2xl backdrop-blur-md">
-        <div className="text-center max-w-2xl mx-auto mb-6 space-y-1.5">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border border-amber-500/30 rounded-full text-xs font-bold text-amber-300 uppercase tracking-widest mb-1 shadow-inner">
-            <span>🎭</span> Application de mémorisation théâtrale
-          </div>
-          <h2 className="text-white font-extrabold text-2xl sm:text-3xl font-display tracking-tight">
-            Bienvenue sur RépliCoach !
-          </h2>
-          <p className="text-gray-400 text-xs sm:text-sm">
-            Choisissez votre parcours pour accéder rapidement à vos textes et répétitions :
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* CARTE 1 : COMÉDIEN INDÉPENDANT (Thème Or / Ambre / Ardoise) */}
-          <Link
-            to="/upload"
-            className="relative bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-amber-950/30 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-amber-500/20 flex flex-col justify-between overflow-hidden"
-          >
-            {/* Effet lumineux d'arrière-plan */}
-            <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/20 transition-all" />
-
-            <div>
-              {/* Badge & Titre */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
-                  <span>👤</span> Comédien Indépendant
-                </span>
-                <span className="text-xs text-amber-400 font-semibold group-hover:translate-x-1 transition-transform">
-                  Solo →
-                </span>
-              </div>
-
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-amber-300 transition-colors">
-                Travaillez vos textes personnels
-              </h3>
-              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-4">
-                Importez directement vos pièces personnelles, scripts ou livrets pour répéter vos répliques en toute autonomie.
-              </p>
-
-              {/* Bullet points */}
-              <ul className="space-y-2 text-xs sm:text-sm text-gray-300 mb-6">
-                <li className="flex items-center gap-2">
-                  <span className="text-amber-400 font-bold">✓</span> Importation PDF, TXT ou Scan photo
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-amber-400 font-bold">✓</span> Audio, italienne & mémorisation interactive
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-amber-400 font-bold">✓</span> Espace de travail 100 % privé
-                </li>
-              </ul>
-            </div>
-
-            {/* Bouton CTA */}
-            <div className="mt-2 pt-3 border-t border-amber-500/20">
-              <span className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 group-hover:from-amber-400 group-hover:to-amber-500 text-gray-950 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
-                <span>➕ Importer un texte</span>
-                <span>→</span>
-              </span>
-            </div>
-          </Link>
-
-          {/* CARTE 2 : EN TROUPE / ATELIER (Thème Bordeaux Théâtre / Pourpre) */}
-          <Link
-            to="/shared"
-            className="relative bg-gradient-to-br from-primary-950/90 via-gray-900 to-purple-950/90 border-2 border-purple-500/60 hover:border-purple-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-purple-500/20 flex flex-col justify-between overflow-hidden"
-          >
-            {/* Effet lumineux d'arrière-plan */}
-            <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
-
-            <div>
-              {/* Badge & Titre */}
-              <div className="flex items-center justify-between mb-4">
-                <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
-                  <span>👥</span> Troupe & Atelier
-                </span>
-                <span className="text-xs text-purple-300 font-semibold group-hover:translate-x-1 transition-transform">
-                  Espace Partagé →
-                </span>
-              </div>
-
-              <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">
-                Espace Partagé & Metteur en Scène
-              </h3>
-              <p className="text-purple-100/70 text-xs sm:text-sm leading-relaxed mb-4">
-                Accédez aux pièces partagées par votre metteuse/metteur en scène à l'aide d'un code de troupe ou gérez vos groupes.
-              </p>
-
-              {/* Bullet points */}
-              <ul className="space-y-2 text-xs sm:text-sm text-purple-100/80 mb-6">
-                <li className="flex items-center gap-2">
-                  <span className="text-purple-400 font-bold">✓</span> Connexion par code de troupe sécurisé
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-purple-400 font-bold">✓</span> Consignes & notes de mise en scène
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="text-purple-400 font-bold">✓</span> Synchronisation des rôles distribués
-                </li>
-              </ul>
-            </div>
-
-            {/* Bouton CTA */}
-            <div className="mt-2 pt-3 border-t border-purple-500/20">
-              <span className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-primary-700 group-hover:from-purple-500 group-hover:to-primary-600 text-white rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
-                <span>🎭 Accéder à mes Troupes</span>
-                <span>→</span>
-              </span>
-            </div>
-          </Link>
-        </div>
-      </div>
-
-      {/* 🧭 BARRE D'ONGLETS Navigation */}
-      <div className="flex gap-2 mb-6 p-1.5 bg-gray-900/80 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto">
+      
+      {/* 🧭 TOP DE LA HOME : BARRE D'ONGLETS Navigation */}
+      <div className="flex gap-2 mb-4 p-1.5 bg-gray-900/90 rounded-2xl border border-gray-800 backdrop-blur-sm max-w-2xl mx-auto shadow-xl">
         <button
           onClick={() => setActiveHomeTab("scripts")}
-          className={`flex-1 py-2.5 px-3 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+          className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
             activeHomeTab === "scripts"
               ? "bg-gold-500 text-black shadow-lg shadow-gold-500/10 font-bold"
               : "text-gray-400 hover:text-white hover:bg-gray-800/60"
@@ -711,168 +311,135 @@ function Home() {
         </button>
       </div>
 
-      {/* 1. ONGLET : MES TEXTES */}
+      {/* 2 BOUTONS D'ACCÈS RAPIDE PAR ANCRAGE */}
       {activeHomeTab === "scripts" && (
-        <div className="space-y-4">
-          {/* Accès rapide au texte récent */}
-          {recentScript && scripts?.some((s) => s.id === recentScript.scriptId) && (
-            <button
-              onClick={() => handleOpenScript(recentScript.scriptId)}
-              className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
-            >
-              <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                <span className="text-2xl">⚡</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
-                    Accès rapide
-                  </span>
-                  <span className="text-amber-500/50 text-[10px]">
-                    • {recentScript.count} fois
+        <div className="flex flex-col sm:flex-row gap-3 max-w-2xl mx-auto mb-6">
+          <button
+            onClick={() => {
+              const el = document.getElementById("comedien");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+              else navigate("/upload");
+            }}
+            className="flex-1 py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95"
+          >
+            <span>➕ Importer un texte</span>
+            <span className="text-xs font-bold">↓</span>
+          </button>
+
+          <button
+            onClick={() => {
+              const el = document.getElementById("troupe");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+              else navigate("/shared");
+            }}
+            className="flex-1 py-3 px-4 bg-gradient-to-r from-purple-600 to-primary-700 hover:from-purple-500 hover:to-primary-600 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition flex items-center justify-center gap-2 active:scale-95"
+          >
+            <span>🎭 Accès metteur en scène</span>
+            <span className="text-xs font-bold">↓</span>
+          </button>
+        </div>
+      )}
+
+      {/* 1. ONGLET : MES TEXTES (Cartes d'accès principales) */}
+      {activeHomeTab === "scripts" && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* CARTE 1 : COMÉDIEN INDÉPENDANT */}
+            <div id="comedien">
+              <Link
+                to="/upload"
+                className="relative bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-amber-950/30 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-amber-500/20 flex flex-col justify-between overflow-hidden block"
+              >
+                <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/20 transition-all" />
+
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                      <span>👤</span> Comédien Indépendant
+                    </span>
+                    <span className="text-xs text-amber-400 font-semibold group-hover:translate-x-1 transition-transform">
+                      Solo →
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-amber-300 transition-colors">
+                    Travaillez vos textes personnels
+                  </h3>
+                  <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-4">
+                    Importez directement vos pièces personnelles, scripts ou livrets pour répéter vos répliques en toute autonomie.
+                  </p>
+
+                  <ul className="space-y-2 text-xs sm:text-sm text-gray-300 mb-6">
+                    <li className="flex items-center gap-2">
+                      <span className="text-amber-400 font-bold">✓</span> Importation PDF, TXT ou Scan photo
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-amber-400 font-bold">✓</span> Audio, italienne & mémorisation interactive
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-amber-400 font-bold">✓</span> Espace de travail 100 % privé
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-2 pt-3 border-t border-amber-500/20">
+                  <span className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 group-hover:from-amber-400 group-hover:to-amber-500 text-gray-950 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                    <span>➕ Importer un texte</span>
+                    <span>→</span>
                   </span>
                 </div>
-                <h3 className="text-white font-bold text-base truncate group-hover:text-amber-300 transition">
-                  {recentScript.title}
-                </h3>
-              </div>
-              <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
-                →
-              </span>
-            </button>
-          )}
-
-          {/* Filtre par Tags */}
-          {userTags.length > 0 && (
-            <TagFilter
-              tags={userTags}
-              selectedTagId={selectedTagFilter}
-              onSelect={setSelectedTagFilter}
-            />
-          )}
-
-          {/* Recherche locale */}
-          <div className="relative max-w-xl mx-auto">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-lg">📣</span>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Rechercher parmi mes saynètes..."
-              className="w-full p-3 pl-10 pr-10 bg-gray-900 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-gold-500"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Option de verrouillage */}
-          {localScripts.length > 1 && !selectedTagFilter && (
-            <div className="flex items-center justify-between py-1">
-              <p className="text-gray-500 text-xs flex items-center gap-1">
-                {orderLocked ? (
-                  <>
-                    <span>🔒</span> Ordre verrouillé
-                  </>
-                ) : (
-                  <>
-                    <span>💡</span> Glissez-déposez pour réorganiser
-                  </>
-                )}
-              </p>
-              <button
-                onClick={toggleOrderLock}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                  orderLocked
-                    ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                    : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white"
-                }`}
-              >
-                {orderLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller"}
-              </button>
-            </div>
-          )}
-
-          {/* Liste des saynètes en grille responsive */}
-          {localScripts.length === 0 ? (
-            <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
-              <p className="text-4xl mb-3">📄</p>
-              <p className="text-gray-400 text-sm">Aucun texte pour le moment</p>
-              <p className="text-gray-600 text-xs mt-1">
-                Importez votre premier fichier pour commencer !
-              </p>
-              <Link to="/upload" className="btn-gold mt-4 inline-block text-xs py-2 px-4">
-                📤 Importer un texte
               </Link>
             </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={[
-                  ...localScripts.map((s) => s.id),
-                  ...personalAudios.map((a) => a.id),
-                ]}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {[
-                    ...localScripts,
-                    ...personalAudios.map((a) => ({ ...a, type: "audio" })),
-                  ]
-                    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                    .map((item, index) =>
-                      item.type === "audio" ? (
-                        <SortableAudioCard
-                          key={item.id}
-                          audio={item}
-                          audioUrl={getAudioUrl(item.audio_path)}
-                          onDelete={handleDeleteAudio}
-                          orderLocked={orderLocked}
-                        />
-                      ) : (
-                        <SortableScriptCard
-                          key={item.id}
-                          script={{
-                            ...item,
-                            tags: scriptTagsMap[item.id] || [],
-                          }}
-                          index={index}
-                          onDelete={handleDelete}
-                          onOpen={handleOpenScript}
-                          onShare={handleOpenShare}
-                          onManageTags={(s) => setManagingTagsFor(s)}
-                          notesCount={notesCounts[item.id] || 0}
-                          orderLocked={orderLocked}
-                        />
-                      )
-                    )}
-                </div>
-              </SortableContext>
 
-              <DragOverlay>
-                {activeScript ? (
-                  <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <span className="text-gold-500 font-bold text-lg">
-                        #{activeScript.display_order}
-                      </span>
-                      <h3 className="font-semibold text-white">{activeScript.title}</h3>
-                    </div>
+            {/* CARTE 2 : EN TROUPE / ATELIER */}
+            <div id="troupe">
+              <Link
+                to="/shared"
+                className="relative bg-gradient-to-br from-primary-950/90 via-gray-900 to-purple-950/90 border-2 border-purple-500/60 hover:border-purple-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-purple-500/20 flex flex-col justify-between overflow-hidden block"
+              >
+                <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
+
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
+                      <span>👥</span> Troupe & Atelier
+                    </span>
+                    <span className="text-xs text-purple-300 font-semibold group-hover:translate-x-1 transition-transform">
+                      Espace Partagé →
+                    </span>
                   </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
-          )}
+
+                  <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">
+                    Espace Partagé & Metteur en Scène
+                  </h3>
+                  <p className="text-purple-100/70 text-xs sm:text-sm leading-relaxed mb-4">
+                    Accédez aux pièces partagées par votre metteuse/metteur en scène à l'aide d'un code de troupe ou gérez vos groupes.
+                  </p>
+
+                  <ul className="space-y-2 text-xs sm:text-sm text-purple-100/80 mb-6">
+                    <li className="flex items-center gap-2">
+                      <span className="text-purple-400 font-bold">✓</span> Connexion par code de troupe sécurisé
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-purple-400 font-bold">✓</span> Consignes & notes de mise en scène
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="text-purple-400 font-bold">✓</span> Synchronisation des rôles distribués
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="mt-2 pt-3 border-t border-purple-500/20">
+                  <span className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-primary-700 group-hover:from-purple-500 group-hover:to-primary-600 text-white rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
+                    <span>🎭 Accéder à mes Troupes</span>
+                    <span>→</span>
+                  </span>
+                </div>
+              </Link>
+            </div>
+
+          </div>
         </div>
       )}
 
@@ -895,47 +462,7 @@ function Home() {
       {/* 3. ONGLET : BIBLIOTHÈQUE */}
       {activeHomeTab === "library" && (
         <div className="space-y-4">
-          <PublicLibrary
-            onAddPersonalAudio={(audio) => {
-              setPersonalAudios((prev) => [...prev, audio]);
-              setAudioImportMsg({
-                type: "info",
-                text: "Audio ajouté ! Glissez-le sur la bonne saynète pour l'associer.",
-              });
-              setTimeout(() => setAudioImportMsg(null), 3500);
-
-              (async () => {
-                try {
-                  await new Promise((r) => setTimeout(r, 900));
-                  const audios = await fetchPersonalAudios(user.id);
-                  setPersonalAudios(audios || []);
-                } catch (e) {
-                  console.warn(e);
-                }
-              })();
-            }}
-          />
-        </div>
-      )}
-
-      {/* Modale de confirmation suppression */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-gray-800 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Supprimer ce texte ?</h3>
-            <p className="text-gray-400 text-xs mb-6">Cette action est irréversible.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1 py-2.5">
-                Annuler
-              </button>
-              <button
-                onClick={confirmDelete}
-                className="bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl flex-1 py-2.5 transition"
-              >
-                Supprimer
-              </button>
-            </div>
-          </div>
+          <PublicLibrary />
         </div>
       )}
 
@@ -944,214 +471,7 @@ function Home() {
         <DocumentViewer document={viewingDocument} onClose={() => setViewingDocument(null)} />
       )}
 
-      {/* Modale Partage */}
-      {scriptToShare && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-900 rounded-2xl max-w-sm w-full border border-gray-800 p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">👥 Partager "{scriptToShare.title}"</h3>
-            <p className="text-gray-400 text-xs mb-4">Choisissez la troupe destinataire :</p>
-            {shareTroupes.length === 0 ? (
-              <p className="text-gray-500 text-xs text-center py-4">Aucune troupe disponible.</p>
-            ) : (
-              <div className="space-y-2 mb-4">
-                {shareTroupes.map((troupe) => (
-                  <button
-                    key={troupe.id}
-                    onClick={() => handleConfirmShare(troupe.id)}
-                    disabled={sharingLoading}
-                    className="w-full p-3 bg-gray-800 hover:bg-primary-600 rounded-xl text-left transition flex items-center justify-between text-sm"
-                  >
-                    <span className="text-white font-medium">{troupe.name}</span>
-                    <span className="text-primary-400">→</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {shareSuccess && <p className="text-green-400 text-xs mb-4">{shareSuccess}</p>}
-            {shareError && <p className="text-red-400 text-xs mb-4">{shareError}</p>}
-            <button onClick={() => setScriptToShare(null)} className="btn-secondary w-full py-2.5">
-              Fermer
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modale Tags */}
-      {managingTagsFor && (
-        <ScriptTagsModal
-          scriptId={managingTagsFor.id}
-          scriptTitle={managingTagsFor.title}
-          userId={user?.id}
-          onClose={() => {
-            setManagingTagsFor(null);
-            loadScriptsTags();
-            loadUserTags();
-          }}
-        />
-      )}
-
-      {/* Notifications Audio */}
-      {audioImportMsg && (
-        <div className="fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-2xl flex items-center justify-between">
-          <span>{audioImportMsg.text}</span>
-          <button onClick={() => setAudioImportMsg(null)} className="text-xs">✕</button>
-        </div>
-      )}
-
       <FloatingActionButton />
-    </div>
-  );
-}
-
-/**
- * Composants auxiliaires pour la liste DnD (Cartes avec fond gris ardoise élégant)
- */
-function SortableScriptCard({
-  script,
-  index,
-  onDelete,
-  onOpen,
-  onShare,
-  onManageTags,
-  notesCount,
-  orderLocked,
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: script.id, disabled: orderLocked });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="card hover:border-amber-500/60 transition cursor-pointer group bg-gray-800/90 border border-gray-700/80 p-4 rounded-2xl shadow-md hover:shadow-amber-500/10 flex flex-col justify-between"
-    >
-      <div className="flex items-center gap-3">
-        {!orderLocked && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="touch-none text-gray-500 hover:text-amber-400 p-1 cursor-grab active:cursor-grabbing text-lg"
-          >
-            ⋮⋮
-          </button>
-        )}
-
-        <div onClick={() => onOpen(script.id)} className="flex-1 flex items-center gap-3 min-w-0">
-          <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
-            #{index + 1}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <h3 className="font-semibold text-white text-sm truncate group-hover:text-amber-300 transition">
-              {script.title}
-            </h3>
-
-            <div className="flex items-center gap-2 mt-1 text-gray-300 text-xs flex-wrap">
-              <span>{script.characters?.length || 0} pers.</span>
-              <span>•</span>
-              <span>{script.replicas?.length || 0} répl.</span>
-              {notesCount > 0 && (
-                <>
-                  <span>•</span>
-                  <span className="text-amber-400 font-medium">📝 {notesCount}</span>
-                </>
-              )}
-            </div>
-
-            {script.tags && script.tags.length > 0 && (
-              <div className="mt-2">
-                <ScriptTagBadges tags={script.tags} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onManageTags(script);
-            }}
-            className="p-1.5 text-gray-400 hover:text-amber-400 hover:bg-gray-700 rounded-lg transition"
-            title="Tags"
-          >
-            🏷️
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onShare(script);
-            }}
-            className="p-1.5 text-gray-400 hover:text-primary-300 hover:bg-gray-700 rounded-lg transition"
-            title="Partager"
-          >
-            👥
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(script.id);
-            }}
-            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-            title="Supprimer"
-          >
-            🗑️
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: audio.id, disabled: orderLocked });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="bg-gray-800/90 border border-blue-500/30 rounded-xl p-3 shadow-md"
-    >
-      <div className="flex items-center gap-3">
-        {!orderLocked && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="touch-none text-gray-500 hover:text-blue-400 p-1 cursor-grab active:cursor-grabbing text-lg"
-          >
-            ⋮⋮
-          </button>
-        )}
-
-        <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400 text-sm">
-          🎵
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className="text-white text-xs font-medium truncate">{audio.title || audio.file_name}</p>
-          <audio src={audioUrl} controls className="w-full h-7 mt-1" />
-        </div>
-
-        <button
-          onClick={() => onDelete(audio.id, audio.audio_path)}
-          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-        >
-          🗑️
-        </button>
-      </div>
     </div>
   );
 }

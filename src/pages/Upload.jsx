@@ -1,13 +1,11 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
-import { uploadFile, supabase } from "../lib/supabase";
-import { extractTextFromPDF, hasNativeText } from "../lib/pdfProcessor";
+import { uploadFile } from "../lib/supabase";
+import { extractTextFromPDF } from "../lib/pdfProcessor";
 import {
   extractTextFromWord,
-  isWordDocument,
-  isTextFile,
   extractTextFromTxt,
 } from "../lib/docProcessor";
 import { parseScript } from "../lib/scriptParser";
@@ -23,13 +21,12 @@ export default function Upload() {
   const { user, isPremium } = useAuthStore();
   const { createScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
 
-  // Mode d'importation : "file" | "paste" | "scan_standard" | "scan_premium"
-  const [importMode, setImportMode] = useState("file");
+  // Mode d'importation par défaut : "scan_standard" (Scan classique OCR)
+  const [importMode, setImportMode] = useState("scan_standard");
 
   // Champs de saisie
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
-  const [pastedText, setPastedText] = useState("");
   const [customCharacters, setCustomCharacters] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreviewUrl, setFilePreviewUrl] = useState(null);
@@ -107,7 +104,7 @@ export default function Upload() {
     setImportMode(mode);
   };
 
-  // Fonction d'extraction de texte selon le type de fichier
+  // Extraction de texte selon fichier
   const extractTextFromFile = async (file, onProgress, refCharacters = null) => {
     const ext = file.name.toLowerCase().split(".").pop();
     if (ext === "pdf") {
@@ -122,17 +119,15 @@ export default function Upload() {
     }
   };
 
-  // Sauvegarde globale dans Supabase (Script, Personnages, Répliques)
+  // Sauvegarde globale Supabase
   const saveParsedScriptToDb = async ({
     scriptTitle,
-    scriptAuthor,
     rawText,
     fileName,
     filePath,
     parsedCharacters,
     parsedReplicas,
   }) => {
-    // 1. Création de l'entrée script
     const script = await createScript({
       user_id: user?.id,
       title: scriptTitle || "Sans titre",
@@ -143,31 +138,34 @@ export default function Upload() {
 
     const scriptId = script.id || script.script_id;
 
-    // Palette de couleurs distinctes par personnage
-    const CHARACTER_COLORS = [
-      "#8B1538", "#2563EB", "#059669", "#D97706", "#7C3AED",
+    // Attribute a unique color to each character
+    const CHARACTER_PALETTE = [
+      "#8B1538", "#2563EB", "#D97706", "#059669", "#7C3AED",
       "#DC2626", "#0891B2", "#4F46E5", "#DB2777", "#65A30D"
     ];
 
-    // 2. Création des personnages avec couleurs uniques
     const characterMap = {};
     if (Array.isArray(parsedCharacters)) {
-      for (let idx = 0; idx < parsedCharacters.length; idx++) {
-        const char = parsedCharacters[idx];
-        const charName = typeof char === "string" ? char : char?.name;
-        const defaultColor = CHARACTER_COLORS[idx % CHARACTER_COLORS.length];
-        const charColor = (typeof char === "object" && char?.color) ? char.color : defaultColor;
+      parsedCharacters.forEach((char, idx) => {
+        const charName = typeof char === "string" ? char : char.name;
+        const assignedColor = (typeof char === "object" && char.color) 
+          ? char.color 
+          : CHARACTER_PALETTE[idx % CHARACTER_PALETTE.length];
+        
         if (charName) {
-          const createdChar = await addCharacter(scriptId, {
-            name: charName.toUpperCase(),
-            color: charColor,
-          });
-          characterMap[charName.toUpperCase()] = createdChar.id;
+          characterMap[charName.toUpperCase()] = assignedColor;
         }
+      });
+
+      for (const [cName, cColor] of Object.entries(characterMap)) {
+        const createdChar = await addCharacter(scriptId, {
+          name: cName,
+          color: cColor,
+        });
+        characterMap[cName] = createdChar.id;
       }
     }
 
-    // 3. Création des répliques
     if (Array.isArray(parsedReplicas) && parsedReplicas.length > 0) {
       const replicasToInsert = parsedReplicas.map((rep, idx) => {
         const charName = (rep.character || rep.character_name || "").toUpperCase();
@@ -184,7 +182,6 @@ export default function Upload() {
       await addReplicas(replicasToInsert);
     }
 
-    // 4. Rafrachissement
     if (user?.id) {
       await fetchScripts(user.id);
     }
@@ -192,63 +189,33 @@ export default function Upload() {
     return scriptId;
   };
 
-  // Traitement principal lors de la soumission
+  // Submit principal
   const handleSubmit = async (e) => {
     e?.preventDefault();
     setError(null);
 
-    if (!title.trim()) {
-      setError("Veuillez saisir un titre pour la pièce de théâtre.");
-      return;
-    }
-
-    // -------------------------------------------------------------
-    // MODE 1 : COPIER - COLLER
-    // -------------------------------------------------------------
-    if (importMode === "paste") {
-      if (!pastedText.trim()) {
-        setError("Veuillez coller le texte de votre réplique ou scène.");
+    // MODE 1 : SCAN CLASSIQUE (OCR)
+    if (importMode === "scan_standard") {
+      if (!title.trim()) {
+        setError("Veuillez saisir un titre pour la pièce de théâtre.");
         return;
       }
 
-      setIsUploading(true);
-      setUploadProgress("Analyse et découpage du texte...");
-
-      try {
-        const manualCharList = customCharacters
-          ? customCharacters.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
-          : null;
-
-        const { title: parsedTitle, characters, replicas } = parseScript(
-          pastedText,
-          title.trim(),
-          manualCharList
-        );
-
-        setUploadProgress("Enregistrement dans votre bibliothèque...");
-        const scriptId = await saveParsedScriptToDb({
-          scriptTitle: title.trim() || parsedTitle,
-          scriptAuthor: author.trim(),
-          rawText: pastedText,
-          fileName: "copier_coller.txt",
-          filePath: null,
-          parsedCharacters: characters,
-          parsedReplicas: replicas,
-        });
-
-        navigate(`/script/${scriptId}`);
-      } catch (err) {
-        console.error("Erreur import texte collé:", err);
-        setError("Échec de la structuration du texte collé. Vérifiez le format de vos répliques.");
-      } finally {
-        setIsUploading(false);
+      if (!selectedFile) {
+        setError("Veuillez sélectionner un document PDF ou une photo scannée.");
+        return;
       }
+
+      if (!customCharacters.trim()) {
+        setShowCharModal(true);
+        return;
+      }
+
+      await executeScanStandard();
       return;
     }
 
-    // -------------------------------------------------------------
-    // MODE 2 : FICHIER NUMÉRIQUE (PDF, Word, TXT)
-    // -------------------------------------------------------------
+    // MODE 2 : FICHIER NATIF NUMÉRIQUE
     if (importMode === "file") {
       if (!selectedFile) {
         setError("Veuillez choisir un fichier PDF, Word ou TXT à importer.");
@@ -293,7 +260,6 @@ export default function Upload() {
         setUploadProgress("Enregistrement de la pièce de théâtre...");
         const scriptId = await saveParsedScriptToDb({
           scriptTitle: title.trim() || parsedTitle,
-          scriptAuthor: author.trim(),
           rawText,
           fileName: selectedFile.name,
           filePath,
@@ -304,35 +270,14 @@ export default function Upload() {
         navigate(`/script/${scriptId}`);
       } catch (err) {
         console.error("Erreur lors de l'importation de fichier:", err);
-        setError(`Échec de la lecture du fichier : ${err.message || "Fichier complexe"}. Essayez le mode Copier-Coller si besoin.`);
+        setError(`Échec de la lecture du fichier : ${err.message || "Fichier complexe"}.`);
       } finally {
         setIsUploading(false);
       }
       return;
     }
 
-    // -------------------------------------------------------------
-    // MODE 3 : SCAN CLASSIQUE (Photo / PDF scanné avec liste personnages)
-    // -------------------------------------------------------------
-    if (importMode === "scan_standard") {
-      if (!selectedFile) {
-        setError("Veuillez sélectionner un document PDF ou une photo scannée.");
-        return;
-      }
-
-      // Si aucune liste de personnages n'a encore été renseignée, on ouvre la modale
-      if (!customCharacters.trim()) {
-        setShowCharModal(true);
-        return;
-      }
-
-      await executeScanStandard();
-      return;
-    }
-
-    // -------------------------------------------------------------
-    // MODE 4 : SCAN PREMIUM IA (Gemini Vision OCR 100% automatique)
-    // -------------------------------------------------------------
+    // MODE 3 : SCAN PREMIUM IA
     if (importMode === "scan_premium") {
       if (!isPremium) {
         setShowPremiumModal(true);
@@ -340,7 +285,7 @@ export default function Upload() {
       }
 
       if (!selectedFile) {
-        setError("Veuillez sélectionner un fichier PDF pour le Scan Premium.");
+        setError("Veuillez sélectionner un fichier PDF ou une photo pour le Scan Premium.");
         return;
       }
 
@@ -355,7 +300,6 @@ export default function Upload() {
         setUploadProgress("Enregistrement de la pièce scannée...");
         const scriptId = await saveParsedScriptToDb({
           scriptTitle: title.trim() || geminiResult.title || selectedFile.name,
-          scriptAuthor: author.trim() || geminiResult.author,
           rawText: geminiResult.fullText || geminiResult.rawText || "",
           fileName: selectedFile.name,
           filePath: null,
@@ -373,7 +317,6 @@ export default function Upload() {
     }
   };
 
-  // Exécution du Scan Classique après validation des personnages
   const executeScanStandard = async () => {
     setIsUploading(true);
     setUploadProgress("Lancement de la reconnaissance optique (OCR)...");
@@ -408,7 +351,6 @@ export default function Upload() {
 
       const scriptId = await saveParsedScriptToDb({
         scriptTitle: title.trim() || parsedTitle,
-        scriptAuthor: author.trim(),
         rawText,
         fileName: selectedFile.name,
         filePath,
@@ -442,65 +384,15 @@ export default function Upload() {
         </div>
       </div>
 
-      {/* SÉLECTEUR DES 2 VOIES / 4 OPTIONS D'IMPORTATION */}
+      {/* SÉLECTEUR DES MÉTHODES D'IMPORTATION (3 BLOCS RESTRUCTURÉS) */}
       <div className="space-y-4">
         <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">
           1. Choisissez la méthode d'importation
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           
-          {/* OPTION 1 : FICHIER TEXTE NUMÉRIQUE */}
-          <button
-            type="button"
-            onClick={() => handleModeChange("file")}
-            className={`p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col justify-between ${
-              importMode === "file"
-                ? "bg-gray-800 border-blue-500 shadow-lg shadow-blue-500/10"
-                : "bg-gray-800/60 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80"
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📁</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full border border-gray-600">
-                  Standard
-                </span>
-              </div>
-              <h3 className="font-bold text-white text-sm">📄 Fichier numérique</h3>
-              <p className="text-gray-400 text-xs mt-1 leading-snug">
-                PDF informatisé, Word (.docx) ou TXT. Lecture instantanée à 100%.
-              </p>
-            </div>
-            <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
-          </button>
-
-          {/* OPTION 2 : COPIER / COLLER */}
-          <button
-            type="button"
-            onClick={() => handleModeChange("paste")}
-            className={`p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col justify-between ${
-              importMode === "paste"
-                ? "bg-gray-800 border-blue-500 shadow-lg shadow-blue-500/10"
-                : "bg-gray-800/60 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80"
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📋</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full border border-gray-600">
-                  Standard
-                </span>
-              </div>
-              <h3 className="font-bold text-white text-sm">📋 Copier / Coller</h3>
-              <p className="text-gray-400 text-xs mt-1 leading-snug">
-                Copiez-collez vos répliques directement depuis votre presse-papier.
-              </p>
-            </div>
-            <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
-          </button>
-
-          {/* OPTION 3 : SCAN CLASSIQUE */}
+          {/* 1ÈRE POSITION : SCAN CLASSIQUE (OCR) */}
           <button
             type="button"
             onClick={() => handleModeChange("scan_standard")}
@@ -512,20 +404,45 @@ export default function Upload() {
           >
             <div>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-2xl">📕</span>
+                <span className="text-2xl">📸</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full border border-gray-600">
                   Standard
                 </span>
               </div>
-              <h3 className="font-bold text-white text-sm">📸 Scan classique (OCR)</h3>
+              <h3 className="font-bold text-white text-sm">Scan classique (OCR)</h3>
               <p className="text-gray-400 text-xs mt-1 leading-snug">
-                Photos de livrets ou PDF scannés. Indication optionnelle des rôles.
+                Votre pdf est issu d'un scan, ou photocopie. Ici, vous précisez le nom de chaque personnage, laissez-vous guider !
               </p>
             </div>
             <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
           </button>
 
-          {/* OPTION 4 : SCAN PREMIUM IA (GEMINI VISION) */}
+          {/* 2ÈME POSITION : FICHIER NATIF NUMÉRIQUE */}
+          <button
+            type="button"
+            onClick={() => handleModeChange("file")}
+            className={`p-4 rounded-xl border-2 text-left transition-all duration-200 flex flex-col justify-between ${
+              importMode === "file"
+                ? "bg-gray-800 border-blue-500 shadow-lg shadow-blue-500/10"
+                : "bg-gray-800/60 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80"
+            }`}
+          >
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-2xl">📄</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-700 text-gray-300 rounded-full border border-gray-600">
+                  Standard
+                </span>
+              </div>
+              <h3 className="font-bold text-white text-sm">Fichier natif numérique</h3>
+              <p className="text-gray-400 text-xs mt-1 leading-snug">
+                Votre document a été conçu entièrement sur pc ou mobile.
+              </p>
+            </div>
+            <span className="text-xs text-blue-400 font-semibold mt-3">Gratuit</span>
+          </button>
+
+          {/* 3ÈME POSITION : SCAN PREMIUM IA (GEMINI VISION) */}
           <button
             type="button"
             onClick={() => handleModeChange("scan_premium")}
@@ -557,173 +474,159 @@ export default function Upload() {
         </div>
       </div>
 
-      {/* FORMULAIRE DE CONFIGURATION DE LA PIÈCE */}
+      {/* FORMULAIRE DE CONFIGURATION */}
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
-          <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">
-            2. Informations de la pièce de théâtre
-          </h2>
+        
+        {/* PAVÉ 2 : INFORMATIONS DE LA PIÈCE DE THÉÂTRE (Affiché uniquement pour le Scan classique OCR) */}
+        {importMode === "scan_standard" && (
+          <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
+            <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider">
+              2. Informations de la pièce de théâtre
+            </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-                Titre de la pièce de théâtre *
-              </label>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Cyrano de Bergerac"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
-                required
-              />
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
+                  Titre de la pièce de théâtre *
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Ex: Cyrano de Bergerac"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
+                  required
+                />
+              </div>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-                Auteur / Dramaturge (Optionnel)
-              </label>
-              <input
-                type="text"
-                value={author}
-                onChange={(e) => setAuthor(e.target.value)}
-                placeholder="Ex: Edmond Rostand"
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
-              />
+              <div>
+                <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
+                  Auteur / Dramaturge (Optionnel)
+                </label>
+                <input
+                  type="text"
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  placeholder="Ex: Edmond Rostand"
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
+                />
+              </div>
             </div>
           </div>
+        )}
 
-          {/* ZONE DE Saisie : COPIER-COLLER OU DRAG & DROP FICHIER */}
-          {importMode === "paste" ? (
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-                Collez votre texte ci-dessous *
-              </label>
-              <textarea
-                rows={10}
-                value={pastedText}
-                onChange={(e) => setPastedText(e.target.value)}
-                placeholder={`Exemple :
-CYRANO : C'est un roc ! c'est un pic ! c'est un cap !
-LE BRET : Cyrano, tu es fantastique !`}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white text-sm font-mono focus:border-amber-500 focus:outline-none transition"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
-                {importMode === "scan_premium"
-                  ? "Sélectionnez votre document PDF scanné *"
-                  : "Glissez vos fichiers ou cliquez pour sélectionner *"}
-              </label>
+        {/* ZONE DE DÉPÔT / UPLOAD FICHIER */}
+        <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-4 shadow-xl">
+          <label className="block text-xs font-bold text-gray-300 uppercase mb-2">
+            {importMode === "scan_premium"
+              ? "Sélectionnez votre photo ou document scanné *"
+              : "Glissez vos fichiers ou cliquez pour sélectionner *"}
+          </label>
 
-              <div
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
-                  selectedFile
-                    ? "border-amber-500 bg-amber-500/10"
-                    : "border-gray-700 hover:border-gray-500 bg-gray-800/40"
-                }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  accept=".pdf,.doc,.docx,.txt,image/*"
-                  className="hidden"
-                />
+          <div
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-2xl p-6 sm:p-8 text-center cursor-pointer transition-all duration-200 ${
+              selectedFile
+                ? "border-amber-500 bg-amber-500/10"
+                : "border-gray-700 hover:border-gray-500 bg-gray-800/40"
+            }`}
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              accept=".pdf,.doc,.docx,.txt,image/*"
+              className="hidden"
+            />
 
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  accept="image/*"
-                  capture="environment"
-                  className="hidden"
-                />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              onChange={handleFileSelect}
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+            />
 
-                {selectedFile ? (
-                  <div className="space-y-2">
-                    <span className="text-4xl block">📄</span>
-                    <p className="font-bold text-white text-sm">{selectedFile.name}</p>
-                    <p className="text-gray-400 text-xs">
-                      {(selectedFile.size / 1024 / 1024).toFixed(2)} Mo
-                    </p>
-                    {filePreviewUrl && (
-                      <img
-                        src={filePreviewUrl}
-                        alt="Aperçu"
-                        className="max-h-40 mx-auto rounded-lg border border-gray-700 mt-2"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFile(null);
-                        setFilePreviewUrl(null);
-                      }}
-                      className="text-xs text-red-400 hover:text-red-300 underline pt-1"
-                    >
-                      Changer de fichier
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <span className="text-4xl block">📄</span>
-                    <p className="text-white font-bold text-sm sm:text-base">
-                      Glissez vos fichiers ici
-                    </p>
-                    <p className="text-gray-400 text-xs">ou cliquez pour sélectionner</p>
-                    <div className="flex justify-center gap-2 pt-2">
-                      <span className="px-2.5 py-1 bg-red-900/50 text-red-300 text-xs font-bold rounded">
-                        📕 PDF
-                      </span>
-                      <span className="px-2.5 py-1 bg-blue-900/50 text-blue-300 text-xs font-bold rounded">
-                        📘 Word
-                      </span>
-                      <span className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs font-bold rounded">
-                        📄 TXT
-                      </span>
-                    </div>
-                  </div>
+            {selectedFile ? (
+              <div className="space-y-2">
+                <span className="text-4xl block">📄</span>
+                <p className="font-bold text-white text-sm">{selectedFile.name}</p>
+                <p className="text-gray-400 text-xs">
+                  {(selectedFile.size / 1024 / 1024).toFixed(2)} Mo
+                </p>
+                {filePreviewUrl && (
+                  <img
+                    src={filePreviewUrl}
+                    alt="Aperçu"
+                    className="max-h-40 mx-auto rounded-lg border border-gray-700 mt-2"
+                  />
                 )}
-              </div>
-
-              {/* Boutons d'accès appareil photo mobile */}
-              <div className="flex gap-2 mt-3 justify-end">
                 <button
                   type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1.5 transition"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                    setFilePreviewUrl(null);
+                  }}
+                  className="text-xs text-red-400 hover:text-red-300 underline pt-1"
                 >
-                  📷 Prendre une photo directement
+                  Changer de fichier
                 </button>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-3">
+                <span className="text-4xl block">📄</span>
+                <p className="text-white font-bold text-sm sm:text-base">
+                  Glissez vos fichiers ici
+                </p>
+                <p className="text-gray-400 text-xs">ou cliquez pour sélectionner</p>
+                <div className="flex justify-center gap-2 pt-2">
+                  <span className="px-2.5 py-1 bg-red-900/50 text-red-300 text-xs font-bold rounded">
+                    📕 PDF
+                  </span>
+                  <span className="px-2.5 py-1 bg-blue-900/50 text-blue-300 text-xs font-bold rounded">
+                    📘 Word
+                  </span>
+                  <span className="px-2.5 py-1 bg-gray-700 text-gray-300 text-xs font-bold rounded">
+                    📄 TXT
+                  </span>
+                </div>
+              </div>
+            )}
+          </div>
 
-          {/* LISTE DES PERSONNAGES OPTIONNELLE */}
-          <div>
-            <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-              Personnages (Optionnel - Séparés par des virgules)
-            </label>
-            <input
-              type="text"
-              value={customCharacters}
-              onChange={(e) => setCustomCharacters(e.target.value)}
-              placeholder="Ex: Cyrano, Roxane, Christian, De Guiche"
-              className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
-            />
-            <p className="text-gray-500 text-[11px] mt-1">
-              Si laissé vide, l'application détectera les noms écrits en MAJUSCULES.
-            </p>
+          <div className="flex gap-2 justify-end">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-xs font-semibold text-gray-300 flex items-center gap-1.5 transition"
+            >
+              📷 Prendre une photo directement
+            </button>
           </div>
         </div>
 
-        {/* AFFICHAGE DES ERREURS */}
+        {/* LISTE DES PERSONNAGES OPTIONNELLE */}
+        <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-2 shadow-xl">
+          <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
+            Personnages (Optionnel - Séparés par des virgules)
+          </label>
+          <input
+            type="text"
+            value={customCharacters}
+            onChange={(e) => setCustomCharacters(e.target.value)}
+            placeholder="Ex: Cyrano, Roxane, Christian, De Guiche"
+            className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-2.5 text-white text-sm focus:border-amber-500 focus:outline-none transition"
+          />
+          <p className="text-gray-500 text-[11px]">
+            Si laissé vide, l'application détectera les noms écrits en MAJUSCULES.
+          </p>
+        </div>
+
+        {/* ERREURS */}
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/50 rounded-xl flex items-center gap-3">
             <span className="text-2xl">⚠️</span>
@@ -731,7 +634,7 @@ LE BRET : Cyrano, tu es fantastique !`}
           </div>
         )}
 
-        {/* PROGRESSION DU CHARGEMENT */}
+        {/* PROGRESSION */}
         {isUploading && (
           <div className="p-6 bg-gray-900/90 border border-gray-800 rounded-2xl text-center space-y-3">
             <Loader />
@@ -741,7 +644,7 @@ LE BRET : Cyrano, tu es fantastique !`}
           </div>
         )}
 
-        {/* BOUTON D'ACTION DE SOUMISSION */}
+        {/* SOUMISSION */}
         <button
           type="submit"
           disabled={isUploading}
@@ -763,7 +666,7 @@ LE BRET : Cyrano, tu es fantastique !`}
         </button>
       </form>
 
-      {/* MODALE DE SAISIE DE PERSONNAGES POUR SCAN CLASSIQUE */}
+      {/* MODALE PERSONNAGES SCAN CLASSIQUE */}
       {showCharModal && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-gray-900 border border-gray-700 rounded-2xl max-w-md w-full p-6 space-y-4">
@@ -823,7 +726,7 @@ LE BRET : Cyrano, tu es fantastique !`}
         </div>
       )}
 
-      {/* MODALE BASCULE PREMIUM */}
+      {/* MODALE PREMIUM */}
       {showPremiumModal && (
         <PremiumGateModal
           featureKey="OCR_AUTO"

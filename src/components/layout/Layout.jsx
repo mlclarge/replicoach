@@ -6,28 +6,19 @@ import Onboarding from "../Onboarding";
 import OfflineIndicator from "../OfflineIndicator";
 import { useSessionTracker } from "../Monitoring";
 
-function Layout() {
-  // Tracker la session utilisateur pour le monitoring
+export default function Layout() {
   useSessionTracker();
 
   return (
-    <div className="min-h-screen bg-darker flex flex-col">
-      {/* Indicateur hors-ligne */}
+    <div className="min-h-screen bg-darker flex flex-col text-gray-100">
       <OfflineIndicator />
-
       <Header />
-      <main className="flex-1 pb-20 overflow-y-auto">
+      <main className="flex-1 pb-24 overflow-y-auto">
         <Outlet />
       </main>
       <BottomNav />
-
-      {/* Prompt d'installation PWA */}
       <InstallPrompt />
-
-      {/* Tutoriel première visite */}
       <Onboarding />
     </div>
   );
 }
-
-export default Layout;
