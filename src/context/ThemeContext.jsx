@@ -10,21 +10,21 @@ export const THEMES = {
 
 const THEME_CSS = `
 /* =====================================================
-   RÉPLICOACH THEMES CSS (PAPIER SÉPIA & CLAIR DAYLIGHT)
+   RÉPLICOACH THEMES CSS (SÉPIA PARCHEMIN & CLAIR)
    ===================================================== */
 
-/* 1. THÈME PAPIER SÉPIA (Livret de théâtre traditionnel) */
+/* 1. THÈME PARCHEMIN SÉPIA (Livret de théâtre authentique) */
 html.theme-paper,
 html.theme-paper body,
 body.theme-paper {
-  background-color: #f7f3e6 !important;
-  color: #241c14 !important;
+  background-color: #f2e7ce !important;
+  color: #2b1d0f !important;
 }
 
 .theme-paper .bg-darker,
 .theme-paper .bg-gray-950 {
-  background-color: #f7f3e6 !important;
-  color: #241c14 !important;
+  background-color: #f2e7ce !important;
+  color: #2b1d0f !important;
 }
 
 .theme-paper .bg-gray-900,
@@ -33,8 +33,8 @@ body.theme-paper {
 .theme-paper .bg-gray-900\/80,
 .theme-paper .bg-gray-900\/60,
 .theme-paper .bg-gray-900\/50 {
-  background-color: #ebdcb9 !important;
-  color: #241c14 !important;
+  background-color: #ebd8b0 !important;
+  color: #2b1d0f !important;
 }
 
 .theme-paper .bg-gray-800,
@@ -42,31 +42,33 @@ body.theme-paper {
 .theme-paper .bg-gray-800\/80,
 .theme-paper .bg-gray-800\/60,
 .theme-paper .bg-gray-800\/40 {
-  background-color: #e0cea8 !important;
-  color: #241c14 !important;
+  background-color: #dfcb9e !important;
+  color: #2b1d0f !important;
 }
 
+/* Textes sur cartes Parchemin */
 .theme-paper .text-white,
 .theme-paper .text-gray-100,
 .theme-paper .text-gray-200,
 .theme-paper .text-gray-300 {
-  color: #241c14 !important;
+  color: #2b1d0f !important;
 }
 
 .theme-paper .text-gray-400,
 .theme-paper .text-gray-500 {
-  color: #5c4d3c !important;
+  color: #5e452e !important;
 }
 
 .theme-paper .border-gray-800,
 .theme-paper .border-gray-700,
 .theme-paper .border-gray-600 {
-  border-color: #caa775 !important;
+  border-color: #c2a672 !important;
 }
 
 .theme-paper .bg-gray-950\/95,
 .theme-paper .bg-gray-950\/90 {
-  background-color: #f0e2be !important;
+  background-color: #e5d3aa !important;
+  color: #2b1d0f !important;
 }
 
 /* 2. THÈME CLAIR DAYLIGHT */
@@ -118,6 +120,81 @@ body.theme-light {
 .theme-light .border-gray-700,
 .theme-light .border-gray-600 {
   border-color: #cbd5e1 !important;
+}
+
+/* =====================================================
+   RÈGLES D'EXCEPTION : LISIBILITÉ DU TEXTE SUR ÉLÉMENTS FONCÉS ET BANDEAU
+   ===================================================== */
+
+/* 1. Header / Bandeau principal : reste TOUJOURS sombre avec titre blanc et sous-titre doré */
+header,
+header h1,
+header p,
+header span,
+header a,
+.theme-paper header,
+.theme-paper header h1,
+.theme-paper header p,
+.theme-paper header span,
+.theme-paper header a,
+.theme-light header,
+.theme-light header h1,
+.theme-light header p,
+.theme-light header span,
+.theme-light header a {
+  color: #ffffff !important;
+}
+
+header p.text-gold-400,
+.theme-paper header p.text-gold-400,
+.theme-light header p.text-gold-400 {
+  color: #fbbf24 !important;
+}
+
+/* 2. Boutons d'action, CTA et cartes sombres : garantit du texte blanc lisible sur fonds sombres */
+.theme-paper .bg-purple-600, .theme-light .bg-purple-600,
+.theme-paper .bg-purple-900, .theme-light .bg-purple-900,
+.theme-paper .bg-purple-950, .theme-light .bg-purple-950,
+.theme-paper .bg-primary-600, .theme-light .bg-primary-600,
+.theme-paper .bg-primary-900, .theme-light .bg-primary-900,
+.theme-paper .bg-primary-950, .theme-light .bg-primary-950,
+.theme-paper .bg-blue-600, .theme-light .bg-blue-600,
+.theme-paper .bg-blue-900, .theme-light .bg-blue-900,
+.theme-paper .bg-rose-600, .theme-light .bg-rose-600,
+.theme-paper .bg-emerald-600, .theme-light .bg-emerald-600,
+.theme-paper .bg-black, .theme-light .bg-black,
+.theme-paper .btn-gold, .theme-light .btn-gold {
+  color: #ffffff !important;
+}
+
+/* Textes à l'intérieur des boutons sombres */
+.theme-paper .bg-purple-600 *, .theme-light .bg-purple-600 *,
+.theme-paper .bg-purple-900 *, .theme-light .bg-purple-900 *,
+.theme-paper .bg-purple-950 *, .theme-light .bg-purple-950 *,
+.theme-paper .bg-primary-600 *, .theme-light .bg-primary-600 *,
+.theme-paper .bg-primary-900 *, .theme-light .bg-primary-900 *,
+.theme-paper .bg-primary-950 *, .theme-light .bg-primary-950 *,
+.theme-paper .bg-blue-600 *, .theme-light .bg-blue-600 *,
+.theme-paper .bg-rose-600 *, .theme-light .bg-rose-600 *,
+.theme-paper .bg-emerald-600 *, .theme-light .bg-emerald-600 * {
+  color: #ffffff !important;
+}
+
+/* Boutons or/ambre -> texte foncé contrasté */
+.theme-paper .bg-amber-500, .theme-light .bg-amber-500,
+.theme-paper .bg-gold-500, .theme-light .bg-gold-500 {
+  color: #0f172a !important;
+}
+
+/* Badges de texte avec couleurs distinctes et lisibles */
+.theme-paper .text-amber-300, .theme-light .text-amber-300,
+.theme-paper .text-amber-400, .theme-light .text-amber-400 {
+  color: #b45309 !important;
+}
+
+.theme-paper .text-purple-300, .theme-light .text-purple-300,
+.theme-paper .text-purple-400, .theme-light .text-purple-400 {
+  color: #7e22ce !important;
 }
 `;
 
