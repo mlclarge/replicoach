@@ -44,21 +44,18 @@ import { CSS } from "@dnd-kit/utilities";
 import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
-/**
- * Section Consignes Metteur en Scène (Sécurisée)
- */
 function DirectorNotesSection({
-  notes = [],
+  notes,
   onUpload,
   onDelete,
   onViewDocument,
   uploading,
   error,
-  expanded = true,
+  expanded,
   onToggleExpand,
 }) {
-  const safeNotes = Array.isArray(notes) ? notes : [];
   const [dragActive, setDragActive] = useState(false);
+  const safeNotes = Array.isArray(notes) ? notes : [];
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -108,72 +105,76 @@ function DirectorNotesSection({
           </div>
         </div>
         {onToggleExpand && (
-          <div className={`text-gray-400 transition-transform ${expanded ? "rotate-90" : ""}`}>
+          <div
+            className={`text-gray-400 transition-transform ${
+              expanded ? "rotate-90" : ""
+            }`}
+          >
             ▶
           </div>
         )}
       </div>
 
       {expanded && (
-        <div
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-          className={`mt-4 pt-4 border-t border-gray-800 transition ${
-            dragActive ? "bg-yellow-500/10 border-dashed border-yellow-500 rounded-xl p-4" : ""
-          }`}
-        >
-          {error && (
-            <div className="mb-3 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs">
-              {error}
-            </div>
-          )}
+        <div className="mt-4 pt-4 border-t border-gray-800 transition">
+          {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
 
-          {uploading && (
-            <div className="py-4 text-center">
-              <Loader size="sm" />
-              <p className="text-gray-400 text-xs mt-2">Envoi du document en cours...</p>
-            </div>
-          )}
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl p-4 text-center transition mb-4 ${
+              dragActive
+                ? "border-yellow-400 bg-yellow-500/10"
+                : "border-gray-700 bg-gray-800/40 hover:border-yellow-500/50"
+            }`}
+          >
+            <p className="text-xs text-gray-300 mb-2">
+              Glissez vos consignes (PDF, Word, TXT, Images) ici
+            </p>
+            <label className="btn-gold text-xs px-3 py-1.5 inline-block cursor-pointer">
+              {uploading ? "⏳ Upload..." : "📤 Parcourir les fichiers"}
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) =>
+                  e.target.files && onUpload && onUpload(e.target.files)
+                }
+                disabled={uploading}
+              />
+            </label>
+          </div>
 
           {safeNotes.length === 0 ? (
-            <div className="text-center py-6 border-2 border-dashed border-gray-800 rounded-xl">
-              <p className="text-3xl mb-2">📂</p>
-              <p className="text-gray-400 text-xs">
-                Aucune consigne déposée. Glissez-déposez vos fichiers ici.
-              </p>
-            </div>
+            <p className="text-gray-500 text-xs text-center py-3">
+              Aucune consigne ajoutée.
+            </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2 max-h-60 overflow-y-auto">
               {safeNotes.map((note) => (
                 <div
                   key={note.id}
-                  className="flex items-center justify-between p-3 bg-gray-800/60 rounded-xl border border-gray-700/50 hover:border-gray-600 transition"
+                  className="flex items-center justify-between p-2.5 bg-gray-800/60 rounded-xl border border-gray-700/60 hover:border-yellow-500/30 transition text-xs"
                 >
                   <div
-                    onClick={() => onViewDocument && onViewDocument(note)}
-                    className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
+                    onClick={() => onViewDocument(note)}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
                   >
-                    <span className="text-xl">📄</span>
-                    <div className="truncate">
-                      <p className="text-white text-sm font-medium truncate">{note.file_name}</p>
-                      <p className="text-gray-500 text-[10px]">
-                        {note.created_at
-                          ? new Date(note.created_at).toLocaleDateString("fr-FR")
-                          : ""}
-                      </p>
-                    </div>
+                    <span className="text-base">
+                      {note.file_name?.endsWith(".pdf") ? "📕" : "📝"}
+                    </span>
+                    <span className="text-gray-200 font-semibold truncate">
+                      {note.file_name}
+                    </span>
                   </div>
-                  {onDelete && (
-                    <button
-                      onClick={() => onDelete(note.id)}
-                      className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-                      title="Supprimer"
-                    >
-                      🗑️
-                    </button>
-                  )}
+                  <button
+                    onClick={() => onDelete(note.id, note.file_path)}
+                    className="p-1 text-gray-500 hover:text-red-400 rounded transition"
+                  >
+                    🗑️
+                  </button>
                 </div>
               ))}
             </div>
@@ -184,10 +185,7 @@ function DirectorNotesSection({
   );
 }
 
-/**
- * Composant principal Home
- */
-function Home() {
+export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [searchParams] = useSearchParams();
@@ -207,12 +205,25 @@ function Home() {
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({});
 
-  // Navigation par onglets ('scripts', 'director', 'library')
-  
-  // Rôle utilisateur
-  const [userRole, setUserRole] = useState("member");
+  const [directorNotes, setDirectorNotes] = useState([]);
+  const [uploadingNote, setUploadingNote] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
+  const [viewingDocument, setViewingDocument] = useState(null);
 
-  // Ordre verrouillé
+  const [scriptToShare, setScriptToShare] = useState(null);
+  const [shareTroupes, setShareTroupes] = useState([]);
+  const [sharingLoading, setSharingLoading] = useState(false);
+  const [shareSuccess, setShareSuccess] = useState(null);
+  const [shareError, setShareError] = useState(null);
+
+  const [userTags, setUserTags] = useState([]);
+  const [scriptTagsMap, setScriptTagsMap] = useState({});
+  const [selectedTagFilter, setSelectedTagFilter] = useState(null);
+  const [managingTagsFor, setManagingTagsFor] = useState(null);
+
+  const [personalAudios, setPersonalAudios] = useState([]);
+  const [audioImportMsg, setAudioImportMsg] = useState(null);
   const [orderLocked, setOrderLocked] = useState(() => {
     try {
       return localStorage.getItem("replicoach-order-locked") === "true";
@@ -221,196 +232,75 @@ function Home() {
     }
   });
 
-  // Consignes Metteur en scène
-  const [directorNotesExpanded, setDirectorNotesExpanded] = useState(true);
-  const [directorNotes, setDirectorNotes] = useState([]);
-  const [uploadingNote, setUploadingNote] = useState(false);
-  const [uploadError, setUploadError] = useState(null);
-  const [showTroupeSelector, setShowTroupeSelector] = useState(false);
-  const [pendingFiles, setPendingFiles] = useState(null);
-  const [uploadTroupes, setUploadTroupes] = useState([]);
-
-  // Documents
-  const [viewingDocument, setViewingDocument] = useState(null);
-
-  // Partage
-  const [scriptToShare, setScriptToShare] = useState(null);
-  const [shareTroupes, setShareTroupes] = useState([]);
-  const [sharingLoading, setSharingLoading] = useState(false);
-  const [shareSuccess, setShareSuccess] = useState(null);
-  const [shareError, setShareError] = useState(null);
-
-  // Tags
-  const [userTags, setUserTags] = useState([]);
-  const [scriptTagsMap, setScriptTagsMap] = useState({});
-  const [selectedTagFilter, setSelectedTagFilter] = useState(null);
-  const [managingTagsFor, setManagingTagsFor] = useState(null);
-
-  // Accès rapide
   const [recentScript, setRecentScript] = useState(null);
 
-  // Audios
-  const [personalAudios, setPersonalAudios] = useState([]);
-  const [audioImportMsg, setAudioImportMsg] = useState(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
-  useEffect(() => {
-    if (user?.id) {
-      getUserRole(user.id)
-        .then((role) => setUserRole(role || "member"))
-        .catch(() => setUserRole("member"));
-
-      fetchScripts(user.id);
-      loadDirectorNotes();
-      loadUploadTroupes();
-      loadNotesCounts();
-      loadUserTags();
-      loadRecentScript();
-      loadPersonalAudios();
-    }
-  }, [user?.id]);
-
-  const loadDirectorNotes = async () => {
-    if (!user?.id) return;
+  const loadData = useCallback(async () => {
+    if (!user) return;
     try {
+      await fetchScripts();
       const notes = await fetchDirectorNotes(user.id);
-      setDirectorNotes(Array.isArray(notes) ? notes : []);
-    } catch (err) {
-      console.error("Erreur consignes:", err);
-      setDirectorNotes([]);
-    }
-  };
+      setDirectorNotes(notes || []);
 
-  const loadUploadTroupes = async () => {
-    if (!user?.id) return;
-    try {
-      const troupes = await fetchUserTroupes(user.id);
-      setUploadTroupes(Array.isArray(troupes) ? troupes : []);
-    } catch (err) {
-      console.error("Erreur troupes:", err);
-      setUploadTroupes([]);
-    }
-  };
-
-  const loadNotesCounts = async () => {
-    if (!user?.id) return;
-    try {
-      const counts = await countNotesForScripts(user.id);
-      setNotesCounts(counts || {});
-    } catch (err) {
-      console.error("Erreur notes counts:", err);
-    }
-  };
-
-  const loadUserTags = async () => {
-    if (!user?.id) return;
-    try {
       const tags = await fetchUserTags(user.id);
-      setUserTags(Array.isArray(tags) ? tags : []);
-    } catch (err) {
-      console.error("Erreur tags:", err);
-    }
-  };
+      setUserTags(tags || []);
 
-  const loadRecentScript = () => {
-    try {
-      const stored = localStorage.getItem("replicoach_recent_script");
-      if (stored) setRecentScript(JSON.parse(stored));
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const loadPersonalAudios = async () => {
-    if (!user?.id) return;
-    try {
       const audios = await fetchPersonalAudios(user.id);
-      setPersonalAudios(Array.isArray(audios) ? audios : []);
+      setPersonalAudios(audios || []);
     } catch (err) {
-      console.error("Erreur audios:", err);
+      console.error(err);
     }
-  };
+  }, [user, fetchScripts]);
 
   useEffect(() => {
-    if (Array.isArray(scripts)) {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    if (scripts) {
       let filtered = [...scripts];
-
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        filtered = filtered.filter((s) => s.title?.toLowerCase().includes(q));
+        filtered = filtered.filter((s) =>
+          s.title.toLowerCase().includes(searchQuery.toLowerCase())
+        );
       }
-
       if (selectedTagFilter) {
         filtered = filtered.filter((s) => {
           const tags = scriptTagsMap[s.id] || [];
           return tags.some((t) => t.id === selectedTagFilter);
         });
       }
-
       setLocalScripts(filtered);
-    } else {
-      setLocalScripts([]);
+
+      if (scripts.length > 0) {
+        countNotesForScripts(scripts.map((s) => s.id)).then(setNotesCounts);
+      }
     }
-  }, [scripts, searchQuery, selectedTagFilter, scriptTagsMap]);
+  }, [scripts, searchQuery, selectedTagFilter, scriptTagsMap, countNotesForScripts]);
 
-  useEffect(() => {
-    loadScriptsTags();
-  }, [scripts]);
-
-  const loadScriptsTags = async () => {
-    if (!Array.isArray(scripts) || scripts.length === 0) return;
+  const loadScriptsTags = useCallback(async () => {
+    if (!scripts || scripts.length === 0) return;
     const map = {};
-    for (const script of scripts) {
+    for (const s of scripts) {
       try {
-        const tags = await fetchScriptTags(script.id);
-        map[script.id] = tags || [];
-      } catch (err) {
-        console.error(err);
+        const tags = await fetchScriptTags(s.id);
+        map[s.id] = tags || [];
+      } catch (e) {
+        console.error(e);
       }
     }
     setScriptTagsMap(map);
-  };
+  }, [scripts]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: orderLocked ? 999999 : 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleDragStart = (event) => {
-    if (orderLocked) return;
-    setActiveId(event.active.id);
-  };
-
-  const handleDragEnd = async (event) => {
-    setActiveId(null);
-    if (orderLocked) return;
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = localScripts.findIndex((s) => s.id === active.id);
-    const newIndex = localScripts.findIndex((s) => s.id === over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const reordered = arrayMove(localScripts, oldIndex, newIndex);
-      setLocalScripts(reordered);
-
-      const itemsToUpdate = reordered.map((s, idx) => ({
-        id: s.id,
-        display_order: idx + 1,
-      }));
-
-      try {
-        await updateScriptOrder(itemsToUpdate);
-      } catch (err) {
-        console.error("Erreur ordre:", err);
-      }
-    }
-  };
+  useEffect(() => {
+    loadScriptsTags();
+  }, [loadScriptsTags]);
 
   const toggleOrderLock = () => {
     const next = !orderLocked;
@@ -422,58 +312,45 @@ function Home() {
     }
   };
 
-  const handleDelete = (scriptId) => setDeleteConfirm(scriptId);
+  const handleOpenScript = (id) => {
+    navigate(`/script/${id}`);
+  };
+
+  const handleDelete = (id) => {
+    setDeleteConfirm(id);
+  };
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return;
     try {
       await deleteScript(deleteConfirm);
       setDeleteConfirm(null);
+      loadData();
     } catch (err) {
       console.error(err);
     }
-  };
-
-  const handleOpenScript = (scriptId) => {
-    const targetScript = scripts.find((s) => s.id === scriptId);
-    if (targetScript) {
-      const existing = recentScript && recentScript.scriptId === scriptId ? recentScript.count || 0 : 0;
-      const updated = {
-        scriptId,
-        title: targetScript.title,
-        lastAccess: new Date().toISOString(),
-        count: existing + 1,
-      };
-      localStorage.setItem("replicoach_recent_script", JSON.stringify(updated));
-      setRecentScript(updated);
-    }
-    navigate(`/script/${scriptId}`);
   };
 
   const handleOpenShare = async (script) => {
     setScriptToShare(script);
     setShareSuccess(null);
     setShareError(null);
-    setSharingLoading(true);
     try {
       const troupes = await fetchUserTroupes(user.id);
       setShareTroupes(troupes || []);
-    } catch (err) {
-      console.error(err);
-      setShareTroupes([]);
-    } finally {
-      setSharingLoading(false);
+    } catch (e) {
+      console.error(e);
     }
   };
 
   const handleConfirmShare = async (troupeId) => {
-    if (!scriptToShare || !user) return;
+    if (!scriptToShare) return;
     setSharingLoading(true);
     setShareError(null);
     try {
       await shareScriptToTroupe(scriptToShare.id, troupeId, user.id);
-      setShareSuccess("Texte partagé avec succès !");
-      setTimeout(() => setScriptToShare(null), 1500);
+      setShareSuccess("✓ Texte partagé avec succès !");
+      setTimeout(() => setScriptToShare(null), 1200);
     } catch (err) {
       setShareError(err.message || "Erreur lors du partage");
     } finally {
@@ -481,52 +358,61 @@ function Home() {
     }
   };
 
-  const handleUploadDirectorNote = async (files) => {
-    if (!user) return;
-    if (uploadTroupes.length > 0) {
-      setPendingFiles(Array.from(files));
-      setShowTroupeSelector(true);
-    } else {
-      await doUploadDirectorNotes(Array.from(files), null);
+  const handleDragStart = (e) => setActiveId(e.active.id);
+
+  const handleDragEnd = async (e) => {
+    const { active, over } = e;
+    setActiveId(null);
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = localScripts.findIndex((s) => s.id === active.id);
+    const newIndex = localScripts.findIndex((s) => s.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reordered = arrayMove(localScripts, oldIndex, newIndex);
+      setLocalScripts(reordered);
+      try {
+        await updateScriptOrder(
+          reordered.map((s, idx) => ({ id: s.id, display_order: idx + 1 }))
+        );
+      } catch (err) {
+        console.error("Erreur ordre:", err);
+      }
     }
   };
 
-  const doUploadDirectorNotes = async (files, troupeId) => {
+  const handleUploadDirectorNote = async (files) => {
+    if (!files || files.length === 0) return;
     setUploadingNote(true);
     setUploadError(null);
     try {
       for (const file of files) {
-        await uploadDirectorNote(file, user.id, troupeId);
+        await uploadDirectorNote(user.id, file);
       }
-      setShowTroupeSelector(false);
-      setPendingFiles(null);
-      await loadDirectorNotes();
+      const notes = await fetchDirectorNotes(user.id);
+      setDirectorNotes(notes || []);
     } catch (err) {
-      console.error(err);
-      setUploadError(err.message || "Erreur lors de l'envoi");
+      setUploadError(err.message || "Erreur d'upload");
     } finally {
       setUploadingNote(false);
     }
   };
 
-  const handleDeleteDirectorNote = async (noteId) => {
-    const note = directorNotes.find((n) => n.id === noteId);
-    if (!note) return;
+  const handleDeleteDirectorNote = async (noteId, filePath) => {
+    if (!confirm("Supprimer cette consigne ?")) return;
     try {
-      await deleteDirectorNote(noteId, note.file_path);
+      await deleteDirectorNote(noteId, filePath);
       setDirectorNotes((prev) => prev.filter((n) => n.id !== noteId));
-    } catch (error) {
-      console.error(error);
-      alert("Erreur lors de la suppression");
+    } catch (err) {
+      console.error(err);
     }
   };
 
   const handleViewDocument = (note) => {
-    setViewingDocument({
-      file_name: note.file_name,
-      file_url: getDirectorNoteUrl(note.file_path),
-      file_type: note.file_type,
-    });
+    const url = getDirectorNoteUrl(note.file_path);
+    if (url) {
+      setViewingDocument({ title: note.file_name, url });
+    }
   };
 
   const handleDeleteAudio = async (audioId, audioPath) => {
@@ -550,11 +436,9 @@ function Home() {
   }
 
   return (
-    /* Responsivité pleine page Desktop identique aux pages /profile et /script/[id] */
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4 space-y-8">
-      
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
       {/* 🎭 EN-TÊTE BIENVENUE SUR REPLICOACH */}
-      <div className="text-center max-w-2xl mx-auto space-y-1.5 p-2">
+      <div className="text-center max-w-2xl mx-auto space-y-1.5 p-2 mb-6">
         <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border border-amber-500/30 rounded-full text-xs font-bold text-amber-300 uppercase tracking-widest mb-1 shadow-inner">
           <span>🎭</span> Application de mémorisation théâtrale
         </div>
@@ -566,7 +450,6 @@ function Home() {
         </p>
       </div>
 
-      {/* VUE PRINCIPALE OU ONGLETS (SI NAVIGUÉ DEPUIS LE FOOTER/FAB) */}
       {activeHomeTab === "director" ? (
         <div className="space-y-4">
           <DirectorNotesSection
@@ -606,7 +489,6 @@ function Home() {
       ) : (
         /* ACCUEIL PRINCIPAL : LISTE DE TEXTES ON TOP + LES 2 PARCOURS EN DESSOUS */
         <div className="space-y-8">
-          
           {/* 1. BLOC ON TOP : MES TEXTES & SAYNÈTES */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -618,7 +500,6 @@ function Home() {
               </span>
             </div>
 
-            {/* Accès rapide au texte récent */}
             {recentScript && scripts?.some((s) => s.id === recentScript.scriptId) && (
               <button
                 onClick={() => handleOpenScript(recentScript.scriptId)}
@@ -646,7 +527,6 @@ function Home() {
               </button>
             )}
 
-            {/* Filtre par Tags */}
             {userTags.length > 0 && (
               <TagFilter
                 tags={userTags}
@@ -671,7 +551,11 @@ function Home() {
                 </p>
                 <button
                   onClick={toggleOrderLock}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${orderLocked ? "bg-green-500/20 text-green-400 border border-green-500/50" : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white"}`}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
+                    orderLocked
+                      ? "bg-green-500/20 text-green-400 border border-green-500/50"
+                      : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white"
+                  }`}
                 >
                   {orderLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller"}
                 </button>
@@ -758,16 +642,13 @@ function Home() {
           {/* 2. BLOC DESSOUS : LES 2 CARTES DE PARCOURS */}
           <div className="p-5 sm:p-6 bg-gradient-to-b from-gray-900/95 to-gray-950/95 border border-gray-800 rounded-3xl shadow-2xl backdrop-blur-md">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* CARTE 1 : COMÉDIEN INDÉPENDANT (Thème Or / Ambre / Ardoise) */}
+              {/* CARTE 1 : COMÉDIEN INDÉPENDANT */}
               <Link
                 to="/upload"
                 className="relative bg-gradient-to-br from-gray-900/90 via-gray-800/90 to-amber-950/30 border-2 border-amber-500/60 hover:border-amber-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-amber-500/20 flex flex-col justify-between overflow-hidden"
               >
-                {/* Effet lumineux d'arrière-plan */}
                 <div className="absolute -top-10 -right-10 w-28 h-28 bg-amber-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-amber-500/20 transition-all" />
-
                 <div>
-                  {/* Badge & Titre */}
                   <div className="flex items-center justify-between mb-4">
                     <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
                       <span>👤</span> Comédien Indépendant
@@ -776,15 +657,12 @@ function Home() {
                       Solo →
                     </span>
                   </div>
-
                   <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-amber-300 transition-colors">
                     Travaillez vos textes personnels
                   </h3>
                   <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-4">
                     Importez directement vos pièces personnelles, scripts ou livrets pour répéter vos répliques en toute autonomie.
                   </p>
-
-                  {/* Bullet points */}
                   <ul className="space-y-2 text-xs sm:text-sm text-gray-300 mb-6">
                     <li className="flex items-center gap-2">
                       <span className="text-amber-400 font-bold">✓</span> Importation PDF, TXT ou Scan photo
@@ -797,8 +675,6 @@ function Home() {
                     </li>
                   </ul>
                 </div>
-
-                {/* Bouton CTA */}
                 <div className="mt-2 pt-3 border-t border-amber-500/20">
                   <span className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 group-hover:from-amber-400 group-hover:to-amber-500 text-gray-950 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
                     <span>➕ Importer un texte</span>
@@ -807,16 +683,13 @@ function Home() {
                 </div>
               </Link>
 
-              {/* CARTE 2 : EN TROUPE / ATELIER (Thème Bordeaux Théâtre / Pourpre) */}
+              {/* CARTE 2 : TROUPE & ATELIER */}
               <Link
                 to="/shared"
                 className="relative bg-gradient-to-br from-primary-950/90 via-gray-900 to-purple-950/90 border-2 border-purple-500/60 hover:border-purple-400 rounded-2xl p-5 sm:p-6 transition-all duration-300 group shadow-xl hover:shadow-purple-500/20 flex flex-col justify-between overflow-hidden"
               >
-                {/* Effet lumineux d'arrière-plan */}
                 <div className="absolute -top-10 -right-10 w-28 h-28 bg-purple-500/10 rounded-full blur-2xl pointer-events-none group-hover:bg-purple-500/20 transition-all" />
-
                 <div>
-                  {/* Badge & Titre */}
                   <div className="flex items-center justify-between mb-4">
                     <span className="px-3 py-1 bg-purple-500/20 text-purple-300 border border-purple-500/40 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-sm flex items-center gap-1.5">
                       <span>👥</span> Troupe & Atelier
@@ -825,15 +698,12 @@ function Home() {
                       Espace Partagé →
                     </span>
                   </div>
-
                   <h3 className="text-lg sm:text-xl font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">
                     Espace Partagé & Metteur en Scène
                   </h3>
                   <p className="text-purple-100/70 text-xs sm:text-sm leading-relaxed mb-4">
                     Accédez aux pièces partagées par votre metteuse/metteur en scène à l'aide d'un code de troupe ou gérez vos groupes.
                   </p>
-
-                  {/* Bullet points */}
                   <ul className="space-y-2 text-xs sm:text-sm text-purple-100/80 mb-6">
                     <li className="flex items-center gap-2">
                       <span className="text-purple-400 font-bold">✓</span> Connexion par code de troupe sécurisé
@@ -846,8 +716,6 @@ function Home() {
                     </li>
                   </ul>
                 </div>
-
-                {/* Bouton CTA */}
                 <div className="mt-2 pt-3 border-t border-purple-500/20">
                   <span className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-primary-700 group-hover:from-purple-500 group-hover:to-primary-600 text-white rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
                     <span>🎭 Accéder à mes Troupes</span>
@@ -857,7 +725,6 @@ function Home() {
               </Link>
             </div>
           </div>
-
         </div>
       )}
 
@@ -882,12 +749,10 @@ function Home() {
         </div>
       )}
 
-      {/* Viewer Document */}
       {viewingDocument && (
         <DocumentViewer document={viewingDocument} onClose={() => setViewingDocument(null)} />
       )}
 
-      {/* Modale Partage */}
       {scriptToShare && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl max-w-sm w-full border border-gray-800 p-6 shadow-2xl">
@@ -919,7 +784,6 @@ function Home() {
         </div>
       )}
 
-      {/* Modale Tags */}
       {managingTagsFor && (
         <ScriptTagsModal
           scriptId={managingTagsFor.id}
@@ -933,7 +797,6 @@ function Home() {
         />
       )}
 
-      {/* Notifications Audio */}
       {audioImportMsg && (
         <div className="fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-2xl flex items-center justify-between">
           <span>{audioImportMsg.text}</span>
@@ -945,9 +808,7 @@ function Home() {
     </div>
   );
 }
-/**
- * Composants auxiliaires pour la liste DnD (Cartes avec fond gris ardoise élégant)
- */
+
 function SortableScriptCard({
   script,
   index,
@@ -1083,7 +944,9 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-white text-xs font-medium truncate">{audio.title || audio.file_name}</p>
+          <p className="text-white text-xs font-medium truncate">
+            {audio.title || audio.file_name}
+          </p>
           <audio src={audioUrl} controls className="w-full h-7 mt-1" />
         </div>
 
@@ -1097,5 +960,3 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     </div>
   );
 }
-
-export default Home;

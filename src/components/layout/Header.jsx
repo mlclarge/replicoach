@@ -19,7 +19,6 @@ export default function Header() {
 
   const handleSelectTheme = (newTheme) => {
     setTheme(newTheme);
-    setShowMenu(false); // Retracte automatiquement le menu profil
   };
 
   return (
@@ -37,9 +36,9 @@ export default function Header() {
         </div>
       </Link>
 
-      {/* Profil connecté & Sélecteur de thème */}
+      {/* Profil connecté & Sélecteur de thème rapide */}
       <div className="flex items-center gap-2 relative">
-        {/* Bouton rapide de bascule de thème */}
+        {/* Bouton rapide de bascule de thème (Bandeau Haut) */}
         <button
           onClick={() => {
             if (theme === THEMES.DARK) handleSelectTheme(THEMES.PAPER);
@@ -47,7 +46,7 @@ export default function Header() {
             else handleSelectTheme(THEMES.DARK);
           }}
           className="px-2.5 py-1.5 bg-black/40 hover:bg-black/60 border border-amber-500/40 rounded-xl text-xs font-bold text-amber-300 transition flex items-center gap-1.5 shadow-sm active:scale-95"
-          title="Changer le thème d'affichage"
+          title="Changer le thème d'affichage (Sombre / Parchemin / Clair)"
         >
           {theme === THEMES.DARK && <span>🌙 Sombre</span>}
           {theme === THEMES.PAPER && <span>📜 Parchemin</span>}
@@ -63,62 +62,17 @@ export default function Header() {
           {initials}
         </button>
 
-        {/* Menu déroulant Profil / Déconnexion */}
+        {/* Menu déroulant Profil / Déconnexion (Option de thème retirée d'ici) */}
         {showMenu && (
           <>
             <div
               className="fixed inset-0 z-40"
               onClick={() => setShowMenu(false)}
             />
-            <div className="absolute right-0 top-12 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl z-50 min-w-64 py-2 animate-fadeIn text-white">
+            <div className="absolute right-0 top-12 bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl z-50 min-w-56 py-2 animate-fadeIn text-white">
               <div className="px-4 py-2.5 border-b border-gray-800">
                 <p className="text-[11px] text-gray-400 font-medium">Connecté en tant que</p>
                 <p className="text-xs font-bold text-white truncate">{user?.email}</p>
-              </div>
-
-              {/* Choix interactif du Thème */}
-              <div className="px-4 py-2.5 border-b border-gray-800 space-y-2">
-                <p className="text-[10px] uppercase font-bold text-amber-400 tracking-wider flex items-center justify-between">
-                  <span>🎨 Thème d'affichage</span>
-                  <span className="text-[9px] text-gray-400 font-normal">1-clic</span>
-                </p>
-                <div className="grid grid-cols-3 gap-1.5">
-                  <button
-                    onClick={() => handleSelectTheme(THEMES.DARK)}
-                    className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5 border ${
-                      theme === THEMES.DARK
-                        ? "bg-amber-500 text-gray-950 border-amber-400 shadow-md font-black"
-                        : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
-                    }`}
-                  >
-                    <span className="text-sm">🌙</span>
-                    <span>Sombre</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleSelectTheme(THEMES.PAPER)}
-                    className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5 border ${
-                      theme === THEMES.PAPER
-                        ? "bg-amber-500 text-gray-950 border-amber-400 shadow-md font-black"
-                        : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
-                    }`}
-                  >
-                    <span className="text-sm">📜</span>
-                    <span>Parchemin</span>
-                  </button>
-
-                  <button
-                    onClick={() => handleSelectTheme(THEMES.LIGHT)}
-                    className={`py-1.5 px-1 rounded-xl text-[11px] font-bold transition flex flex-col items-center gap-0.5 border ${
-                      theme === THEMES.LIGHT
-                        ? "bg-amber-500 text-gray-950 border-amber-400 shadow-md font-black"
-                        : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
-                    }`}
-                  >
-                    <span className="text-sm">☀️</span>
-                    <span>Clair</span>
-                  </button>
-                </div>
               </div>
 
               {/* Lien vers la page Profil */}
