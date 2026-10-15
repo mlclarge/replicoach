@@ -568,9 +568,7 @@ function ScriptDetail() {
           }
           scriptText={replicas
             .map((r) => `${r.character?.name}: ${r.text}`)
-            .join("
-
-")}
+            .join("\n\n")}
           coachingCharacterId={coachingCharacterId}
           allCharacters={characters}
           allReplicas={replicas}
