@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
-import { useTheme, THEMES } from "../../context/ThemeContext";
 
 export default function Header() {
   const navigate = useNavigate();
   const { user, signOut } = useAuthStore();
-  const { theme, setTheme } = useTheme();
   const [showMenu, setShowMenu] = useState(false);
 
   const initials = user?.email?.slice(0, 2).toUpperCase() || "?";
@@ -15,10 +13,6 @@ export default function Header() {
     setShowMenu(false);
     await signOut();
     navigate("/login");
-  };
-
-  const handleSelectTheme = (newTheme) => {
-    setTheme(newTheme);
   };
 
   return (
@@ -36,23 +30,8 @@ export default function Header() {
         </div>
       </Link>
 
-      {/* Profil connecté & Sélecteur de thème rapide */}
+      {/* Profil connecté */}
       <div className="flex items-center gap-2 relative">
-        {/* Bouton rapide de bascule de thème (Bandeau Haut) */}
-        <button
-          onClick={() => {
-            if (theme === THEMES.DARK) handleSelectTheme(THEMES.PAPER);
-            else if (theme === THEMES.PAPER) handleSelectTheme(THEMES.LIGHT);
-            else handleSelectTheme(THEMES.DARK);
-          }}
-          className="px-2.5 py-1.5 bg-black/40 hover:bg-black/60 border border-amber-500/40 rounded-xl text-xs font-bold text-amber-300 transition flex items-center gap-1.5 shadow-sm active:scale-95"
-          title="Changer le thème d'affichage (Sombre / Parchemin / Clair)"
-        >
-          {theme === THEMES.DARK && <span>🌙 Sombre</span>}
-          {theme === THEMES.PAPER && <span>📜 Parchemin</span>}
-          {theme === THEMES.LIGHT && <span>☀️ Clair</span>}
-        </button>
-
         {/* Avatar Profil */}
         <button
           onClick={() => setShowMenu(!showMenu)}
@@ -62,7 +41,7 @@ export default function Header() {
           {initials}
         </button>
 
-        {/* Menu déroulant Profil / Déconnexion (Option de thème retirée d'ici) */}
+        {/* Menu déroulant Profil / Déconnexion */}
         {showMenu && (
           <>
             <div
