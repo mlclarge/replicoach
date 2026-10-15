@@ -365,11 +365,12 @@ export default function Home() {
     setActiveId(null);
     if (!over || active.id === over.id) return;
 
-    const oldIndex = localScripts.findIndex((s) => s.id === active.id);
-    const newIndex = localScripts.findIndex((s) => s.id === over.id);
+    const currentList = displayScripts;
+    const oldIndex = currentList.findIndex((s) => s.id === active.id);
+    const newIndex = currentList.findIndex((s) => s.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      const reordered = arrayMove(localScripts, oldIndex, newIndex);
+      const reordered = arrayMove(currentList, oldIndex, newIndex);
       setLocalScripts(reordered);
       try {
         await updateScriptOrder(
@@ -425,12 +426,15 @@ export default function Home() {
     }
   };
 
-  const effectiveScripts =
-    localScripts.length === 0 && scripts && scripts.length > 0 && !searchQuery && !selectedTagFilter
+  // Garantit l'accès immédiat aux scripts depuis le store Supabase si localScripts est temporairement vide
+  const displayScripts =
+    localScripts && localScripts.length > 0
+      ? localScripts
+      : scripts && scripts.length > 0
       ? scripts
-      : localScripts;
+      : [];
 
-  const activeScript = activeId ? effectiveScripts.find((s) => s.id === activeId) : null;
+  const activeScript = activeId ? displayScripts.find((s) => s.id === activeId) : null;
 
   if (loading) {
     return (
@@ -501,7 +505,7 @@ export default function Home() {
                 <span>🎭</span> Mes textes & saynètes
               </h2>
               <span className="text-xs font-bold px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-mono">
-                {effectiveScripts.length} texte{effectiveScripts.length > 1 ? "s" : ""}
+                {displayScripts.length} texte{displayScripts.length > 1 ? "s" : ""}
               </span>
             </div>
 
@@ -541,7 +545,7 @@ export default function Home() {
             )}
 
             {/* Option de verrouillage */}
-            {effectiveScripts.length > 1 && !selectedTagFilter && (
+            {displayScripts.length > 1 && !selectedTagFilter && (
               <div className="flex items-center justify-between py-1">
                 <p className="text-gray-500 text-xs flex items-center gap-1">
                   {orderLocked ? (
@@ -567,81 +571,68 @@ export default function Home() {
               </div>
             )}
 
-            {/* Liste des saynètes en grille responsive */}
-            {effectiveScripts.length === 0 ? (
-              <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
-                <p className="text-4xl mb-3">📄</p>
-                <p className="text-gray-400 text-sm">Aucun texte pour le moment</p>
-                <p className="text-gray-600 text-xs mt-1">
-                  Importez votre premier fichier pour commencer !
-                </p>
-                <Link to="/upload" className="btn-gold mt-4 inline-block text-xs py-2 px-4">
-                  📤 Importer un texte
-                </Link>
-              </div>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
+            {/* Grille des saynètes et audios (Rendu direct sans bloc placeholder bloquant) */}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={[
+                  ...displayScripts.map((s) => s.id),
+                  ...personalAudios.map((a) => a.id),
+                ]}
+                strategy={verticalListSortingStrategy}
               >
-                <SortableContext
-                  items={[
-                    ...effectiveScripts.map((s) => s.id),
-                    ...personalAudios.map((a) => a.id),
-                  ]}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {[
-                      ...effectiveScripts,
-                      ...personalAudios.map((a) => ({ ...a, type: "audio" })),
-                    ]
-                      .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
-                      .map((item, index) =>
-                        item.type === "audio" ? (
-                          <SortableAudioCard
-                            key={item.id}
-                            audio={item}
-                            audioUrl={getAudioUrl(item.audio_path)}
-                            onDelete={handleDeleteAudio}
-                            orderLocked={orderLocked}
-                          />
-                        ) : (
-                          <SortableScriptCard
-                            key={item.id}
-                            script={{
-                              ...item,
-                              tags: scriptTagsMap[item.id] || [],
-                            }}
-                            index={index}
-                            onDelete={handleDelete}
-                            onOpen={handleOpenScript}
-                            onShare={handleOpenShare}
-                            onManageTags={(s) => setManagingTagsFor(s)}
-                            notesCount={notesCounts[item.id] || 0}
-                            orderLocked={orderLocked}
-                          />
-                        )
-                      )}
-                  </div>
-                </SortableContext>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[
+                    ...displayScripts,
+                    ...personalAudios.map((a) => ({ ...a, type: "audio" })),
+                  ]
+                    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                    .map((item, index) =>
+                      item.type === "audio" ? (
+                        <SortableAudioCard
+                          key={item.id}
+                          audio={item}
+                          audioUrl={getAudioUrl(item.audio_path)}
+                          onDelete={handleDeleteAudio}
+                          orderLocked={orderLocked}
+                        />
+                      ) : (
+                        <SortableScriptCard
+                          key={item.id}
+                          script={{
+                            ...item,
+                            tags: scriptTagsMap[item.id] || [],
+                          }}
+                          index={index}
+                          onDelete={handleDelete}
+                          onOpen={handleOpenScript}
+                          onShare={handleOpenShare}
+                          onManageTags={(s) => setManagingTagsFor(s)}
+                          notesCount={notesCounts[item.id] || 0}
+                          orderLocked={orderLocked}
+                        />
+                      )
+                    )}
+                </div>
+              </SortableContext>
 
-                <DragOverlay>
-                  {activeScript ? (
-                    <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
-                      <div className="flex items-center gap-3">
-                        <span className="text-gold-500 font-bold text-lg">
-                          #{activeScript.display_order}
-                        </span>
-                        <h3 className="font-semibold text-white">{activeScript.title}</h3>
-                      </div>
+              <DragOverlay>
+                {activeScript ? (
+                  <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <span className="text-gold-500 font-bold text-lg">
+                        #{activeScript.display_order}
+                      </span>
+                      <h3 className="font-semibold text-white">{activeScript.title}</h3>
                     </div>
-                  ) : null}
-                </DragOverlay>
-              </DndContext>
-            )}
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           </div>
 
           {/* 2. BLOC DESSOUS : LES 2 CARTES DE PARCOURS */}
@@ -797,7 +788,6 @@ export default function Home() {
           onClose={() => {
             setManagingTagsFor(null);
             loadScriptsTags();
-            loadUserTags();
           }}
         />
       )}
