@@ -448,18 +448,7 @@ export default function Home() {
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4">
-      {/* 🎭 EN-TÊTE BIENVENUE SUR REPLICOACH */}
-      <div className="text-center max-w-2xl mx-auto space-y-1.5 p-2 mb-6">
-        <div className="inline-flex items-center gap-2 px-3.5 py-1 bg-gradient-to-r from-amber-500/10 via-purple-500/10 to-amber-500/10 border border-amber-500/30 rounded-full text-xs font-bold text-amber-300 uppercase tracking-widest mb-1 shadow-inner">
-          <span>🎭</span> Application de mémorisation théâtrale
-        </div>
-        <h2 className="text-white font-extrabold text-2xl sm:text-3xl font-display tracking-tight">
-          Bienvenue sur RépliCoach !
-        </h2>
-        <p className="text-gray-400 text-xs sm:text-sm">
-          Choisissez votre parcours pour accéder rapidement à vos textes et répétitions :
-        </p>
-      </div>
+
 
       {activeHomeTab === "director" ? (
         <div className="space-y-4">
