@@ -9,7 +9,6 @@ function notifyScriptCacheInvalidation(scriptId, userId) {
   ) {
     return;
   }
-
   navigator.serviceWorker.controller.postMessage({
     type: "INVALIDATE_SCRIPT",
     scriptId,
@@ -31,20 +30,47 @@ export const useScriptStore = create((set, get) => ({
   fetchScripts: async (userId) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase
+      // 1. Déterminer l'ID utilisateur cible (passé ou depuis la session active)
+      let uid = userId;
+      if (!uid) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        uid = sessionData?.session?.user?.id;
+      }
+
+      if (!uid) {
+        set({ scripts: [], loading: false });
+        return;
+      }
+
+      // 2. Requête simple sur les scripts
+      const { data: scriptsData, error: scriptsError } = await supabase
         .from("scripts")
-        .select(
-          `
-    *,
-    characters!characters_script_id_fkey (*),
-    replicas (*)
-  `,
-        )
-        .eq("user_id", userId)
+        .select("*")
+        .eq("user_id", uid)
         .order("display_order", { ascending: true });
 
-      if (error) throw error;
-      set({ scripts: data || [], loading: false });
+      if (scriptsError) throw scriptsError;
+
+      if (!scriptsData || scriptsData.length === 0) {
+        set({ scripts: [], loading: false });
+        return;
+      }
+
+      // 3. Charger personnages et répliques de façon découplée (anti-PGRST201)
+      const scriptIds = scriptsData.map((s) => s.id);
+      const [{ data: charsData }, { data: repsData }] = await Promise.all([
+        supabase.from("characters").select("*").in("script_id", scriptIds),
+        supabase.from("replicas").select("*").in("script_id", scriptIds),
+      ]);
+
+      // 4. Assembler les données
+      const combinedScripts = scriptsData.map((s) => ({
+        ...s,
+        characters: charsData?.filter((c) => c.script_id === s.id) || [],
+        replicas: repsData?.filter((r) => r.script_id === s.id) || [],
+      }));
+
+      set({ scripts: combinedScripts, loading: false });
     } catch (error) {
       console.error(
         "Fetch scripts error:",
@@ -53,7 +79,7 @@ export const useScriptStore = create((set, get) => ({
           code: error?.code,
           details: error?.details,
           hint: error?.hint,
-        }),
+        })
       );
       set({ error: error.message, loading: false });
     }
@@ -62,26 +88,31 @@ export const useScriptStore = create((set, get) => ({
   fetchScript: async (scriptId) => {
     set({ loading: true, error: null });
     try {
-      const { data, error } = await supabase
+      const { data: scriptData, error: scriptError } = await supabase
         .from("scripts")
-        .select(
-          `
-    *,
-    characters!characters_script_id_fkey (*),
-    replicas (*)
-  `,
-        )
+        .select("*")
         .eq("id", scriptId)
         .single();
 
-      if (error) throw error;
+      if (scriptError) throw scriptError;
 
-      // Trier les répliques par order_index
-      if (data.replicas) {
-        data.replicas.sort((a, b) => a.order_index - b.order_index);
-      }
+      // Charger personnages et répliques de façon découplée (anti-PGRST201)
+      const [{ data: charsData }, { data: repsData }] = await Promise.all([
+        supabase.from("characters").select("*").eq("script_id", scriptId),
+        supabase
+          .from("replicas")
+          .select("*")
+          .eq("script_id", scriptId)
+          .order("order_index", { ascending: true }),
+      ]);
 
-      set({ currentScript: data, loading: false });
+      const fullScript = {
+        ...scriptData,
+        characters: charsData || [],
+        replicas: repsData || [],
+      };
+
+      set({ currentScript: fullScript, loading: false });
     } catch (error) {
       console.error("Fetch script error:", error);
       set({ error: error.message, loading: false });
@@ -90,7 +121,6 @@ export const useScriptStore = create((set, get) => ({
 
   createScript: async (scriptData) => {
     try {
-      // Récupérer le plus grand display_order actuel
       const { data: existingScripts } = await supabase
         .from("scripts")
         .select("display_order")
@@ -122,7 +152,6 @@ export const useScriptStore = create((set, get) => ({
 
   updateScriptOrder: async (updates) => {
     try {
-      // Mettre à jour chaque script avec son nouvel ordre
       for (const update of updates) {
         const { error } = await supabase
           .from("scripts")
@@ -132,7 +161,6 @@ export const useScriptStore = create((set, get) => ({
         if (error) throw error;
       }
 
-      // Mettre à jour le state local
       set((state) => ({
         scripts: state.scripts.map((script) => {
           const update = updates.find((u) => u.id === script.id);
@@ -152,7 +180,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Mettre à jour un script (titre, etc.)
   updateScript: async (scriptId, updates) => {
     try {
       const userId = findScriptUserId(get(), scriptId);
@@ -167,7 +194,7 @@ export const useScriptStore = create((set, get) => ({
 
       set((state) => ({
         scripts: state.scripts.map((s) =>
-          s.id === scriptId ? { ...s, ...updates } : s,
+          s.id === scriptId ? { ...s, ...updates } : s
         ),
         currentScript:
           state.currentScript?.id === scriptId
@@ -213,7 +240,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript || state.currentScript.id !== scriptId)
           return state;
@@ -227,7 +253,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId),
+        findScriptUserId(get(), scriptId)
       );
 
       return data;
@@ -237,7 +263,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Modifier un personnage
   updateCharacter: async (characterId, updates) => {
     try {
       const { data, error } = await supabase
@@ -249,7 +274,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -257,14 +281,14 @@ export const useScriptStore = create((set, get) => ({
           currentScript: {
             ...state.currentScript,
             characters: state.currentScript.characters.map((c) =>
-              c.id === characterId ? { ...c, ...data } : c,
+              c.id === characterId ? { ...c, ...data } : c
             ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id,
+        get().currentScript?.user_id
       );
 
       return data;
@@ -274,10 +298,8 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Supprimer un personnage (et toutes ses répliques)
   deleteCharacter: async (characterId) => {
     try {
-      // D'abord supprimer les répliques associées
       const { error: replicasError } = await supabase
         .from("replicas")
         .delete()
@@ -285,7 +307,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (replicasError) throw replicasError;
 
-      // Puis supprimer le personnage
       const { error } = await supabase
         .from("characters")
         .delete()
@@ -293,7 +314,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -301,17 +321,17 @@ export const useScriptStore = create((set, get) => ({
           currentScript: {
             ...state.currentScript,
             characters: state.currentScript.characters.filter(
-              (c) => c.id !== characterId,
+              (c) => c.id !== characterId
             ),
             replicas: state.currentScript.replicas.filter(
-              (r) => r.character_id !== characterId,
+              (r) => r.character_id !== characterId
             ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id,
+        get().currentScript?.user_id
       );
     } catch (error) {
       console.error("Delete character error:", error);
@@ -330,7 +350,7 @@ export const useScriptStore = create((set, get) => ({
       if (replicas?.[0]?.script_id) {
         notifyScriptCacheInvalidation(
           replicas[0].script_id,
-          findScriptUserId(get(), replicas[0].script_id),
+          findScriptUserId(get(), replicas[0].script_id)
         );
       }
       return data;
@@ -340,7 +360,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Ajouter une seule réplique
   addSingleReplica: async (replicaData) => {
     try {
       const { data, error } = await supabase
@@ -351,7 +370,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -367,7 +385,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         replicaData.script_id,
-        findScriptUserId(get(), replicaData.script_id),
+        findScriptUserId(get(), replicaData.script_id)
       );
 
       return data;
@@ -377,7 +395,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Modifier une réplique
   updateReplica: async (replicaId, updates) => {
     try {
       const { data, error } = await supabase
@@ -389,12 +406,11 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
         const updatedReplicas = state.currentScript.replicas.map((r) =>
-          r.id === replicaId ? { ...r, ...data } : r,
+          r.id === replicaId ? { ...r, ...data } : r
         );
 
         return {
@@ -406,7 +422,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id,
+        get().currentScript?.user_id
       );
 
       return data;
@@ -416,10 +432,8 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Supprimer une réplique
   deleteReplica: async (replicaId) => {
     try {
-      // Récupérer le script_id avant suppression pour invalider le cache
       const { data: replica } = await supabase
         .from("replicas")
         .select("script_id")
@@ -433,7 +447,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -441,7 +454,7 @@ export const useScriptStore = create((set, get) => ({
           currentScript: {
             ...state.currentScript,
             replicas: state.currentScript.replicas.filter(
-              (r) => r.id !== replicaId,
+              (r) => r.id !== replicaId
             ),
           },
         };
@@ -449,7 +462,7 @@ export const useScriptStore = create((set, get) => ({
 
       notifyScriptCacheInvalidation(
         replica?.script_id,
-        findScriptUserId(get(), replica?.script_id),
+        findScriptUserId(get(), replica?.script_id)
       );
     } catch (error) {
       console.error("Delete replica error:", error);
@@ -457,10 +470,8 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Réordonner les répliques
   reorderReplicas: async (scriptId, replicaIds) => {
     try {
-      // Mettre à jour l'order_index de chaque réplique
       for (let i = 0; i < replicaIds.length; i++) {
         const { error } = await supabase
           .from("replicas")
@@ -470,11 +481,10 @@ export const useScriptStore = create((set, get) => ({
         if (error) throw error;
       }
 
-      // Rafraîchir le script
       await get().fetchScript(scriptId);
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId),
+        findScriptUserId(get(), scriptId)
       );
     } catch (error) {
       console.error("Reorder replicas error:", error);
@@ -482,9 +492,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // ========== NOTES PERSONNELLES ==========
-
-  // Récupérer les notes personnelles d'un script
   fetchPersonalNotes: async (scriptId, userId) => {
     try {
       const { data, error } = await supabase
@@ -496,7 +503,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript || state.currentScript.id !== scriptId)
           return state;
@@ -516,7 +522,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Ajouter une note personnelle
   addPersonalNote: async (noteData) => {
     try {
       const { data, error } = await supabase
@@ -527,7 +532,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -540,7 +544,7 @@ export const useScriptStore = create((set, get) => ({
       });
       notifyScriptCacheInvalidation(
         data.script_id,
-        data.user_id || findScriptUserId(get(), data.script_id),
+        data.user_id || findScriptUserId(get(), data.script_id)
       );
 
       return data;
@@ -550,7 +554,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Modifier une note personnelle
   updatePersonalNote: async (noteId, updates) => {
     try {
       const { data, error } = await supabase
@@ -564,10 +567,9 @@ export const useScriptStore = create((set, get) => ({
       const scriptId = get().currentScript?.id;
       notifyScriptCacheInvalidation(
         scriptId,
-        findScriptUserId(get(), scriptId),
+        findScriptUserId(get(), scriptId)
       );
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -575,7 +577,7 @@ export const useScriptStore = create((set, get) => ({
           currentScript: {
             ...state.currentScript,
             personalNotes: (state.currentScript.personalNotes || []).map((n) =>
-              n.id === noteId ? data : n,
+              n.id === noteId ? data : n
             ),
           },
         };
@@ -588,7 +590,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Supprimer une note personnelle
   deletePersonalNote: async (noteId) => {
     try {
       const { error } = await supabase
@@ -598,7 +599,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Mettre à jour le state local
       set((state) => {
         if (!state.currentScript) return state;
 
@@ -606,14 +606,14 @@ export const useScriptStore = create((set, get) => ({
           currentScript: {
             ...state.currentScript,
             personalNotes: (state.currentScript.personalNotes || []).filter(
-              (n) => n.id !== noteId,
+              (n) => n.id !== noteId
             ),
           },
         };
       });
       notifyScriptCacheInvalidation(
         get().currentScript?.id,
-        get().currentScript?.user_id,
+        get().currentScript?.user_id
       );
     } catch (error) {
       console.error("Delete personal note error:", error);
@@ -621,7 +621,6 @@ export const useScriptStore = create((set, get) => ({
     }
   },
 
-  // Compter les notes par script (pour l'affichage dans Home)
   countNotesForScripts: async (userId) => {
     try {
       const { data, error } = await supabase
@@ -631,7 +630,6 @@ export const useScriptStore = create((set, get) => ({
 
       if (error) throw error;
 
-      // Compter par script_id
       const counts = {};
       (data || []).forEach((note) => {
         counts[note.script_id] = (counts[note.script_id] || 0) + 1;

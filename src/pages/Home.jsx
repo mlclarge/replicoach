@@ -244,7 +244,7 @@ export default function Home() {
   const loadData = useCallback(async () => {
     if (!user) return;
     try {
-      await fetchScripts();
+      await fetchScripts(user.id);
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
 
@@ -426,7 +426,7 @@ export default function Home() {
     }
   };
 
-  // Garantit l'accès immédiat aux scripts depuis le store Supabase si localScripts est temporairement vide
+  // Liste effective des scripts (découplage immédiat du store Supabase)
   const displayScripts =
     localScripts && localScripts.length > 0
       ? localScripts
@@ -434,7 +434,9 @@ export default function Home() {
       ? scripts
       : [];
 
-  const activeScript = activeId ? displayScripts.find((s) => s.id === activeId) : null;
+  const activeScript = activeId
+    ? displayScripts.find((s) => s.id === activeId)
+    : null;
 
   if (loading) {
     return (
@@ -469,7 +471,9 @@ export default function Home() {
             uploading={uploadingNote}
             error={uploadError}
             expanded={directorNotesExpanded}
-            onToggleExpand={() => setDirectorNotesExpanded(!directorNotesExpanded)}
+            onToggleExpand={() =>
+              setDirectorNotesExpanded(!directorNotesExpanded)
+            }
           />
         </div>
       ) : activeHomeTab === "library" ? (
@@ -509,32 +513,33 @@ export default function Home() {
               </span>
             </div>
 
-            {recentScript && scripts?.some((s) => s.id === recentScript.scriptId) && (
-              <button
-                onClick={() => handleOpenScript(recentScript.scriptId)}
-                className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
-              >
-                <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                  <span className="text-2xl">⚡</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
-                      Accès rapide
-                    </span>
-                    <span className="text-amber-500/50 text-[10px]">
-                      • {recentScript.count} fois
-                    </span>
+            {recentScript &&
+              scripts?.some((s) => s.id === recentScript.scriptId) && (
+                <button
+                  onClick={() => handleOpenScript(recentScript.scriptId)}
+                  className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
+                >
+                  <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                    <span className="text-2xl">⚡</span>
                   </div>
-                  <h3 className="text-white font-bold text-base truncate group-hover:text-amber-300 transition">
-                    {recentScript.title}
-                  </h3>
-                </div>
-                <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
-                  →
-                </span>
-              </button>
-            )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
+                        Accès rapide
+                      </span>
+                      <span className="text-amber-500/50 text-[10px]">
+                        • {recentScript.count} fois
+                      </span>
+                    </div>
+                    <h3 className="text-white font-bold text-base truncate group-hover:text-amber-300 transition">
+                      {recentScript.title}
+                    </h3>
+                  </div>
+                  <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
+                    →
+                  </span>
+                </button>
+              )}
 
             {userTags.length > 0 && (
               <TagFilter
@@ -571,7 +576,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Grille des saynètes et audios (Rendu direct sans bloc placeholder bloquant) */}
+            {/* Grille directe des textes */}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -590,7 +595,9 @@ export default function Home() {
                     ...displayScripts,
                     ...personalAudios.map((a) => ({ ...a, type: "audio" })),
                   ]
-                    .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
+                    .sort(
+                      (a, b) => (a.display_order || 0) - (b.display_order || 0)
+                    )
                     .map((item, index) =>
                       item.type === "audio" ? (
                         <SortableAudioCard
@@ -627,7 +634,9 @@ export default function Home() {
                       <span className="text-gold-500 font-bold text-lg">
                         #{activeScript.display_order}
                       </span>
-                      <h3 className="font-semibold text-white">{activeScript.title}</h3>
+                      <h3 className="font-semibold text-white">
+                        {activeScript.title}
+                      </h3>
                     </div>
                   </div>
                 ) : null}
@@ -728,10 +737,17 @@ export default function Home() {
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full border border-gray-800 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">Supprimer ce texte ?</h3>
-            <p className="text-gray-400 text-xs mb-6">Cette action est irréversible.</p>
+            <h3 className="text-lg font-bold text-white mb-2">
+              Supprimer ce texte ?
+            </h3>
+            <p className="text-gray-400 text-xs mb-6">
+              Cette action est irréversible.
+            </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="btn-secondary flex-1 py-2.5">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="btn-secondary flex-1 py-2.5"
+              >
                 Annuler
               </button>
               <button
@@ -746,16 +762,25 @@ export default function Home() {
       )}
 
       {viewingDocument && (
-        <DocumentViewer document={viewingDocument} onClose={() => setViewingDocument(null)} />
+        <DocumentViewer
+          document={viewingDocument}
+          onClose={() => setViewingDocument(null)}
+        />
       )}
 
       {scriptToShare && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl max-w-sm w-full border border-gray-800 p-6 shadow-2xl">
-            <h3 className="text-lg font-bold text-white mb-2">👥 Partager "{scriptToShare.title}"</h3>
-            <p className="text-gray-400 text-xs mb-4">Choisissez la troupe destinataire :</p>
+            <h3 className="text-lg font-bold text-white mb-2">
+              👥 Partager "{scriptToShare.title}"
+            </h3>
+            <p className="text-gray-400 text-xs mb-4">
+              Choisissez la troupe destinataire :
+            </p>
             {shareTroupes.length === 0 ? (
-              <p className="text-gray-500 text-xs text-center py-4">Aucune troupe disponible.</p>
+              <p className="text-gray-500 text-xs text-center py-4">
+                Aucune troupe disponible.
+              </p>
             ) : (
               <div className="space-y-2 mb-4">
                 {shareTroupes.map((troupe) => (
@@ -771,9 +796,16 @@ export default function Home() {
                 ))}
               </div>
             )}
-            {shareSuccess && <p className="text-green-400 text-xs mb-4">{shareSuccess}</p>}
-            {shareError && <p className="text-red-400 text-xs mb-4">{shareError}</p>}
-            <button onClick={() => setScriptToShare(null)} className="btn-secondary w-full py-2.5">
+            {shareSuccess && (
+              <p className="text-green-400 text-xs mb-4">{shareSuccess}</p>
+            )}
+            {shareError && (
+              <p className="text-red-400 text-xs mb-4">{shareError}</p>
+            )}
+            <button
+              onClick={() => setScriptToShare(null)}
+              className="btn-secondary w-full py-2.5"
+            >
               Fermer
             </button>
           </div>
@@ -795,7 +827,12 @@ export default function Home() {
       {audioImportMsg && (
         <div className="fixed bottom-32 left-4 right-4 z-50 px-4 py-3 rounded-xl bg-blue-600 text-white text-xs font-semibold shadow-2xl flex items-center justify-between">
           <span>{audioImportMsg.text}</span>
-          <button onClick={() => setAudioImportMsg(null)} className="text-xs">✕</button>
+          <button
+            onClick={() => setAudioImportMsg(null)}
+            className="text-xs"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -840,7 +877,10 @@ function SortableScriptCard({
           </button>
         )}
 
-        <div onClick={() => onOpen(script.id)} className="flex-1 flex items-center gap-3 min-w-0">
+        <div
+          onClick={() => onOpen(script.id)}
+          className="flex-1 flex items-center gap-3 min-w-0"
+        >
           <div className="w-10 h-10 bg-amber-500/15 border border-amber-500/30 rounded-xl flex items-center justify-center text-amber-400 font-bold text-xs flex-shrink-0">
             #{index + 1}
           </div>
@@ -857,7 +897,9 @@ function SortableScriptCard({
               {notesCount > 0 && (
                 <>
                   <span>•</span>
-                  <span className="text-amber-400 font-medium">📝 {notesCount}</span>
+                  <span className="text-amber-400 font-medium">
+                    📝 {notesCount}
+                  </span>
                 </>
               )}
             </div>
