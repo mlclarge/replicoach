@@ -201,8 +201,6 @@ export default function Home() {
 
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [localScripts, setLocalScripts] = useState([]);
-  const displayScripts = localScripts.length > 0 ? localScripts : (scripts || []);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [activeId, setActiveId] = useState(null);
   const [notesCounts, setNotesCounts] = useState({});
@@ -427,7 +425,12 @@ export default function Home() {
     }
   };
 
-  const activeScript = activeId ? localScripts.find((s) => s.id === activeId) : null;
+  const effectiveScripts =
+    localScripts.length === 0 && scripts && scripts.length > 0 && !searchQuery && !selectedTagFilter
+      ? scripts
+      : localScripts;
+
+  const activeScript = activeId ? effectiveScripts.find((s) => s.id === activeId) : null;
 
   if (loading) {
     return (
@@ -498,7 +501,7 @@ export default function Home() {
                 <span>🎭</span> Mes textes & saynètes
               </h2>
               <span className="text-xs font-bold px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-mono">
-                {displayScripts.length} texte{displayScripts.length > 1 ? "s" : ""}
+                {effectiveScripts.length} texte{effectiveScripts.length > 1 ? "s" : ""}
               </span>
             </div>
 
@@ -538,7 +541,7 @@ export default function Home() {
             )}
 
             {/* Option de verrouillage */}
-            {displayScripts.length > 1 && !selectedTagFilter && (
+            {effectiveScripts.length > 1 && !selectedTagFilter && (
               <div className="flex items-center justify-between py-1">
                 <p className="text-gray-500 text-xs flex items-center gap-1">
                   {orderLocked ? (
@@ -565,10 +568,17 @@ export default function Home() {
             )}
 
             {/* Liste des saynètes en grille responsive */}
-            {displayScripts.length === 0 && personalAudios.length === 0 ? (
-              <p className="text-gray-500 text-xs italic py-2">
-                Aucun texte dans votre bibliothèque pour le moment.
-              </p>
+            {effectiveScripts.length === 0 ? (
+              <div className="text-center py-12 bg-gray-900/50 rounded-2xl border border-gray-800 p-6">
+                <p className="text-4xl mb-3">📄</p>
+                <p className="text-gray-400 text-sm">Aucun texte pour le moment</p>
+                <p className="text-gray-600 text-xs mt-1">
+                  Importez votre premier fichier pour commencer !
+                </p>
+                <Link to="/upload" className="btn-gold mt-4 inline-block text-xs py-2 px-4">
+                  📤 Importer un texte
+                </Link>
+              </div>
             ) : (
               <DndContext
                 sensors={sensors}
@@ -578,14 +588,14 @@ export default function Home() {
               >
                 <SortableContext
                   items={[
-                    ...displayScripts.map((s) => s.id),
+                    ...effectiveScripts.map((s) => s.id),
                     ...personalAudios.map((a) => a.id),
                   ]}
                   strategy={verticalListSortingStrategy}
                 >
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {[
-                      ...displayScripts,
+                      ...effectiveScripts,
                       ...personalAudios.map((a) => ({ ...a, type: "audio" })),
                     ]
                       .sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
