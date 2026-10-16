@@ -533,27 +533,18 @@ function ScriptDetail() {
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-2">
-            {(originalFileUrl || full_text) && (
-              <button
-                onClick={() => setShowOriginalFile(true)}
-                className="p-2.5 rounded-lg transition shadow-md bg-blue-500 hover:bg-blue-600 text-white border-2 border-blue-600"
-                title="Voir le fichier original"
-              >
-                📄
-              </button>
-            )}
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="p-2.5 rounded-lg transition shadow-md bg-green-500 hover:bg-green-600 text-white border-2 border-green-600"
-              title="Partager avec ma troupe"
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/script/${id}/audio`}
+              className="px-3.5 py-2 bg-white hover:bg-amber-50 text-gray-950 font-extrabold text-xs rounded-xl shadow-md transition active:scale-95 border border-gray-200 shrink-0"
+              title="Écouter et enregistrer les répliques"
             >
-              👥
-            </button>
+              écouter/s'enregistrer
+            </Link>
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-2.5 rounded-lg transition shadow-md bg-red-500 hover:bg-red-600 text-white border-2 border-red-600"
-              title="Supprimer"
+              className="p-2.5 rounded-xl transition shadow-md bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shrink-0"
+              title="Supprimer ce texte"
             >
               🗑️
             </button>
