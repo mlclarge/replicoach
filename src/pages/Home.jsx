@@ -80,33 +80,35 @@ function DirectorNotesSection({
   );
 
   return (
-    <div className="mb-6 bg-gray-900/90 border border-gray-800 rounded-2xl p-4 shadow-xl">
+    <div className="mb-6 bg-gradient-to-r from-amber-100 via-amber-200 to-amber-100 border-2 border-amber-300 rounded-2xl p-4 shadow-xl">
       <div
         onClick={onToggleExpand}
         className="menu-director cursor-pointer transition group flex items-center justify-between p-2"
       >
         <div className="flex items-center gap-4">
-          <div className="w-12 h-12 bg-yellow-500/20 rounded-xl flex items-center justify-center group-hover:bg-yellow-500/30 transition">
+          <div className="w-12 h-12 bg-amber-500/30 rounded-xl flex items-center justify-center group-hover:bg-amber-500/40 transition border border-amber-500/40 shadow-sm">
             <span className="text-2xl">📁</span>
           </div>
           <div>
-            <h3 className="section-title text-white text-base font-bold">
+            <h3 className="section-title text-gray-950 text-base font-extrabold tracking-tight">
               Consignes du metteur en scène
             </h3>
-            <p className="text-gray-400 text-xs mt-0.5">
+            <p className="text-gray-900 font-bold text-xs mt-0.5">
               {safeNotes.length > 0 ? (
-                <span className="font-bold text-yellow-400">
+                <span className="font-extrabold text-amber-950">
                   {safeNotes.length} document{safeNotes.length > 1 ? "s" : ""}
                 </span>
               ) : (
-                "Aucun document pour le moment"
+                <span className="font-bold text-gray-800">
+                  Aucun document pour le moment
+                </span>
               )}
             </p>
           </div>
         </div>
         {onToggleExpand && (
           <div
-            className={`text-gray-400 transition-transform ${
+            className={`text-gray-950 font-bold transition-transform ${
               expanded ? "rotate-90" : ""
             }`}
           >
@@ -116,8 +118,8 @@ function DirectorNotesSection({
       </div>
 
       {expanded && (
-        <div className="mt-4 pt-4 border-t border-gray-800 transition">
-          {error && <p className="text-red-400 text-xs mb-3">{error}</p>}
+        <div className="mt-4 pt-4 border-t border-amber-300/80 transition text-gray-900">
+          {error && <p className="text-red-600 text-xs font-bold mb-3">{error}</p>}
 
           <div
             onDragEnter={handleDrag}
@@ -126,14 +128,14 @@ function DirectorNotesSection({
             onDrop={handleDrop}
             className={`border-2 border-dashed rounded-xl p-4 text-center transition mb-4 ${
               dragActive
-                ? "border-yellow-400 bg-yellow-500/10"
-                : "border-gray-700 bg-gray-800/40 hover:border-yellow-500/50"
+                ? "border-amber-600 bg-amber-300/50"
+                : "border-amber-400/80 bg-amber-50/60 hover:border-amber-500"
             }`}
           >
-            <p className="text-xs text-gray-300 mb-2">
+            <p className="text-xs text-gray-900 font-semibold mb-2">
               Glissez vos consignes (PDF, Word, TXT, Images) ici
             </p>
-            <label className="btn-gold text-xs px-3 py-1.5 inline-block cursor-pointer">
+            <label className="btn-gold text-xs px-3 py-1.5 inline-block cursor-pointer font-bold bg-amber-500 text-gray-950 rounded-lg border border-amber-600 shadow">
               {uploading ? "⏳ Upload..." : "📤 Parcourir les fichiers"}
               <input
                 type="file"
@@ -148,7 +150,7 @@ function DirectorNotesSection({
           </div>
 
           {safeNotes.length === 0 ? (
-            <p className="text-gray-500 text-xs text-center py-3">
+            <p className="text-gray-700 text-xs font-medium text-center py-3">
               Aucune consigne ajoutée.
             </p>
           ) : (
@@ -156,7 +158,7 @@ function DirectorNotesSection({
               {safeNotes.map((note) => (
                 <div
                   key={note.id}
-                  className="flex items-center justify-between p-2.5 bg-gray-800/60 rounded-xl border border-gray-700/60 hover:border-yellow-500/30 transition text-xs"
+                  className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-300 hover:border-amber-400 transition text-xs shadow-sm"
                 >
                   <div
                     onClick={() => onViewDocument(note)}
@@ -165,13 +167,13 @@ function DirectorNotesSection({
                     <span className="text-base">
                       {note.file_name?.endsWith(".pdf") ? "📕" : "📝"}
                     </span>
-                    <span className="text-gray-200 font-semibold truncate">
+                    <span className="text-gray-900 font-bold truncate">
                       {note.file_name}
                     </span>
                   </div>
                   <button
                     onClick={() => onDelete(note.id, note.file_path)}
-                    className="p-1 text-gray-500 hover:text-red-400 rounded transition"
+                    className="p-1 text-gray-600 hover:text-red-600 rounded transition"
                   >
                     🗑️
                   </button>
@@ -478,69 +480,6 @@ export default function Home() {
               </span>
             </div>
 
-            {recentScript &&
-              scripts?.some((s) => s.id === recentScript.scriptId) && (
-                <button
-                  onClick={() => handleOpenScript(recentScript.scriptId)}
-                  className="w-full p-4 bg-gradient-to-r from-amber-500/20 to-gold-500/20 hover:from-amber-500/30 hover:to-gold-500/30 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition-all flex items-center gap-4 group shadow-lg text-left"
-                >
-                  <div className="w-12 h-12 bg-amber-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
-                    <span className="text-2xl">⚡</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-amber-400 text-[10px] font-bold uppercase tracking-wide">
-                        Accès rapide
-                      </span>
-                      <span className="text-amber-500/50 text-[10px]">
-                        • {recentScript.count} fois
-                      </span>
-                    </div>
-                    <h3 className="text-white font-bold text-base truncate group-hover:text-amber-300 transition">
-                      {recentScript.title}
-                    </h3>
-                  </div>
-                  <span className="text-amber-400 text-xl group-hover:translate-x-1 transition-transform">
-                    →
-                  </span>
-                </button>
-              )}
-
-            {userTags.length > 0 && (
-              <TagFilter
-                tags={userTags}
-                selectedTagId={selectedTagFilter}
-                onSelect={setSelectedTagFilter}
-              />
-            )}
-
-            {/* Option de verrouillage */}
-            {displayScripts.length > 1 && !selectedTagFilter && (
-              <div className="flex items-center justify-between py-1">
-                <p className="text-gray-500 text-xs flex items-center gap-1">
-                  {orderLocked ? (
-                    <>
-                      <span>🔒</span> Ordre verrouillé
-                    </>
-                  ) : (
-                    <>
-                      <span>💡</span> Glissez-déposez pour réorganiser
-                    </>
-                  )}
-                </p>
-                <button
-                  onClick={toggleOrderLock}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium transition flex items-center gap-1 ${
-                    orderLocked
-                      ? "bg-green-500/20 text-green-400 border border-green-500/50"
-                      : "bg-gray-800 text-gray-400 border border-gray-700 hover:text-white"
-                  }`}
-                >
-                  {orderLocked ? "🔓 Déverrouiller" : "🔒 Verrouiller"}
-                </button>
-              </div>
-            )}
-
             {/* Grille directe des textes */}
             <DndContext
               sensors={sensors}
@@ -555,14 +494,13 @@ export default function Home() {
                 ]}
                 strategy={verticalListSortingStrategy}
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {[
-                    ...displayScripts,
+                    ...displayScripts.map((s) => ({ ...s, type: "script" })),
                     ...personalAudios.map((a) => ({ ...a, type: "audio" })),
                   ]
                     .sort(
-                      (a, b) =>
-                        (a.display_order || 0) - (b.display_order || 0)
+                      (a, b) => (a.display_order || 0) - (b.display_order || 0)
                     )
                     .map((item, index) =>
                       item.type === "audio" ? (
@@ -592,26 +530,14 @@ export default function Home() {
                     )}
                 </div>
               </SortableContext>
-
-              <DragOverlay>
-                {activeScript ? (
-                  <div className="card shadow-2xl ring-2 ring-gold-500 opacity-90 p-4 bg-gray-800 rounded-xl">
-                    <div className="flex items-center gap-3">
-                      <span className="text-gold-500 font-bold text-lg">
-                        #{activeScript.display_order}
-                      </span>
-                      <h3 className="font-semibold text-white">
-                        {activeScript.title}
-                      </h3>
-                    </div>
-                  </div>
-                ) : null}
-              </DragOverlay>
             </DndContext>
           </div>
 
           {/* 2. BLOC DESSOUS : BIBLIOTHÈQUE PUBLIQUE */}
-          <div className="space-y-4">
+          <div className="space-y-4 pt-4 border-t border-gray-800/80">
+            <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+              <span>📚</span> Bibliothèque publique
+            </h2>
             <PublicLibrary
               onAddPersonalAudio={(audio) => {
                 setPersonalAudios((prev) => [...prev, audio]);
@@ -633,7 +559,8 @@ export default function Home() {
               }}
             />
           </div>
-        </div>) : (
+        </div>
+      ) : (
         /* ACCUEIL PRINCIPAL : LISTE DE TEXTES ON TOP + LES 2 PARCOURS EN DESSOUS */
         <div className="space-y-8">
           {/* 1. BLOC ON TOP : MES TEXTES & SAYNÈTES */}
