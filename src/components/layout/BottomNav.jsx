@@ -28,34 +28,34 @@ export default function BottomNav() {
 
       {/* Groupe de navigation principal */}
       <div className="flex items-center justify-around flex-1 gap-1 sm:gap-3">
-        {/* 1. Importer (Inversé : placé en 1ère position tout à gauche) */}
+        {/* 1. Importer */}
         <NavLink
           to="/upload"
           className={({ isActive }) =>
             `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
               isActive
                 ? "text-blue-400 font-bold bg-blue-500/10 border border-blue-500/30"
-                : "text-white hover:text-blue-300"
+                : "text-white font-medium hover:text-amber-300"
             }`
           }
         >
           <span className="text-base sm:text-lg">➕</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Importer</span>
+          <span className="text-[10px] sm:text-xs">Importer</span>
         </NavLink>
 
-        {/* 2. Consignes (Inversé : placé en 2ème position) */}
+        {/* 2. Consignes */}
         <NavLink
           to="/?tab=director"
           className={() =>
             `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
               isDirectorActive
                 ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
-                : "text-white hover:text-amber-300"
+                : "text-white font-medium hover:text-amber-300"
             }`
           }
         >
           <span className="text-base sm:text-lg">📁</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Consignes</span>
+          <span className="text-[10px] sm:text-xs">Consignes</span>
         </NavLink>
 
         {/* 3. Partagés / Troupes */}
@@ -65,37 +65,37 @@ export default function BottomNav() {
             `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
               isActive
                 ? "text-purple-400 font-bold bg-purple-500/10 border border-purple-500/30"
-                : "text-white hover:text-purple-300"
+                : "text-white font-medium hover:text-amber-300"
             }`
           }
         >
           <span className="text-base sm:text-lg">👥</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Partagés</span>
+          <span className="text-[10px] sm:text-xs">Partagés</span>
         </NavLink>
 
-        {/* 4. Bibliothèque */}
+        {/* 4. Textes-biblio */}
         <NavLink
           to="/?tab=library#library"
           className={() =>
             `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
               isLibraryActive
                 ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
-                : "text-white hover:text-amber-300"
+                : "text-white font-medium hover:text-amber-300"
             }`
           }
         >
           <span className="text-base sm:text-lg">📚</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Bibliothèque</span>
+          <span className="text-[10px] sm:text-xs">Textes-biblio</span>
         </NavLink>
 
         {/* 5. Tutoriel */}
         <button
           onClick={handleOpenTutorial}
-          className="flex flex-col items-center py-1 px-2.5 rounded-xl text-white hover:text-amber-300 transition text-center"
+          className="flex flex-col items-center py-1 px-2.5 rounded-xl text-white font-medium hover:text-amber-300 transition text-center"
           title="Accéder au tutoriel"
         >
           <span className="text-base sm:text-lg">📖</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Tutoriel</span>
+          <span className="text-[10px] sm:text-xs">Tutoriel</span>
         </button>
       </div>
     </nav>
