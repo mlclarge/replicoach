@@ -53,16 +53,6 @@ function ScriptDetail() {
   } = useScriptStore();
 
   const [viewMode, setViewMode] = useState("full");
-  const VIEW_MODE_LABELS = {
-    full: "📖 Complet",
-    gaps: "🔤 Trous",
-    first3: "3️⃣ 3 mots",
-    debut_fin: "🟢 Début/Fin",
-    last_word: "🟣 Derniers Mots",
-    cue: "🎭 Répliques",
-  };
-
-  const [showExerciseMenu, setShowExerciseMenu] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [editingReplica, setEditingReplica] = useState(null);
@@ -83,6 +73,7 @@ function ScriptDetail() {
   const [insertAfterIndex, setInsertAfterIndex] = useState(null);
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [showExerciseMenu, setShowExerciseMenu] = useState(false);
   const [newTitle, setNewTitle] = useState("");
 
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
@@ -494,12 +485,22 @@ function ScriptDetail() {
     original_filename,
   } = currentScript;
 
+
+  const VIEW_MODE_LABELS = {
+    full: "📖 Complet",
+    gaps: "🔤 Trous",
+    first3: "3️⃣ 3 mots",
+    debut_fin: "🟢 Début/Fin",
+    last_word: "🟣 Derniers Mots",
+    cue: "🎭 Répliques",
+  };
+
   return (
     <div className="pb-32 min-h-screen bg-amber-50">
       {/* En-tête de la pièce */}
-      <div className="bg-black p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
-        <div className="flex justify-between items-start">
-          <div className="flex-1">
+      <div className="bg-black p-3 sm:p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex-1 min-w-0">
             {editingTitle ? (
               <div className="flex items-center gap-2 mb-1">
                 <input
@@ -525,36 +526,38 @@ function ScriptDetail() {
               </div>
             ) : (
               <h1
-                className="text-2xl font-display text-gold-400 mb-1 cursor-pointer hover:text-gold-300 flex items-center gap-2 group"
+                className="text-xl sm:text-2xl font-display text-gold-400 mb-0.5 cursor-pointer hover:text-gold-300 flex items-center gap-2 group truncate"
                 onClick={() => {
                   setNewTitle(title);
                   setEditingTitle(true);
                 }}
                 title="Cliquer pour modifier le titre"
               >
-                {title}
-                <span className="text-sm opacity-0 group-hover:opacity-100 transition">
+                <span className="truncate">{title}</span>
+                <span className="text-sm opacity-0 group-hover:opacity-100 transition shrink-0">
                   ✏️
                 </span>
               </h1>
             )}
-            <p className="text-gray-300 text-sm">
+            <p className="text-gray-300 text-xs sm:text-sm truncate">
               {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          
+          {/* Alignment parfait sur mobile & desktop */}
+          <div className="flex items-center gap-2 shrink-0 self-center">
             <Link
               to={`/script/${id}/audio`}
-              className="px-4 py-2.5 bg-gradient-to-r from-amber-500 via-amber-400 to-gold-500 hover:from-amber-400 hover:to-gold-400 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-lg shadow-amber-500/25 transition-all transform active:scale-95 flex items-center gap-1.5 shrink-0 border border-amber-300"
-              title="Mode Écoute et Enregistrement"
+              className="h-10 px-3 sm:px-4 py-2 bg-gradient-to-r from-amber-400 via-amber-500 to-gold-500 hover:from-amber-300 hover:to-amber-400 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-md shadow-amber-500/20 transition active:scale-95 border border-amber-300/60 flex items-center justify-center gap-1.5 shrink-0"
+              title="Écouter et enregistrer les répliques"
             >
-              <span className="text-sm">🎙️</span>
+              <span>🎙️</span>
               <span>écouter/s'enregistrer</span>
             </Link>
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-2.5 rounded-xl transition shadow-md bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shrink-0"
+              className="h-10 w-10 flex items-center justify-center rounded-xl transition shadow-md bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shrink-0"
               title="Supprimer ce texte"
             >
               🗑️
@@ -572,7 +575,128 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Filtres personnages et boutons d'action */}
+        {/* 1. BLOC EXERCICE "EXERCEZ-VOUS !" : IMMÉDIATEMENT SOUS LE BANDEAU DE DÉPART */}
+        <div className="mb-4 bg-slate-900 border-2 border-amber-500/40 rounded-2xl p-3 shadow-xl text-white transition-all">
+          <div
+            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
+            className="cursor-pointer flex items-center justify-between gap-2 p-1 select-none"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xl">🎯</span>
+              <span className="font-extrabold text-sm text-white tracking-tight">
+                Exercez-vous !
+              </span>
+              <span className="text-xs px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full font-bold truncate">
+                {VIEW_MODE_LABELS[viewMode] || "📖 Complet"}
+              </span>
+            </div>
+            <button
+              className="text-xs font-bold px-3 py-1.5 bg-amber-500 text-black hover:bg-amber-400 rounded-xl transition flex items-center gap-1 shadow shrink-0"
+              title="Afficher les modes d'exercice"
+            >
+              <span>{showExerciseMenu ? "Fermer" : "Choisir un exercice"}</span>
+              <span className={`transition-transform duration-200 inline-block ${showExerciseMenu ? "rotate-180" : ""}`}>
+                ▼
+              </span>
+            </button>
+          </div>
+
+          {showExerciseMenu && (
+            <div className="mt-3 pt-3 border-t border-gray-800 space-y-3">
+              {/* Grille des 6 modes de mémorisation */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <button
+                  onClick={() => { setViewMode("full"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "full"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  📖 Complet
+                </button>
+                <button
+                  onClick={() => { setViewMode("gaps"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "gaps"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  🔤 Trous
+                </button>
+                <button
+                  onClick={() => { setViewMode("first3"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "first3"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  3️⃣ 3 mots
+                </button>
+                <button
+                  onClick={() => { setViewMode("debut_fin"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "debut_fin"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  🟢 Début/Fin
+                </button>
+                <button
+                  onClick={() => { setViewMode("last_word"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "last_word"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  🟣 Derniers Mots
+                </button>
+                <button
+                  onClick={() => { setViewMode("cue"); setShowExerciseMenu(false); }}
+                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    viewMode === "cue"
+                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
+                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  🎭 Répliques
+                </button>
+              </div>
+
+              {/* Actions secondaires */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setEditMode(!editMode)}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition border ${
+                    editMode
+                      ? "bg-orange-500 text-white border-orange-400 shadow"
+                      : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
+                  }`}
+                >
+                  {editMode ? "✅ Terminer" : "✏️ Mode édition"}
+                </button>
+                <button
+                  onClick={() => { setShowCharacterManager(true); setShowExerciseMenu(false); }}
+                  className="py-2 px-3 rounded-xl text-xs font-bold bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition"
+                >
+                  👥 Personnages
+                </button>
+                <button
+                  onClick={() => { setShowReplicaGroups(true); setShowExerciseMenu(false); }}
+                  className="py-2 px-3 rounded-xl text-xs font-bold bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition"
+                >
+                  📚 Groupes
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 2. FILTRES DES PERSONNAGES : POSITIONNÉS SOUS LE BLOC EXERCICES */}
         <div className="mb-4">
           {myCharacterId && (
             <div className="mb-2">
@@ -595,7 +719,7 @@ function ScriptDetail() {
               onClick={() => setSelectedCharacter(null)}
               className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow ${
                 !selectedCharacter
-                  ? "bg-gold-500 text-dark"
+                  ? "bg-gold-500 text-dark font-bold"
                   : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
               }`}
             >
@@ -711,124 +835,6 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Accordéon déroulant : Exercez-vous ! */}
-        <div className="mb-4 bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden transition-all">
-          <button
-            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
-            className="w-full px-4 py-3 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white flex items-center justify-between transition hover:from-gray-800 hover:to-gray-700 active:scale-[0.99]"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="text-lg">🎯</span>
-              <span className="font-extrabold text-sm sm:text-base tracking-tight text-white">
-                Exercez-vous !
-              </span>
-              <span className="text-[11px] font-bold px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-mono">
-                {VIEW_MODE_LABELS[viewMode] || "📖 Complet"}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300 bg-gray-800/90 px-3 py-1.5 rounded-xl border border-gray-700 shadow-inner">
-              <span>{showExerciseMenu ? "Masquer" : "Choisir un exercice"}</span>
-              <span className={`transition-transform duration-200 ${showExerciseMenu ? "rotate-180" : ""}`}>
-                ▼
-              </span>
-            </div>
-          </button>
-
-          {showExerciseMenu && (
-            <div className="p-3 border-t border-gray-100 bg-gray-50/50 space-y-3">
-              {/* Modes de mémorisation */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <button
-                  onClick={() => { setViewMode("full"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "full"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  📖 Complet
-                </button>
-                <button
-                  onClick={() => { setViewMode("gaps"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "gaps"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  🔤 Trous
-                </button>
-                <button
-                  onClick={() => { setViewMode("first3"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "first3"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  3️⃣ 3 mots
-                </button>
-                <button
-                  onClick={() => { setViewMode("debut_fin"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "debut_fin"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  🟢 Début/Fin
-                </button>
-                <button
-                  onClick={() => { setViewMode("last_word"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "last_word"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  🟣 Derniers Mots
-                </button>
-                <button
-                  onClick={() => { setViewMode("cue"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition shadow-sm border ${
-                    viewMode === "cue"
-                      ? "bg-amber-500 text-black border-amber-400 font-extrabold shadow-md"
-                      : "bg-white text-gray-700 border-gray-200 hover:bg-amber-50"
-                  }`}
-                >
-                  🎭 Répliques
-                </button>
-              </div>
-
-              {/* Actions secondaires */}
-              <div className="flex gap-2 pt-2 border-t border-gray-200/60">
-                <button
-                  onClick={() => setEditMode(!editMode)}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition border ${
-                    editMode
-                      ? "bg-orange-500 text-white border-orange-600 shadow"
-                      : "bg-white text-gray-700 border-gray-300 hover:bg-orange-50"
-                  }`}
-                >
-                  {editMode ? "✅ Terminer" : "✏️ Mode édition"}
-                </button>
-                <button
-                  onClick={() => setShowCharacterManager(true)}
-                  className="py-2 px-3 rounded-xl text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-purple-50 transition"
-                >
-                  👥 Personnages
-                </button>
-                <button
-                  onClick={() => setShowReplicaGroups(true)}
-                  className="py-2 px-3 rounded-xl text-xs font-bold bg-white text-gray-700 border border-gray-300 hover:bg-indigo-50 transition"
-                >
-                  📚 Groupes
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
         {studyingGroup && (
           <div className="mb-4 p-3 bg-indigo-100 border border-indigo-300 rounded-lg flex items-center justify-between">
             <p className="text-indigo-800 text-sm">
@@ -859,6 +865,8 @@ function ScriptDetail() {
             </button>
           </div>
         )}
+
+        
 
         {/* DnD Liste des répliques */}
         <DndContext
