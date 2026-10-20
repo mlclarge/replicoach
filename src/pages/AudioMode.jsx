@@ -76,24 +76,46 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
-
-const IDB_NAME = "ReplicoachAudioDB";
-const IDB_VERSION = 1;
+// ==========================================
+// INDEXEDDB HELPER ROBUSTE (Auto-repair & Version upgrade)
+// ==========================================
+const IDB_NAME = "ReplicoachAudioDB_v2";
 const IDB_STORE = "replica_recordings";
+const IDB_VERSION = 2;
 
 function openAudioDB() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
-      return reject("IndexedDB non disponible");
+      return reject(new Error("IndexedDB non supporté"));
     }
     const request = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+
     request.onupgradeneeded = (e) => {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(IDB_STORE)) {
         db.createObjectStore(IDB_STORE, { keyPath: "id" });
       }
     };
-    request.onsuccess = () => resolve(request.result);
+
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        // En cas de conflit de version, ré-ouvrir avec version forcée
+        db.close();
+        const reqVersion = window.indexedDB.open(IDB_NAME, db.version + 1);
+        reqVersion.onupgradeneeded = (ev) => {
+          const dbUp = ev.target.result;
+          if (!dbUp.objectStoreNames.contains(IDB_STORE)) {
+            dbUp.createObjectStore(IDB_STORE, { keyPath: "id" });
+          }
+        };
+        reqVersion.onsuccess = () => resolve(reqVersion.result);
+        reqVersion.onerror = () => reject(reqVersion.error);
+      } else {
+        resolve(db);
+      }
+    };
+
     request.onerror = () => reject(request.error);
   });
 }
@@ -121,6 +143,7 @@ async function saveTakeToIDB(scriptId, replicaId, takeIndex, blob, duration, cha
     });
   } catch (err) {
     console.error("Erreur sauvegarde IDB:", err);
+    throw err;
   }
 }
 
@@ -169,6 +192,7 @@ async function deleteTakeFromIDB(scriptId, replicaId, takeIndex) {
     });
   } catch (err) {
     console.error("Erreur suppression IDB:", err);
+    return false;
   }
 }
 
@@ -189,13 +213,15 @@ function AudioMode() {
 
   // Voix enregistrées
   const [characterRecordings, setCharacterRecordings] = useState({});
-  const [replicaRecordings, setReplicaRecordings] = useState({});
+  const [replicaRecordings, setReplicaRecordings] = useState({}); // { [replicaId]: [ {takeIndex, url, duration}, ... ] }
   const [voiceMode, setVoiceMode] = useState({});
 
   // Enregistrement réplique
   const [recordingReplicaId, setRecordingReplicaId] = useState(null);
+  const [recordingTakeIndex, setRecordingTakeIndex] = useState(1);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [savingAudio, setSavingAudio] = useState(false);
 
   // Lecture
   const [isPlaying, setIsPlaying] = useState(false);
@@ -223,9 +249,7 @@ function AudioMode() {
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const audioContextRef = useRef(null);
-
-  // 🚀 CACHE & PRÉCHARGEMENT AUDIO PREMIUM (Optimisation latence entre répliques)
-  const ttsCacheRef = useRef({}); // Cache : { [replicaId]: { url, audio, usage } }
+  const ttsCacheRef = useRef({});
 
   // Charger le statut Premium
   useEffect(() => {
@@ -256,11 +280,13 @@ function AudioMode() {
     }
   }, [id, currentScript, fetchScript]);
 
+  // Charger les enregistrements depuis IndexedDB
   useEffect(() => {
-    if (!id) return;
-    loadScriptRecordingsFromIDB(id).then((map) => {
-      setReplicaRecordings(map);
-    });
+    if (id) {
+      loadScriptRecordingsFromIDB(id).then((map) => {
+        setReplicaRecordings(map);
+      });
+    }
   }, [id]);
 
   useEffect(() => {
@@ -368,10 +394,14 @@ function AudioMode() {
     }
   }, [currentIndex, isPlaying]);
 
-  const startReplicaRecording = async (replicaId) => {
+  // ==========================================
+  // LOGIQUE D'ENREGISTREMENT EN 1 CLIC (INDEXEDDB & COMPARATEUR 2 PRISES)
+  // ==========================================
+  const startReplicaRecording = async (replicaId, takeIndex = 1) => {
     try {
       chunksRef.current = [];
       setRecordingReplicaId(replicaId);
+      setRecordingTakeIndex(takeIndex);
       setRecordingDuration(0);
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -387,8 +417,33 @@ function AudioMode() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = () => {
+      mediaRecorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop());
+        
+        if (chunksRef.current.length > 0) {
+          setSavingAudio(true);
+          try {
+            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+            const replica = currentScript?.replicas?.find((r) => r.id === replicaId);
+            const char = currentScript?.characters?.find((c) => c.id === replica?.character_id);
+            const charName = char?.name || "Personnage";
+
+            await saveTakeToIDB(id, replicaId, takeIndex, blob, recordingDuration, charName);
+            
+            // Recharger la carte des enregistrements
+            const updatedMap = await loadScriptRecordingsFromIDB(id);
+            setReplicaRecordings(updatedMap);
+          } catch (err) {
+            console.error("Erreur enregistrement final:", err);
+            alert("Erreur lors de la sauvegarde de l'enregistrement audio.");
+          } finally {
+            setSavingAudio(false);
+            setRecordingReplicaId(null);
+            chunksRef.current = [];
+          }
+        } else {
+          setRecordingReplicaId(null);
+        }
       };
 
       mediaRecorder.start();
@@ -409,41 +464,15 @@ function AudioMode() {
     }
   };
 
-  const stopAndSaveReplicaRecording = async (characterName = "Comédien") => {
-    if (!mediaRecorderRef.current || !isRecording) return;
-
+  const stopAndSaveReplicaRecording = () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setIsRecording(false);
-
-    const activeReplicaId = recordingReplicaId;
-
-    mediaRecorderRef.current.onstop = async () => {
-      if (chunksRef.current.length > 0 && activeReplicaId) {
-        const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        const existingTakes = replicaRecordings[activeReplicaId] || [];
-        const nextTakeIndex = existingTakes.length >= 1 ? 2 : 1;
-
-        await saveTakeToIDB(
-          id,
-          activeReplicaId,
-          nextTakeIndex,
-          blob,
-          recordingDuration,
-          characterName
-        );
-
-        const updatedMap = await loadScriptRecordingsFromIDB(id);
-        setReplicaRecordings(updatedMap);
-      }
-
-      setRecordingReplicaId(null);
-      chunksRef.current = [];
-    };
-
-    mediaRecorderRef.current.stop();
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+    }
   };
 
-  const deleteReplicaTake = async (replicaId, takeIndex) => {
+  const deleteReplicaRecording = async (replicaId, takeIndex) => {
     await deleteTakeFromIDB(id, replicaId, takeIndex);
     const updatedMap = await loadScriptRecordingsFromIDB(id);
     setReplicaRecordings(updatedMap);
@@ -452,14 +481,14 @@ function AudioMode() {
   const playReplicaRecording = (replicaId, takeIndex = 1) => {
     return new Promise(async (resolve) => {
       const takes = replicaRecordings[replicaId] || [];
-      const takeObj = takes.find((t) => t.takeIndex === takeIndex) || takes[0];
-      if (!takeObj?.url) return resolve();
+      const take = takes.find((t) => t.takeIndex === takeIndex) || takes[0];
+      if (!take?.url) return resolve();
 
       try {
         await ensureAudioUnlocked();
       } catch (e) {}
 
-      const audio = new Audio(takeObj.url);
+      const audio = new Audio(take.url);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
 
@@ -560,7 +589,6 @@ function AudioMode() {
     }
   };
 
-  // ⚡ PRÉCHARGEMENT DE LA RÉPLIQUE SUIVANTE (Anticipation TTS pour latence 0ms)
   const preloadNextTts = async (nextReplica) => {
     if (!nextReplica || ttsCacheRef.current[nextReplica.id]) return;
 
@@ -577,7 +605,6 @@ function AudioMode() {
     }
   };
 
-  // Google Cloud TTS (Premium) avec Cache et Préchargement
   const speakPremium = async (replicaId) => {
     let cached = ttsCacheRef.current[replicaId];
 
@@ -635,8 +662,9 @@ function AudioMode() {
 
     const cleanedForDecision = cleanTextForSpeech(text || "");
 
-    if (replicaId && replicaRecordings[replicaId] && replicaRecordings[replicaId].length > 0) {
-      return await playReplicaRecording(replicaId, 1);
+    const takes = replicaRecordings[replicaId] || [];
+    if (replicaId && takes.length > 0 && takes[0]?.url) {
+      return await playReplicaRecording(replicaId, takes[0].takeIndex);
     }
 
     const mode = voiceMode[characterId] || "synth";
@@ -646,7 +674,6 @@ function AudioMode() {
 
     if (isPremium) {
       if (replicaId && premiumLocks[characterId]) {
-        // Lancé en arrière-plan : Précharger la réplique suivante immédiatement
         if (nextReplica && premiumLocks[nextReplica.character_id]) {
           preloadNextTts(nextReplica);
         }
@@ -857,7 +884,6 @@ function AudioMode() {
             </div>
           </div>
 
-          {/* Bouton pour ouvrir/fermer le panneau de réglages des voix */}
           <button
             onClick={() => setShowSettings(!showSettings)}
             className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
@@ -886,7 +912,7 @@ function AudioMode() {
         </div>
       </div>
 
-      {/* Panneau de configuration des voix (fermé par défaut) */}
+      {/* Panneau de configuration des voix */}
       {showSettings && (
         <div className="bg-white border-b-2 border-gold-500/30 p-4 shadow-xl w-full max-w-7xl mx-auto animate-fade-in my-3 rounded-2xl">
           <div className="flex items-center justify-between mb-3">
@@ -1027,7 +1053,7 @@ function AudioMode() {
         </div>
       )}
 
-      {/* Liste des répliques - Responsive Full Width */}
+      {/* Liste des répliques */}
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {replicas.map((replica, index) => {
           const character = characters.find(
@@ -1061,19 +1087,21 @@ function AudioMode() {
               onBubbleClick={() => onBubbleClick(index)}
               onPlay={() => playSingleBubble(index)}
               onStop={stopSingleBubble}
-              replicaRecordings={replicaRecordings}
+              takes={replicaRecordings[replica.id] || []}
               recordingReplicaId={recordingReplicaId}
+              recordingTakeIndex={recordingTakeIndex}
               recordingDuration={recordingDuration}
+              savingAudio={savingAudio}
               startReplicaRecording={startReplicaRecording}
               stopAndSaveReplicaRecording={stopAndSaveReplicaRecording}
-              deleteReplicaTake={deleteReplicaTake}
+              deleteReplicaRecording={deleteReplicaRecording}
               playReplicaRecording={playReplicaRecording}
             />
           );
         })}
       </div>
 
-      {/* 📍 BARRE DE CONTRÔLE AUDIO FIXE EN BAS (STAY CLEAR OF FOOTER NAV ON DESKTOP: bottom-16 md:bottom-20) */}
+      {/* BARRE DE CONTRÔLE AUDIO FIXE EN BAS */}
       <div className="fixed bottom-16 md:bottom-20 left-0 right-0 z-40 bg-white border-t-2 border-gold-500 shadow-[0_-8px_30px_rgba(0,0,0,0.25)] py-2.5 px-4">
         {premiumNotice && (
           <div className="bg-amber-500 text-black px-4 py-1 text-xs font-bold text-center mb-1 rounded-md">
@@ -1082,7 +1110,6 @@ function AudioMode() {
         )}
 
         <div className="w-full max-w-5xl mx-auto">
-          {/* Ligne 1 : Info réplique en cours */}
           <div className="flex items-center justify-between gap-3 mb-1.5 pb-1.5 border-b border-gray-200">
             <div className="flex items-center gap-2 min-w-0">
               <span
@@ -1114,9 +1141,7 @@ function AudioMode() {
             </span>
           </div>
 
-          {/* Ligne 2 : Les 5 boutons de contrôle audio */}
           <div className="flex items-center justify-center gap-3 sm:gap-8">
-            {/* 1. Recommencer */}
             <button
               onClick={() => {
                 stop();
@@ -1130,7 +1155,6 @@ function AudioMode() {
               <span className="text-[10px] font-bold">Début</span>
             </button>
 
-            {/* 2. Précédent */}
             <button
               onClick={goToPrevious}
               disabled={currentIndex === 0}
@@ -1141,7 +1165,6 @@ function AudioMode() {
               <span className="text-[10px] font-bold">Recul</span>
             </button>
 
-            {/* 3. PLAY / PAUSE CENTRAL (GRAND) */}
             <button
               onClick={() => (isPlaying ? stop() : playAll(currentIndex))}
               className={`flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl text-xl sm:text-2xl text-white shadow-lg transition-all transform active:scale-95 ${
@@ -1154,7 +1177,6 @@ function AudioMode() {
               {isPlaying ? "⏸️" : "▶️"}
             </button>
 
-            {/* 4. Suivant */}
             <button
               onClick={goToNext}
               disabled={currentIndex === replicas.length - 1}
@@ -1165,7 +1187,6 @@ function AudioMode() {
               <span className="text-[10px] font-bold">Avance</span>
             </button>
 
-            {/* 5. Arrêter */}
             <button
               onClick={stop}
               className="flex flex-col items-center gap-0.5 p-1.5 text-red-600 hover:text-red-700 transition active:scale-95"
@@ -1198,17 +1219,21 @@ const AudioBubble = forwardRef(
       onBubbleClick,
       onPlay,
       onStop,
-      replicaRecordings,
+      takes = [],
       recordingReplicaId,
+      recordingTakeIndex,
       recordingDuration,
+      savingAudio,
       startReplicaRecording,
       stopAndSaveReplicaRecording,
-      deleteReplicaTake,
+      deleteReplicaRecording,
       playReplicaRecording,
     },
     ref
   ) => {
     const bubbleColor = character?.color || "#6B7280";
+    const take1 = takes.find((t) => t.takeIndex === 1);
+    const take2 = takes.find((t) => t.takeIndex === 2);
 
     return (
       <div
@@ -1288,46 +1313,75 @@ const AudioBubble = forwardRef(
               )}
             </div>
 
+            {/* ZONE ENREGISTREMENT & PRISES (1-CLIC + COMPARATEUR 2 PRISES) */}
             <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/20">
               {recordingReplicaId === replica.id ? (
-                <div className="w-full flex items-center justify-between bg-red-950/80 border border-red-500/50 rounded-xl px-3.5 py-2 shadow-lg">
-                  <span className="text-red-300 font-bold animate-pulse flex items-center gap-2 text-xs">
-                    🔴 Enregistrement : {recordingDuration}s
+                <div className="w-full flex items-center justify-between bg-black/40 backdrop-blur-md rounded-xl p-2.5 border border-red-500/50">
+                  <span className="text-red-400 font-bold animate-pulse flex items-center gap-2 text-xs">
+                    🔴 Enregistrement (Prise {recordingTakeIndex}) : {recordingDuration}s
                   </span>
                   <button
-                    onClick={() => stopAndSaveReplicaRecording(character?.name || "Comédien")}
-                    className="px-3.5 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-extrabold shadow-md transition active:scale-95"
+                    onClick={stopAndSaveReplicaRecording}
+                    disabled={savingAudio}
+                    className="px-4 py-2 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white rounded-lg text-xs font-extrabold shadow-lg transition active:scale-95 border border-red-400 flex items-center gap-1.5"
                   >
-                    ⏹️ Valider
+                    {savingAudio ? "💾 Enregistrement..." : "⏹️ Valider"}
                   </button>
                 </div>
               ) : (
                 <>
-                  {(replicaRecordings[replica.id] || []).map((take, tIdx) => (
-                    <div key={take.takeIndex || tIdx} className="flex items-center gap-1">
+                  {/* Prise 1 */}
+                  {take1 ? (
+                    <div className="flex items-center gap-1 bg-black/30 p-1 rounded-xl border border-white/10">
                       <button
-                        onClick={() => playReplicaRecording(replica.id, take.takeIndex)}
-                        className="flex items-center justify-center gap-1 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-md transition active:scale-95"
+                        onClick={() => playReplicaRecording(replica.id, 1)}
+                        className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-bold shadow transition active:scale-95 flex items-center gap-1"
                       >
-                        ▶️ Prise {take.takeIndex}
+                        ▶️ Prise 1
                       </button>
                       <button
-                        onClick={() => deleteReplicaTake(replica.id, take.takeIndex)}
-                        className="p-1.5 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-xs shadow-md transition active:scale-95"
-                        title="Supprimer cette prise"
+                        onClick={() => deleteReplicaRecording(replica.id, 1)}
+                        className="p-1.5 text-white/70 hover:text-red-400 transition"
+                        title="Supprimer la Prise 1"
                       >
                         🗑️
                       </button>
                     </div>
-                  ))}
-
-                  {(replicaRecordings[replica.id] || []).length < 2 && (
+                  ) : (
                     <button
-                      onClick={() => startReplicaRecording(replica.id)}
-                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black rounded-lg text-xs font-extrabold shadow-md transition active:scale-95"
+                      onClick={() => startReplicaRecording(replica.id, 1)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black font-extrabold rounded-lg text-xs shadow transition active:scale-95 flex items-center gap-1"
                     >
-                      🎤 {(replicaRecordings[replica.id] || []).length === 1 ? "+ Prise 2" : "Enregistrer ma voix"}
+                      🎤 Enregistrer (Prise 1)
                     </button>
+                  )}
+
+                  {/* Prise 2 (Comparatif) */}
+                  {take2 ? (
+                    <div className="flex items-center gap-1 bg-black/30 p-1 rounded-xl border border-white/10">
+                      <button
+                        onClick={() => playReplicaRecording(replica.id, 2)}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-xs font-bold shadow transition active:scale-95 flex items-center gap-1"
+                      >
+                        ▶️ Prise 2
+                      </button>
+                      <button
+                        onClick={() => deleteReplicaRecording(replica.id, 2)}
+                        className="p-1.5 text-white/70 hover:text-red-400 transition"
+                        title="Supprimer la Prise 2"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  ) : (
+                    take1 && (
+                      <button
+                        onClick={() => startReplicaRecording(replica.id, 2)}
+                        className="px-3 py-1.5 bg-purple-500/80 hover:bg-purple-500 text-white font-bold rounded-lg text-xs shadow transition active:scale-95 flex items-center gap-1 border border-purple-400/40"
+                      >
+                        🎙️ Ajouter Prise 2
+                      </button>
+                    )
                   )}
                 </>
               )}
