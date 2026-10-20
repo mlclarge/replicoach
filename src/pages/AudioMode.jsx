@@ -76,41 +76,33 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
-// ==========================================
-// 📱 SYSTEME DE STOCKAGE LOCAL INDEXEDDB PERMANENT
-// ==========================================
-const IDB_NAME = "Replicoach_Audio_DB_v10";
-const IDB_STORE = "replica_recordings";
-const IDB_VERSION = 10; // Version incrémentée pour forcer onupgradeneeded
+// 📦 INDEXEDDB HELPER UNIFIÉ (Stockage local robuste pour fichiers audio)
+const IDB_DB_NAME = "Replicoach_Audio_DB_v25";
+const IDB_STORE_NAME = "replica_recordings";
+const IDB_VERSION = 25;
 
-async function openAudioDB() {
+function openAudioDB() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
-      return reject(new Error("IndexedDB indisponible"));
+      return reject(new Error("IndexedDB non disponible"));
     }
-    const request = window.indexedDB.open(IDB_NAME, IDB_VERSION);
+    const request = window.indexedDB.open(IDB_DB_NAME, IDB_VERSION);
 
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE, { keyPath: "id" });
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+        db.createObjectStore(IDB_STORE_NAME, { keyPath: "id" });
       }
     };
 
     request.onsuccess = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
+      if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
         db.close();
-        // Si le store manque encore, supprimer et recreer
-        const delReq = window.indexedDB.deleteDatabase(IDB_NAME);
-        delReq.onsuccess = () => {
-          const req2 = window.indexedDB.open(IDB_NAME, IDB_VERSION + 1);
-          req2.onupgradeneeded = (ev) => {
-            ev.target.result.createObjectStore(IDB_STORE, { keyPath: "id" });
-          };
-          req2.onsuccess = () => resolve(req2.result);
-          req2.onerror = () => reject(req2.error);
-        };
+        try {
+          window.indexedDB.deleteDatabase(IDB_DB_NAME);
+        } catch (e) {}
+        reject(new Error("Object store manquant"));
         return;
       }
       resolve(db);
@@ -120,82 +112,63 @@ async function openAudioDB() {
   });
 }
 
-async function saveTakeToIDB(scriptId, replicaId, takeIndex, blob, duration, charName) {
+async function saveTakeToIDB(record) {
   try {
     const db = await openAudioDB();
-    const key = `${scriptId}_${replicaId}_take_${takeIndex}`;
-    const record = {
-      id: key,
-      scriptId,
-      replicaId,
-      takeIndex,
-      blob,
-      duration,
-      charName,
-      createdAt: new Date().toISOString(),
-    };
-
     return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const store = tx.objectStore(IDB_STORE);
+      const tx = db.transaction([IDB_STORE_NAME], "readwrite");
+      const store = tx.objectStore(IDB_STORE_NAME);
       const req = store.put(record);
-      req.onsuccess = () => resolve(record);
+      req.onsuccess = () => resolve(true);
       req.onerror = () => reject(req.error);
     });
   } catch (err) {
-    console.warn("Erreur sauvegarde IDB:", err);
+    console.warn("Save IDB warn (fallback mémoire actif):", err);
+    return false;
   }
 }
 
-async function loadScriptRecordingsFromIDB(scriptId) {
+async function loadRecordingsFromIDB(scriptId) {
   try {
     const db = await openAudioDB();
     return new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
+      const tx = db.transaction([IDB_STORE_NAME], "readonly");
+      const store = tx.objectStore(IDB_STORE_NAME);
       const req = store.getAll();
       req.onsuccess = () => {
         const all = req.result || [];
         const filtered = all.filter((item) => item.scriptId === scriptId);
         const map = {};
         filtered.forEach((item) => {
-          if (!map[item.replicaId]) map[item.replicaId] = [];
-          const url = URL.createObjectURL(item.blob);
-          map[item.replicaId].push({
-            takeIndex: item.takeIndex,
+          const url = item.blob ? URL.createObjectURL(item.blob) : item.data || item.url;
+          map[item.replicaId] = {
+            ...item,
             url,
-            blob: item.blob,
-            duration: item.duration,
-            createdAt: item.createdAt,
-          });
-        });
-        // Trier par takeIndex
-        Object.keys(map).forEach((k) => {
-          map[k].sort((a, b) => a.takeIndex - b.takeIndex);
+            data: url,
+          };
         });
         resolve(map);
       };
       req.onerror = () => resolve({});
     });
   } catch (err) {
-    console.warn("Erreur chargement IDB:", err);
+    console.warn("Load IDB warn:", err);
     return {};
   }
 }
 
-async function deleteTakeFromIDB(scriptId, replicaId, takeIndex) {
+async function deleteTakeFromIDB(key) {
   try {
     const db = await openAudioDB();
-    const key = `${scriptId}_${replicaId}_take_${takeIndex}`;
     return new Promise((resolve) => {
-      const tx = db.transaction(IDB_STORE, "readwrite");
-      const store = tx.objectStore(IDB_STORE);
+      const tx = db.transaction([IDB_STORE_NAME], "readwrite");
+      const store = tx.objectStore(IDB_STORE_NAME);
       const req = store.delete(key);
       req.onsuccess = () => resolve(true);
       req.onerror = () => resolve(false);
     });
-  } catch (err) {
-    console.warn("Erreur suppression IDB:", err);
+  } catch (e) {
+    return false;
   }
 }
 
@@ -214,10 +187,8 @@ function AudioMode() {
   const [characterVoices, setCharacterVoices] = useState({});
   const [characterGenders, setCharacterGenders] = useState({});
 
-  // Voix enregistrées (Personnages)
+  // Voix enregistrées
   const [characterRecordings, setCharacterRecordings] = useState({});
-  
-  // 🎭 Enregistrements des répliques (Comédien) : Map { [replicaId]: [ { url, duration, takeIndex } ] }
   const [replicaRecordings, setReplicaRecordings] = useState({});
   const [voiceMode, setVoiceMode] = useState({});
 
@@ -285,13 +256,25 @@ function AudioMode() {
     }
   }, [id, currentScript, fetchScript]);
 
-  // 📂 Charger les enregistrements du comédien depuis IndexedDB au chargement
+  // Charger les enregistrements locaux depuis IndexedDB
   useEffect(() => {
-    if (id) {
-      loadScriptRecordingsFromIDB(id).then((map) => {
-        setReplicaRecordings(map || {});
-      });
-    }
+    if (!id) return;
+    let isMounted = true;
+    loadRecordingsFromIDB(id).then((idbRecordings) => {
+      if (!isMounted) return;
+      // Fallback localStorage si pas de données IDB
+      const savedLs = localStorage.getItem(`replicaRecordings_${id}`);
+      let lsMap = {};
+      if (savedLs) {
+        try {
+          lsMap = JSON.parse(savedLs);
+        } catch (e) {}
+      }
+      setReplicaRecordings({ ...lsMap, ...idbRecordings });
+    });
+    return () => {
+      isMounted = false;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -399,7 +382,6 @@ function AudioMode() {
     }
   }, [currentIndex, isPlaying]);
 
-  // 🎙️ DÉMARRER L'ENREGISTREMENT D'UNE RÉPLIQUE
   const startReplicaRecording = async (replicaId) => {
     try {
       chunksRef.current = [];
@@ -419,48 +401,13 @@ function AudioMode() {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
 
-      mediaRecorder.onstop = async () => {
-        try {
-          stream.getTracks().forEach((track) => track.stop());
-          const duration = recordingDuration;
-          
-          if (chunksRef.current.length > 0) {
-            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-            const existingTakes = replicaRecordings[replicaId] || [];
-            const takeIndex = existingTakes.length >= 1 ? 2 : 1;
-            const charName = "Mon Rôle";
-
-            // Sauvegarde dans IndexedDB
-            await saveTakeToIDB(id, replicaId, takeIndex, blob, duration, charName);
-
-            // Mise à jour de l'état React local
-            const newUrl = URL.createObjectURL(blob);
-            const newTake = { takeIndex, url: newUrl, blob, duration };
-
-            setReplicaRecordings((prev) => {
-              const currentList = prev[replicaId] || [];
-              const updatedList = [...currentList.filter((t) => t.takeIndex !== takeIndex), newTake];
-              updatedList.sort((a, b) => a.takeIndex - b.takeIndex);
-              return { ...prev, [replicaId]: updatedList };
-            });
-          }
-        } catch (err) {
-          console.error("Erreur lors de la fin de l'enregistrement:", err);
-        } finally {
-          // 🛡️ DÉBLOCAGE GARANTI DE L'INTERFACE
-          setIsRecording(false);
-          setRecordingReplicaId(null);
-          chunksRef.current = [];
-        }
-      };
-
-      mediaRecorder.start();
+      mediaRecorder.start(200); // Collect chunks every 200ms
       setIsRecording(true);
 
       timerRef.current = setInterval(() => {
         setRecordingDuration((d) => {
           if (d >= 60) {
-            stopAndSaveReplicaRecording();
+            stopAndSaveReplicaRecording(replicaId, "Comédien");
             return d;
           }
           return d + 1;
@@ -468,50 +415,103 @@ function AudioMode() {
       }, 1000);
     } catch (err) {
       alert("Impossible d'accéder au microphone");
-      setIsRecording(false);
       setRecordingReplicaId(null);
+      setIsRecording(false);
     }
   };
 
-  // ⏹️ BOUTON 1-CLIC : VALIDER ET STOPPER
-  const stopAndSaveReplicaRecording = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
-    } else {
-      setIsRecording(false);
-      setRecordingReplicaId(null);
+  // ⚡ DEVERROUILLAGE GARANTI DE L'UI DANS LE BLOC FINALLY
+  const stopAndSaveReplicaRecording = async (replicaId, characterName) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
-  };
 
-  // 🗑️ SUPPRIMER UNE PRISE
-  const deleteReplicaRecording = async (replicaId, takeIndex) => {
-    await deleteTakeFromIDB(id, replicaId, takeIndex);
-    setReplicaRecordings((prev) => {
-      const list = prev[replicaId] || [];
-      const updated = list.filter((t) => t.takeIndex !== takeIndex);
-      const copy = { ...prev };
-      if (updated.length === 0) {
-        delete copy[replicaId];
-      } else {
-        copy[replicaId] = updated;
+    const mr = mediaRecorderRef.current;
+    if (mr && mr.state !== "inactive") {
+      mr.onstop = async () => {
+        try {
+          if (chunksRef.current.length > 0) {
+            const blob = new Blob(chunksRef.current, { type: "audio/webm" });
+            const audioUrl = URL.createObjectURL(blob);
+            const key = `${id}_${replicaId}`;
+
+            const newRecord = {
+              id: key,
+              scriptId: id,
+              replicaId: replicaId,
+              blob: blob,
+              url: audioUrl,
+              data: audioUrl,
+              name: `${characterName || "Comédien"} - Réplique`,
+              duration: recordingDuration,
+              date: new Date().toISOString(),
+            };
+
+            // Sauvegarde asynchrone IndexedDB
+            saveTakeToIDB(newRecord);
+
+            // Mise à jour de l'état React immédiat
+            setReplicaRecordings((prev) => {
+              const updated = {
+                ...prev,
+                [replicaId]: newRecord,
+              };
+              try {
+                localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+              } catch (e) {}
+              return updated;
+            });
+          }
+        } catch (err) {
+          console.error("Erreur sauvegarde enregistrement:", err);
+        } finally {
+          // 🚀 TOUJOURS LIBÉRER L'UI QUOI QU'IL ARRIVE !
+          setIsRecording(false);
+          setRecordingReplicaId(null);
+          setRecordingDuration(0);
+          chunksRef.current = [];
+        }
+      };
+
+      mr.stop();
+      if (mr.stream) {
+        mr.stream.getTracks().forEach((track) => track.stop());
       }
-      return copy;
+    } else {
+      // Sécurité si mediaRecorder déjà inactif
+      setIsRecording(false);
+      setRecordingReplicaId(null);
+      setRecordingDuration(0);
+      chunksRef.current = [];
+    }
+  };
+
+  const deleteReplicaRecording = (replicaId) => {
+    const key = `${id}_${replicaId}`;
+    deleteTakeFromIDB(key);
+
+    setReplicaRecordings((prev) => {
+      const updated = { ...prev };
+      delete updated[replicaId];
+      try {
+        localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
     });
   };
 
-  // ▶️ LECTURE D'UNE PRISE DU COMÉDIEN
-  const playReplicaRecording = (replicaId, takeIndex = 1) => {
+  const playReplicaRecording = (replicaId) => {
     return new Promise(async (resolve) => {
-      const takes = replicaRecordings[replicaId] || [];
-      const targetTake = takes.find((t) => t.takeIndex === takeIndex) || takes[0];
-      if (!targetTake?.url) return resolve();
+      const recording = replicaRecordings[replicaId];
+      const audioSrc = recording?.url || recording?.data;
+      if (!audioSrc) return resolve();
 
       try {
         await ensureAudioUnlocked();
       } catch (e) {}
 
-      const audio = new Audio(targetTake.url);
+      const audio = new Audio(audioSrc);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
 
@@ -612,6 +612,7 @@ function AudioMode() {
     }
   };
 
+  // Préchargement de la réplique suivante
   const preloadNextTts = async (nextReplica) => {
     if (!nextReplica || ttsCacheRef.current[nextReplica.id]) return;
 
@@ -628,6 +629,7 @@ function AudioMode() {
     }
   };
 
+  // Google Cloud TTS (Premium)
   const speakPremium = async (replicaId) => {
     let cached = ttsCacheRef.current[replicaId];
 
@@ -685,9 +687,8 @@ function AudioMode() {
 
     const cleanedForDecision = cleanTextForSpeech(text || "");
 
-    const takes = replicaRecordings[replicaId] || [];
-    if (replicaId && takes.length > 0) {
-      return await playReplicaRecording(replicaId, 1);
+    if (replicaId && replicaRecordings[replicaId]?.url) {
+      return await playReplicaRecording(replicaId);
     }
 
     const mode = voiceMode[characterId] || "synth";
@@ -921,6 +922,7 @@ function AudioMode() {
           </button>
         </div>
 
+        {/* Barre de progression */}
         <div className="mt-3 w-full max-w-7xl mx-auto">
           <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
             <div
@@ -934,6 +936,7 @@ function AudioMode() {
         </div>
       </div>
 
+      {/* Panneau de configuration des voix */}
       {showSettings && (
         <div className="bg-white border-b-2 border-gold-500/30 p-4 shadow-xl w-full max-w-7xl mx-auto animate-fade-in my-3 rounded-2xl">
           <div className="flex items-center justify-between mb-3">
@@ -1067,6 +1070,7 @@ function AudioMode() {
         </div>
       </div>
 
+      {/* Indicateur d'attente */}
       {waitingForClick && (
         <div className="bg-emerald-600 text-white p-3 text-center animate-pulse sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm max-w-7xl mx-auto rounded-xl">
           🎭 C'est votre tour ! Cliquez sur votre réplique pour continuer.
@@ -1107,7 +1111,7 @@ function AudioMode() {
               onBubbleClick={() => onBubbleClick(index)}
               onPlay={() => playSingleBubble(index)}
               onStop={stopSingleBubble}
-              takes={replicaRecordings[replica.id] || []}
+              replicaRecordings={replicaRecordings}
               recordingReplicaId={recordingReplicaId}
               recordingDuration={recordingDuration}
               startReplicaRecording={startReplicaRecording}
@@ -1237,7 +1241,7 @@ const AudioBubble = forwardRef(
       onBubbleClick,
       onPlay,
       onStop,
-      takes = [],
+      replicaRecordings,
       recordingReplicaId,
       recordingDuration,
       startReplicaRecording,
@@ -1248,8 +1252,7 @@ const AudioBubble = forwardRef(
     ref
   ) => {
     const bubbleColor = character?.color || "#6B7280";
-    const take1 = takes.find((t) => t.takeIndex === 1);
-    const take2 = takes.find((t) => t.takeIndex === 2);
+    const recording = replicaRecordings[replica.id];
 
     return (
       <div
@@ -1329,70 +1332,46 @@ const AudioBubble = forwardRef(
               )}
             </div>
 
-            {/* BARRE D'ENREGISTREMENT ET DE COMPARISON DE PRISES */}
-            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-white/20">
-              {recordingReplicaId === replica.id ? (
-                <div className="w-full flex items-center justify-between bg-red-600/90 text-white rounded-xl px-3 py-2 shadow-inner">
-                  <span className="font-bold animate-pulse flex items-center gap-2 text-xs">
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/20">
+              {recording ? (
+                <>
+                  <button
+                    onClick={() => playReplicaRecording(replica.id)}
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
+                  >
+                    ▶️ Prise
+                  </button>
+                  <button
+                    onClick={() => deleteReplicaRecording(replica.id)}
+                    className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
+                  >
+                    🗑️ Supprimer
+                  </button>
+                </>
+              ) : recordingReplicaId === replica.id ? (
+                <div className="w-full flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
+                  <span className="text-red-600 font-bold animate-pulse flex items-center gap-2 text-xs">
                     🔴 Enregistrement : {recordingDuration}s
                   </span>
                   <button
-                    onClick={stopAndSaveReplicaRecording}
-                    className="px-3.5 py-1.5 bg-white text-red-600 hover:bg-gray-100 rounded-lg text-xs font-black shadow-md transition active:scale-95"
+                    onClick={() =>
+                      stopAndSaveReplicaRecording(
+                        replica.id,
+                        character?.name || "Comédien"
+                      )
+                    }
+                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
                     ⏹️ Valider
                   </button>
                 </div>
               ) : (
-                <>
-                  {/* Prise 1 */}
-                  {take1 ? (
-                    <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl">
-                      <button
-                        onClick={() => playReplicaRecording(replica.id, 1)}
-                        className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow transition active:scale-95 flex items-center gap-1"
-                      >
-                        ▶️ Prise 1
-                      </button>
-                      <button
-                        onClick={() => deleteReplicaRecording(replica.id, 1)}
-                        className="p-1 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-xs transition active:scale-95"
-                        title="Supprimer la prise 1"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {/* Prise 2 */}
-                  {take2 ? (
-                    <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl">
-                      <button
-                        onClick={() => playReplicaRecording(replica.id, 2)}
-                        className="px-2.5 py-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow transition active:scale-95 flex items-center gap-1"
-                      >
-                        ▶️ Prise 2
-                      </button>
-                      <button
-                        onClick={() => deleteReplicaRecording(replica.id, 2)}
-                        className="p-1 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-xs transition active:scale-95"
-                        title="Supprimer la prise 2"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  ) : null}
-
-                  {/* Bouton d'enregistrement (si moins de 2 prises) */}
-                  {takes.length < 2 && (
-                    <button
-                      onClick={() => startReplicaRecording(replica.id)}
-                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-extrabold rounded-xl text-xs shadow-md transition active:scale-95"
-                    >
-                      🎤 {takes.length === 1 ? "Prise 2" : "Enregistrer ma voix"}
-                    </button>
-                  )}
-                </>
+                <button
+                  onClick={() => startReplicaRecording(replica.id)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
+                >
+                  🎤 Enregistrer ma voix
+                </button>
               )}
             </div>
           </>
