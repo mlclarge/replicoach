@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, forwardRef } from "react";
+import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
@@ -122,6 +122,10 @@ function AudioMode() {
 
   // UI : Panneau de réglages fermé par défaut
   const [showSettings, setShowSettings] = useState(false);
+
+  // 🔍 Recherche de réplique (#12 ou mot-clé)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
   const [tempRevealedReplicas, setTempRevealedReplicas] = useState({});
 
@@ -735,6 +739,58 @@ function AudioMode() {
     });
   };
 
+  // 🔍 Logic de recherche de répliques (#12 ou mot-clé)
+  const searchMatches = useMemo(() => {
+    if (!searchQuery.trim() || !currentScript?.replicas) return [];
+    const query = normalizeStr(searchQuery.trim());
+    const numMatch = query.match(/^#?\s*(\d+)$/);
+    if (numMatch) {
+      const targetNum = parseInt(numMatch[1], 10);
+      if (targetNum >= 1 && targetNum <= currentScript.replicas.length) {
+        return [targetNum - 1];
+      }
+    }
+    const matches = [];
+    currentScript.replicas.forEach((rep, idx) => {
+      const charName = currentScript.characters?.find((c) => c.id === rep.character_id)?.name || "";
+      const plainText = normalizeStr(stripHtml(rep.text || ""));
+      const normCharName = normalizeStr(charName);
+      if (plainText.includes(query) || normCharName.includes(query)) {
+        matches.push(idx);
+      }
+    });
+    return matches;
+  }, [searchQuery, currentScript]);
+
+  useEffect(() => {
+    if (searchMatches.length > 0) {
+      const targetIdx =
+        searchMatches[searchMatchIndex] !== undefined
+          ? searchMatches[searchMatchIndex]
+          : searchMatches[0];
+      if (targetIdx !== undefined && targetIdx >= 0) {
+        setCurrentIndex(targetIdx);
+      }
+    }
+  }, [searchMatches, searchMatchIndex]);
+
+  const handleSearchChange = (val) => {
+    setSearchQuery(val);
+    setSearchMatchIndex(0);
+  };
+
+  const goToNextMatch = () => {
+    if (searchMatches.length === 0) return;
+    setSearchMatchIndex((prev) => (prev + 1) % searchMatches.length);
+  };
+
+  const goToPrevMatch = () => {
+    if (searchMatches.length === 0) return;
+    setSearchMatchIndex(
+      (prev) => (prev - 1 + searchMatches.length) % searchMatches.length
+    );
+  };
+
   if (loading || !currentScript) {
     return (
       <div className="flex justify-center py-12 bg-amber-50 min-h-screen">
@@ -790,7 +846,7 @@ function AudioMode() {
           </button>
         </div>
 
-        {/* Barre de progression */}
+                {/* Barre de progression */}
         <div className="mt-3 w-full max-w-7xl mx-auto">
           <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
             <div
@@ -801,6 +857,58 @@ function AudioMode() {
           <p className="text-gray-300 text-[11px] mt-1 text-center font-mono">
             Réplique {currentIndex + 1} / {replicas.length}
           </p>
+        </div>
+
+        {/* 🔍 Barre de recherche de réplique (#12 ou mot-clé) - Fond clair haute visibilité */}
+        <div className="mt-2.5 w-full max-w-7xl mx-auto flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm font-bold">🔍</span>
+            <input
+              type="text"
+              placeholder="Rechercher par # (ex: #12) ou mot-clé..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 bg-white text-gray-900 placeholder-gray-500 text-xs sm:text-sm rounded-xl border-2 border-gold-400 focus:border-gold-500 focus:ring-2 focus:ring-gold-300 focus:outline-none transition shadow-md font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSearchMatchIndex(0);
+                }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold px-1"
+                title="Effacer"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {searchQuery && (
+            <div className="flex items-center gap-1.5 bg-white text-primary-900 px-3 py-2 rounded-xl border-2 border-gold-400 text-xs font-mono font-bold flex-shrink-0 shadow-md">
+              {searchMatches.length > 0 ? (
+                <>
+                  <span className="text-amber-800 font-extrabold">{searchMatchIndex + 1}/{searchMatches.length}</span>
+                  <button
+                    onClick={goToPrevMatch}
+                    className="px-1 text-gray-700 hover:text-black font-bold transition"
+                    title="Précédent"
+                  >
+                    ▲
+                  </button>
+                  <button
+                    onClick={goToNextMatch}
+                    className="px-1 text-gray-700 hover:text-black font-bold transition"
+                    title="Suivant"
+                  >
+                    ▼
+                  </button>
+                </>
+              ) : (
+                <span className="text-red-600 font-sans text-xs">0 résultat</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

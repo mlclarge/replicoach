@@ -26,6 +26,15 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DOMPurify from "dompurify";
 
+const VIEW_MODE_LABELS = {
+  full: "📖 Complet",
+  gaps: "🔤 Trous",
+  first3: "3️⃣ 3 mots",
+  debut_fin: "🟢 Début/Fin",
+  last_word: "🟣 Derniers Mots",
+  cue: "🎭 Répliques",
+};
+
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -172,7 +181,17 @@ function ScriptDetail() {
     });
   }, [currentScript?.replicas, myCharacterId]);
 
-  // Répliques filtrées
+  // Mapping pour conserver le numéro d'origine de chaque réplique dans le script complet
+  const replicaGlobalNumberMap = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const map = {};
+    currentScript.replicas.forEach((rep, idx) => {
+      map[rep.id] = idx + 1;
+    });
+    return map;
+  }, [currentScript?.replicas]);
+
+  // Répliques filtrées avec support de la recherche par #numéro ou texte
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
     let result = currentScript.replicas;
@@ -186,8 +205,63 @@ function ScriptDetail() {
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
+    if (searchQuery.trim()) {
+      const query = normalizeStr(searchQuery.trim());
+      const numMatch = query.match(/^#?\s*(\d+)$/);
+      if (numMatch) {
+        const targetNum = parseInt(numMatch[1], 10);
+        const numMatched = result.filter(
+          (r) => replicaGlobalNumberMap[r.id] === targetNum
+        );
+        if (numMatched.length > 0) {
+          result = numMatched;
+        } else {
+          result = result.filter((r) =>
+            normalizeStr(stripHtml(r.text || "")).includes(query)
+          );
+        }
+      } else {
+        result = result.filter((r) => {
+          const charName =
+            currentScript?.characters?.find((c) => c.id === r.character_id)?.name || "";
+          const plainText = normalizeStr(stripHtml(r.text || ""));
+          const normCharName = normalizeStr(charName);
+          return (
+            plainText.includes(query) || normCharName.includes(query)
+          );
+        });
+      }
+    }
+
     return result;
-  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
+  }, [
+    currentScript?.replicas,
+    currentScript?.characters,
+    selectedCharacter,
+    studyingGroup,
+    searchQuery,
+    replicaGlobalNumberMap,
+  ]);
+
+  // Auto-scroll et surbrillance lorsqu'une réplique exacte est ciblée par #numéro
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
+      if (numMatch && filteredReplicas.length === 1) {
+        const targetReplica = filteredReplicas[0];
+        const element = document.getElementById(
+          `replica-anchor-${targetReplica.id}`
+        );
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("ring-4", "ring-gold-400", "transition-all");
+          setTimeout(() => {
+            element.classList.remove("ring-4", "ring-gold-400");
+          }, 2000);
+        }
+      }
+    }
+  }, [searchQuery, filteredReplicas]);
 
   // Fonction d'interception du clic Coach (Sécurisée avec Paywall Premium)
   const handleCoachClick = (e, characterId) => {
@@ -742,68 +816,87 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Modes de mémorisation */}
-        <div className="grid grid-cols-2 gap-2 mb-4">
+                {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
+        <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <input
+              type="text"
+              placeholder="Rechercher réplique par # (ex: #12 ou 12) ou mot-clé..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 bg-gray-50 hover:bg-gray-100 focus:bg-white text-gray-900 placeholder-gray-400 text-sm rounded-xl border border-gray-300 focus:border-gold-500 focus:outline-none transition font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold px-1"
+                title="Effacer la recherche"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <span
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 ${
+                filteredReplicas.length > 0
+                  ? "bg-gold-100 text-gold-900 border border-gold-300"
+                  : "bg-red-50 text-red-600 border border-red-200"
+              }`}
+            >
+              {filteredReplicas.length}{" "}
+              {filteredReplicas.length > 1 ? "répliques" : "réplique"}
+            </span>
+          )}
+        </div>
+
+        {/* Accordéon pour les exercices / modes de mémorisation */}
+        <div className="mb-4 bg-white rounded-2xl border border-gold-500/30 shadow-md overflow-hidden">
           <button
-            onClick={() => setViewMode("full")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "full"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
+            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
+            className="w-full p-3.5 bg-gradient-to-r from-primary-900 to-primary-800 text-white font-bold text-sm flex items-center justify-between hover:from-primary-800 hover:to-primary-700 transition"
           >
-            📖 Complet
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <span>Exercez-vous !</span>
+              <span className="text-xs text-gold-400 font-normal ml-2">
+                ({VIEW_MODE_LABELS[viewMode] || "Complet"})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-gold-500/20 text-gold-300 px-2.5 py-1 rounded-full border border-gold-500/30 font-semibold">
+                {showExerciseMenu ? "Masquer ▲" : "Choisir un exercice ▼"}
+              </span>
+            </div>
           </button>
-          <button
-            onClick={() => setViewMode("gaps")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "gaps"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
-          >
-            🔤 Trous
-          </button>
-          <button
-            onClick={() => setViewMode("first3")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "first3"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
-          >
-            3️⃣ 3 mots
-          </button>
-          <button
-            onClick={() => setViewMode("debut_fin")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "debut_fin"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
-          >
-            🟢 Début/Fin
-          </button>
-          <button
-            onClick={() => setViewMode("last_word")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "last_word"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
-          >
-            🟣 Derniers Mots
-          </button>
-          <button
-            onClick={() => setViewMode("cue")}
-            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
-              viewMode === "cue"
-                ? "bg-primary-700 text-white"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
-            }`}
-          >
-            🎭 Répliques
-          </button>
+
+          {showExerciseMenu && (
+            <div className="p-3 bg-amber-50/50 border-t border-amber-200/60 animate-fade-in">
+              <p className="text-xs text-gray-600 mb-2 font-medium px-1">
+                Choisissez un mode de mémorisation pour masquer progressivement le texte :
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Object.entries(VIEW_MODE_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setViewMode(key);
+                      setShowExerciseMenu(false);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition shadow-sm border text-left flex items-center justify-between ${
+                      viewMode === key
+                        ? "bg-primary-800 text-gold-400 border-gold-500 shadow-md ring-2 ring-gold-400/30"
+                        : "bg-white text-gray-700 border-gray-200 hover:bg-gold-50 hover:border-gold-300"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {viewMode === key && <span className="text-gold-400 font-extrabold">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Actions secondaires */}
@@ -902,7 +995,7 @@ function ScriptDetail() {
                       characters={characters}
                       viewMode={viewMode}
                       isRight={isRight}
-                      number={index + 1}
+                      number={replicaGlobalNumberMap[replica.id] || index + 1}
                       editMode={editMode}
                       myCharacterId={myCharacterId}
                       hideMyReplicas={hideMyReplicas}
