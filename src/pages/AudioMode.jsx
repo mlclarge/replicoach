@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
+import { useEffect, useState, useRef, forwardRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useScriptStore } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
@@ -35,9 +35,13 @@ function detectGender(name) {
   return "male";
 }
 
+
 function normalizeStr(str) {
   if (!str) return "";
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
 }
 
 function stripHtml(text) {
@@ -121,10 +125,6 @@ function AudioMode() {
   const [showSettings, setShowSettings] = useState(false);
   const [playingSingleBubble, setPlayingSingleBubble] = useState(null);
   const [tempRevealedReplicas, setTempRevealedReplicas] = useState({});
-
-  // 🔍 Recherche de réplique (#12 ou mot-clé)
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
 
   // Refs
   const playingRef = useRef(false);
@@ -277,13 +277,13 @@ function AudioMode() {
   }, [currentScript, voices]);
 
   useEffect(() => {
-    if (currentReplicaRef.current) {
+    if (currentReplicaRef.current && isPlaying) {
       currentReplicaRef.current.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
     }
-  }, [currentIndex]);
+  }, [currentIndex, isPlaying]);
 
   const startReplicaRecording = async (replicaId) => {
     try {
@@ -736,66 +736,6 @@ function AudioMode() {
     });
   };
 
-  // 🔍 Logic de recherche de répliques (avec défilement auto et tolérance aux accents)
-  const searchMatches = useMemo(() => {
-    if (!searchQuery.trim() || !currentScript?.replicas) return [];
-    const queryNorm = normalizeStr(searchQuery.trim());
-    const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
-    if (numMatch) {
-      const targetNum = parseInt(numMatch[1], 10);
-      if (targetNum >= 1 && targetNum <= currentScript.replicas.length) {
-        return [targetNum - 1];
-      }
-    }
-    const matches = [];
-    currentScript.replicas.forEach((rep, idx) => {
-      const charName = currentScript.characters?.find((c) => c.id === rep.character_id)?.name || "";
-      const plainText = normalizeStr(stripHtml(rep.text || ""));
-      const charNameNorm = normalizeStr(charName);
-      if (plainText.includes(queryNorm) || charNameNorm.includes(queryNorm)) {
-        matches.push(idx);
-      }
-    });
-    return matches;
-  }, [searchQuery, currentScript]);
-
-  useEffect(() => {
-    if (searchMatches.length > 0) {
-      const targetIdx =
-        searchMatches[searchMatchIndex] !== undefined
-          ? searchMatches[searchMatchIndex]
-          : searchMatches[0];
-      if (targetIdx !== undefined && targetIdx >= 0) {
-        setCurrentIndex(targetIdx);
-        setTimeout(() => {
-          if (currentReplicaRef.current) {
-            currentReplicaRef.current.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }
-        }, 50);
-      }
-    }
-  }, [searchMatches, searchMatchIndex]);
-
-  const handleSearchChange = (val) => {
-    setSearchQuery(val);
-    setSearchMatchIndex(0);
-  };
-
-  const goToNextMatch = () => {
-    if (searchMatches.length === 0) return;
-    setSearchMatchIndex((prev) => (prev + 1) % searchMatches.length);
-  };
-
-  const goToPrevMatch = () => {
-    if (searchMatches.length === 0) return;
-    setSearchMatchIndex(
-      (prev) => (prev - 1 + searchMatches.length) % searchMatches.length
-    );
-  };
-
   if (loading || !currentScript) {
     return (
       <div className="flex justify-center py-12 bg-amber-50 min-h-screen">
@@ -862,58 +802,6 @@ function AudioMode() {
           <p className="text-gray-300 text-[11px] mt-1 text-center font-mono">
             Réplique {currentIndex + 1} / {replicas.length}
           </p>
-        </div>
-
-        {/* 🔍 Barre de recherche de réplique (#12 ou mot-clé) */}
-        <div className="mt-2.5 w-full max-w-7xl mx-auto flex items-center gap-2">
-          <div className="relative flex-1">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs sm:text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Rechercher par # (ex: #12 ou 12) ou mot-clé..."
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-full pl-8 pr-8 py-1.5 bg-black/40 hover:bg-black/60 focus:bg-black/80 text-white placeholder-gray-400 text-xs sm:text-sm rounded-xl border border-white/20 focus:border-gold-400 focus:outline-none transition"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => {
-                  setSearchQuery("");
-                  setSearchMatchIndex(0);
-                }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white text-xs font-bold px-1"
-                title="Effacer"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {searchQuery && (
-            <div className="flex items-center gap-1.5 bg-black/60 text-gold-400 px-2.5 py-1.5 rounded-xl border border-gold-500/30 text-xs font-mono font-bold flex-shrink-0">
-              {searchMatches.length > 0 ? (
-                <>
-                  <span>{searchMatchIndex + 1}/{searchMatches.length}</span>
-                  <button
-                    onClick={goToPrevMatch}
-                    className="px-1 hover:text-white transition"
-                    title="Précédent"
-                  >
-                    ▲
-                  </button>
-                  <button
-                    onClick={goToNextMatch}
-                    className="px-1 hover:text-white transition"
-                    title="Suivant"
-                  >
-                    ▼
-                  </button>
-                </>
-              ) : (
-                <span className="text-red-400 font-sans text-[11px]">0 résultat</span>
-              )}
-            </div>
-          )}
         </div>
       </div>
 

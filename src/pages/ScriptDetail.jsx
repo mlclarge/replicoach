@@ -26,33 +26,6 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DOMPurify from "dompurify";
 
-
-function normalizeStr(str) {
-  if (!str) return "";
-  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-}
-
-function stripHtml(text) {
-  if (!text) return "";
-  try {
-    if (typeof document !== "undefined") {
-      const tmp = document.createElement("div");
-      tmp.innerHTML = text;
-      return tmp.textContent || tmp.innerText || text;
-    }
-  } catch (e) {}
-  return text.replace(/<[^>]+>/g, "");
-}
-
-const VIEW_MODE_LABELS = {
-  full: "📖 Complet",
-  gaps: "🔤 Trous",
-  first3: "3️⃣ 3 mots",
-  debut_fin: "🟢 Début/Fin",
-  last_word: "🟣 Derniers Mots",
-  cue: "🎭 Répliques",
-};
-
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -100,8 +73,6 @@ function ScriptDetail() {
   const [insertAfterIndex, setInsertAfterIndex] = useState(null);
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
-  const [showExerciseMenu, setShowExerciseMenu] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
@@ -114,14 +85,6 @@ function ScriptDetail() {
 
   // État pour le Paywall Premium Coach IA
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-
-  
-  const characters = currentScript?.characters || [];
-  const replicas = currentScript?.replicas || [];
-  const title = currentScript?.title || "";
-  const stage_directions = currentScript?.stage_directions || "";
-  const full_text = currentScript?.full_text || "";
-  const original_filename = currentScript?.original_filename || "";
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -144,12 +107,13 @@ function ScriptDetail() {
   }, [currentScript?.id, user?.id, fetchPersonalNotes]);
 
   const characterPositions = useMemo(() => {
+    if (!currentScript?.characters) return {};
     const positions = {};
-    characters.forEach((char, index) => {
+    currentScript.characters.forEach((char, index) => {
       positions[char.id] = index % 2;
     });
     return positions;
-  }, [characters]);
+  }, [currentScript?.characters]);
 
   const originalFileUrl = useMemo(() => {
     if (!currentScript?.pdf_url) return null;
@@ -157,23 +121,24 @@ function ScriptDetail() {
   }, [currentScript?.pdf_url]);
 
   const replicaCountByCharacter = useMemo(() => {
+    if (!currentScript?.replicas) return {};
     const counts = {};
-    replicas.forEach((r) => {
+    currentScript.replicas.forEach((r) => {
       counts[r.character_id] = (counts[r.character_id] || 0) + 1;
     });
     return counts;
-  }, [replicas]);
+  }, [currentScript?.replicas]);
 
   // Sommaire des passages
   const characterPassages = useMemo(() => {
-    if (!myCharacterId || replicas.length === 0) return [];
+    if (!myCharacterId || !currentScript?.replicas) return [];
 
     const passages = [];
     let currentPassage = null;
     const MAX_GAP = 15;
     const CONTEXT_WINDOW = 5;
 
-    replicas.forEach((replica, index) => {
+    currentScript.replicas.forEach((replica, index) => {
       if (replica.character_id === myCharacterId) {
         if (!currentPassage) {
           currentPassage = { startIndex: index, endIndex: index };
@@ -194,7 +159,7 @@ function ScriptDetail() {
 
     return passages.map((p, i) => {
       const anchorIndex = Math.max(0, p.startIndex - CONTEXT_WINDOW);
-      const anchorReplicaId = replicas[anchorIndex].id;
+      const anchorReplicaId = currentScript.replicas[anchorIndex].id;
 
       return {
         id: i + 1,
@@ -202,20 +167,12 @@ function ScriptDetail() {
         displayNumber: anchorIndex + 1,
       };
     });
-  }, [replicas, myCharacterId]);
+  }, [currentScript?.replicas, myCharacterId]);
 
-  // Mapping pour conserver le numéro d'origine de chaque réplique dans le script complet
-  const replicaGlobalNumberMap = useMemo(() => {
-    const map = {};
-    replicas.forEach((rep, idx) => {
-      map[rep.id] = idx + 1;
-    });
-    return map;
-  }, [replicas]);
-
-  // Répliques filtrées avec support de la recherche par #numéro ou texte
+  // Répliques filtrées
   const filteredReplicas = useMemo(() => {
-    let result = replicas;
+    if (!currentScript?.replicas) return [];
+    let result = currentScript.replicas;
 
     if (studyingGroup?.replicaIds?.length > 0) {
       const groupSet = new Set(studyingGroup.replicaIds);
@@ -226,63 +183,8 @@ function ScriptDetail() {
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
-    if (searchQuery.trim()) {
-      const queryNorm = normalizeStr(searchQuery.trim());
-      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
-      if (numMatch) {
-        const targetNum = parseInt(numMatch[1], 10);
-        const numMatched = result.filter(
-          (r) => replicaGlobalNumberMap[r.id] === targetNum
-        );
-        if (numMatched.length > 0) {
-          result = numMatched;
-        } else {
-          result = result.filter((r) =>
-            normalizeStr(stripHtml(r.text || "")).includes(queryNorm)
-          );
-        }
-      } else {
-        result = result.filter((r) => {
-          const charName =
-            characters.find((c) => c.id === r.character_id)?.name || "";
-          const plainText = normalizeStr(stripHtml(r.text || ""));
-          const charNameNorm = normalizeStr(charName);
-          return (
-            plainText.includes(queryNorm) || charNameNorm.includes(queryNorm)
-          );
-        });
-      }
-    }
-
     return result;
-  }, [
-    replicas,
-    selectedCharacter,
-    studyingGroup,
-    searchQuery,
-    characters,
-    replicaGlobalNumberMap,
-  ]);
-
-  // Auto-scroll et surbrillance lorsqu'une réplique exacte est ciblée par #numéro
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
-      if (numMatch && filteredReplicas.length === 1) {
-        const targetReplica = filteredReplicas[0];
-        const element = document.getElementById(
-          `replica-anchor-${targetReplica.id}`
-        );
-        if (element) {
-          element.scrollIntoView({ behavior: "smooth", block: "center" });
-          element.classList.add("ring-4", "ring-gold-400", "transition-all");
-          setTimeout(() => {
-            element.classList.remove("ring-4", "ring-gold-400");
-          }, 2000);
-        }
-      }
-    }
-  }, [searchQuery, filteredReplicas]);
+  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
 
   // Fonction d'interception du clic Coach (Sécurisée avec Paywall Premium)
   const handleCoachClick = (e, characterId) => {
@@ -573,7 +475,14 @@ function ScriptDetail() {
     );
   }
 
-  // (title, characters, replicas are destructured safely at component top level)
+  const {
+    title,
+    characters = [],
+    replicas = [],
+    stage_directions,
+    full_text,
+    original_filename,
+  } = currentScript;
 
   return (
     <div className="pb-32 min-h-screen bg-amber-50">
@@ -624,38 +533,60 @@ function ScriptDetail() {
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex gap-2">
-            {(originalFileUrl || full_text) && (
-              <button
-                onClick={() => setShowOriginalFile(true)}
-                className="p-2.5 rounded-lg transition shadow-md bg-blue-500 hover:bg-blue-600 text-white border-2 border-blue-600"
-                title="Voir le fichier original"
-              >
-                📄
-              </button>
-            )}
-            <button
-              onClick={() => setShowShareModal(true)}
-              className="p-2.5 rounded-lg transition shadow-md bg-green-500 hover:bg-green-600 text-white border-2 border-green-600"
-              title="Partager avec ma troupe"
-            >
-              👥
-            </button>
+          <div className="flex items-center gap-2">
+            {/* Bouton principal S'enregistrer / Écouter */}
             <Link
-              to={`/audio/${id}`}
-              className="p-2.5 rounded-lg transition shadow-md bg-gold-500 hover:bg-gold-400 text-black font-bold flex items-center gap-1.5 border-2 border-gold-400 shadow-lg hover:scale-105 active:scale-95"
-              title="Mode Audio - Écouter / S'enregistrer"
+              to={`/script/${id}/audio`}
+              className="px-4 py-2.5 bg-gradient-to-r from-gold-400 via-gold-500 to-amber-500 hover:from-gold-300 hover:to-amber-400 text-black font-extrabold text-sm sm:text-base rounded-xl shadow-lg border-2 border-gold-300 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+              title="Mode Audio - S'enregistrer & Écouter"
             >
-              <span className="text-base">🎙️</span>
-              <span className="hidden sm:inline text-xs font-bold">Écouter</span>
+              <span className="text-xl">🎙️</span>
+              <span className="font-extrabold tracking-tight">S'enregistrer / Écouter</span>
             </Link>
-            <button
-              onClick={() => setShowDeleteConfirm(true)}
-              className="p-2.5 rounded-lg transition shadow-md bg-red-500 hover:bg-red-600 text-white border-2 border-red-600"
-              title="Supprimer"
-            >
-              🗑️
-            </button>
+
+            {/* Menu d'options secondaires */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="p-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition"
+                title="Plus d'options"
+              >
+                ⚙️
+              </button>
+              {showMoreMenu && (
+                <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                  {(originalFileUrl || full_text) && (
+                    <button
+                      onClick={() => {
+                        setShowOriginalFile(true);
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs text-blue-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                    >
+                      📄 Voir fichier original
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowShareModal(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-green-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    👥 Partager à la troupe
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    🗑️ Supprimer le texte
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -808,41 +739,6 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
-        <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
-          <div className="relative flex-1">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Rechercher réplique par # (ex: #12 ou 12) ou mot-clé..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-9 py-2 bg-gray-50 hover:bg-gray-100 focus:bg-white text-gray-900 placeholder-gray-400 text-sm rounded-xl border border-gray-300 focus:border-gold-500 focus:outline-none transition font-medium"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold px-1"
-                title="Effacer la recherche"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-          {searchQuery && (
-            <span
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 ${
-                filteredReplicas.length > 0
-                  ? "bg-gold-100 text-gold-900 border border-gold-300"
-                  : "bg-red-50 text-red-600 border border-red-200"
-              }`}
-            >
-              {filteredReplicas.length}{" "}
-              {filteredReplicas.length > 1 ? "répliques" : "réplique"}
-            </span>
-          )}
-        </div>
-
         {/* Accordéon pour les exercices / modes de mémorisation */}
         <div className="mb-4 bg-white rounded-2xl border border-gold-500/30 shadow-md overflow-hidden">
           <button
@@ -987,7 +883,7 @@ function ScriptDetail() {
                       characters={characters}
                       viewMode={viewMode}
                       isRight={isRight}
-                      number={replicaGlobalNumberMap[replica.id] || index + 1}
+                      number={index + 1}
                       editMode={editMode}
                       myCharacterId={myCharacterId}
                       hideMyReplicas={hideMyReplicas}
@@ -1544,7 +1440,11 @@ function ChatBubble({
       );
     }
 
-
+    const stripHtml = (html) => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html || "";
+      return tmp.textContent || tmp.innerText || "";
+    };
 
     const getFirst3Words = (text) => {
       const plain = stripHtml(text || "");
