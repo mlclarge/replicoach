@@ -280,13 +280,25 @@ function AudioMode() {
   }, [currentScript, voices]);
 
   useEffect(() => {
-    if (currentReplicaRef.current) {
-      currentReplicaRef.current.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }
-  }, [currentIndex]);
+    const timer = setTimeout(() => {
+      if (currentReplicaRef.current) {
+        currentReplicaRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      } else if (currentScript?.replicas?.[currentIndex]) {
+        const replicaId = currentScript.replicas[currentIndex].id;
+        const el = document.getElementById(`audio-replica-${replicaId}`);
+        if (el) {
+          el.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [currentIndex, currentScript]);
 
   const startReplicaRecording = async (replicaId) => {
     try {
@@ -1070,6 +1082,7 @@ function AudioMode() {
           return (
             <AudioBubble
               key={replica.id}
+              id={`audio-replica-${replica.id}`}
               ref={isCurrent ? currentReplicaRef : null}
               replica={replica}
               character={character}
@@ -1212,6 +1225,7 @@ const AudioBubble = forwardRef(
   (
     {
       replica,
+      id,
       character,
       isRight,
       number,
@@ -1241,6 +1255,7 @@ const AudioBubble = forwardRef(
     return (
       <div
         ref={ref}
+        id={id || `audio-replica-${replica?.id}`}
         className={`p-4 sm:p-5 rounded-2xl transition-all duration-300 shadow-md ${
           isRight ? "ml-auto max-w-[85%] sm:max-w-[75%]" : "mr-auto max-w-[85%] sm:max-w-[75%]"
         } ${
