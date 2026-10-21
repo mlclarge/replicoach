@@ -280,13 +280,13 @@ function AudioMode() {
   }, [currentScript, voices]);
 
   useEffect(() => {
-    if (currentReplicaRef.current && isPlaying) {
+    if (currentReplicaRef.current) {
       currentReplicaRef.current.scrollIntoView({
         behavior: "smooth",
         block: "center",
       });
     }
-  }, [currentIndex, isPlaying]);
+  }, [currentIndex]);
 
   const startReplicaRecording = async (replicaId) => {
     try {
@@ -742,8 +742,9 @@ function AudioMode() {
   // 🔍 Logic de recherche de répliques (#12 ou mot-clé)
   const searchMatches = useMemo(() => {
     if (!searchQuery.trim() || !currentScript?.replicas) return [];
-    const query = normalizeStr(searchQuery.trim());
-    const numMatch = query.match(/^#?\s*(\d+)$/);
+    const rawQuery = searchQuery.trim();
+    const query = normalizeStr(rawQuery);
+    const numMatch = rawQuery.match(/^#?\s*(\d+)$/);
     if (numMatch) {
       const targetNum = parseInt(numMatch[1], 10);
       if (targetNum >= 1 && targetNum <= currentScript.replicas.length) {

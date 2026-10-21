@@ -26,6 +26,26 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DOMPurify from "dompurify";
 
+function normalizeStr(str) {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function stripHtml(text) {
+  if (!text) return "";
+  try {
+    if (typeof document !== "undefined") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = text;
+      return tmp.textContent || tmp.innerText || text;
+    }
+  } catch (e) {}
+  return text.replace(/<[^>]+>/g, "");
+}
+
 const VIEW_MODE_LABELS = {
   full: "📖 Complet",
   gaps: "🔤 Trous",
@@ -193,8 +213,7 @@ function ScriptDetail() {
 
   // Répliques filtrées avec support de la recherche par #numéro ou texte
   const filteredReplicas = useMemo(() => {
-    if (!currentScript?.replicas) return [];
-    let result = currentScript.replicas;
+    let result = replicas;
 
     if (studyingGroup?.replicaIds?.length > 0) {
       const groupSet = new Set(studyingGroup.replicaIds);
@@ -206,8 +225,9 @@ function ScriptDetail() {
     }
 
     if (searchQuery.trim()) {
-      const query = normalizeStr(searchQuery.trim());
-      const numMatch = query.match(/^#?\s*(\d+)$/);
+      const rawQuery = searchQuery.trim();
+      const query = normalizeStr(rawQuery);
+      const numMatch = rawQuery.match(/^#?\s*(\d+)$/);
       if (numMatch) {
         const targetNum = parseInt(numMatch[1], 10);
         const numMatched = result.filter(
@@ -223,11 +243,10 @@ function ScriptDetail() {
       } else {
         result = result.filter((r) => {
           const charName =
-            currentScript?.characters?.find((c) => c.id === r.character_id)?.name || "";
+            characters.find((c) => c.id === r.character_id)?.name || "";
           const plainText = normalizeStr(stripHtml(r.text || ""));
-          const normCharName = normalizeStr(charName);
           return (
-            plainText.includes(query) || normCharName.includes(query)
+            plainText.includes(query) || normalizeStr(charName).includes(query)
           );
         });
       }
@@ -235,11 +254,11 @@ function ScriptDetail() {
 
     return result;
   }, [
-    currentScript?.replicas,
-    currentScript?.characters,
+    replicas,
     selectedCharacter,
     studyingGroup,
     searchQuery,
+    characters,
     replicaGlobalNumberMap,
   ]);
 
