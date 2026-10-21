@@ -35,7 +35,6 @@ function detectGender(name) {
   return "male";
 }
 
-
 function normalizeStr(str) {
   if (!str) return "";
   return str

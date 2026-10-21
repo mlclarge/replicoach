@@ -73,6 +73,9 @@ function ScriptDetail() {
   const [insertAfterIndex, setInsertAfterIndex] = useState(null);
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showExerciseMenu, setShowExerciseMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
@@ -544,7 +547,7 @@ function ScriptDetail() {
               <span className="font-extrabold tracking-tight">S'enregistrer / Écouter</span>
             </Link>
 
-            {/* Menu d'options secondaires */}
+            {/* Menu des options secondaires */}
             <div className="relative">
               <button
                 onClick={() => setShowMoreMenu(!showMoreMenu)}
@@ -739,52 +742,68 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Accordéon pour les exercices / modes de mémorisation */}
-        <div className="mb-4 bg-white rounded-2xl border border-gold-500/30 shadow-md overflow-hidden">
+        {/* Modes de mémorisation */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
           <button
-            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
-            className="w-full p-3.5 bg-gradient-to-r from-primary-900 to-primary-800 text-white font-bold text-sm flex items-center justify-between hover:from-primary-800 hover:to-primary-700 transition"
+            onClick={() => setViewMode("full")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "full"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
           >
-            <div className="flex items-center gap-2">
-              <span className="text-base">🎯</span>
-              <span>Exercez-vous !</span>
-              <span className="text-xs text-gold-400 font-normal ml-2">
-                ({VIEW_MODE_LABELS[viewMode] || "Complet"})
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-gold-500/20 text-gold-300 px-2.5 py-1 rounded-full border border-gold-500/30 font-semibold">
-                {showExerciseMenu ? "Masquer ▲" : "Choisir un exercice ▼"}
-              </span>
-            </div>
+            📖 Complet
           </button>
-
-          {showExerciseMenu && (
-            <div className="p-3 bg-amber-50/50 border-t border-amber-200/60 animate-fade-in">
-              <p className="text-xs text-gray-600 mb-2 font-medium px-1">
-                Choisissez un mode de mémorisation pour masquer progressivement le texte :
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {Object.entries(VIEW_MODE_LABELS).map(([key, label]) => (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      setViewMode(key);
-                      setShowExerciseMenu(false);
-                    }}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition shadow-sm border text-left flex items-center justify-between ${
-                      viewMode === key
-                        ? "bg-primary-800 text-gold-400 border-gold-500 shadow-md ring-2 ring-gold-400/30"
-                        : "bg-white text-gray-700 border-gray-200 hover:bg-gold-50 hover:border-gold-300"
-                    }`}
-                  >
-                    <span>{label}</span>
-                    {viewMode === key && <span className="text-gold-400 font-extrabold">✓</span>}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          <button
+            onClick={() => setViewMode("gaps")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "gaps"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            🔤 Trous
+          </button>
+          <button
+            onClick={() => setViewMode("first3")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "first3"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            3️⃣ 3 mots
+          </button>
+          <button
+            onClick={() => setViewMode("debut_fin")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "debut_fin"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            🟢 Début/Fin
+          </button>
+          <button
+            onClick={() => setViewMode("last_word")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "last_word"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            🟣 Derniers Mots
+          </button>
+          <button
+            onClick={() => setViewMode("cue")}
+            className={`py-3 px-3 rounded-lg text-sm font-semibold transition shadow ${
+              viewMode === "cue"
+                ? "bg-primary-700 text-white"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-100"
+            }`}
+          >
+            🎭 Répliques
+          </button>
         </div>
 
         {/* Actions secondaires */}
