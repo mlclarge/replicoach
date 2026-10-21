@@ -26,6 +26,33 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import DOMPurify from "dompurify";
 
+
+function normalizeStr(str) {
+  if (!str) return "";
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function stripHtml(text) {
+  if (!text) return "";
+  try {
+    if (typeof document !== "undefined") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = text;
+      return tmp.textContent || tmp.innerText || text;
+    }
+  } catch (e) {}
+  return text.replace(/<[^>]+>/g, "");
+}
+
+const VIEW_MODE_LABELS = {
+  full: "📖 Complet",
+  gaps: "🔤 Trous",
+  first3: "3️⃣ 3 mots",
+  debut_fin: "🟢 Début/Fin",
+  last_word: "🟣 Derniers Mots",
+  cue: "🎭 Répliques",
+};
+
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -74,6 +101,7 @@ function ScriptDetail() {
   const [showNotesListModal, setShowNotesListModal] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [showExerciseMenu, setShowExerciseMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
@@ -86,6 +114,14 @@ function ScriptDetail() {
 
   // État pour le Paywall Premium Coach IA
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  
+  const characters = currentScript?.characters || [];
+  const replicas = currentScript?.replicas || [];
+  const title = currentScript?.title || "";
+  const stage_directions = currentScript?.stage_directions || "";
+  const full_text = currentScript?.full_text || "";
+  const original_filename = currentScript?.original_filename || "";
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -108,13 +144,12 @@ function ScriptDetail() {
   }, [currentScript?.id, user?.id, fetchPersonalNotes]);
 
   const characterPositions = useMemo(() => {
-    if (!currentScript?.characters) return {};
     const positions = {};
-    currentScript.characters.forEach((char, index) => {
+    characters.forEach((char, index) => {
       positions[char.id] = index % 2;
     });
     return positions;
-  }, [currentScript?.characters]);
+  }, [characters]);
 
   const originalFileUrl = useMemo(() => {
     if (!currentScript?.pdf_url) return null;
@@ -122,24 +157,23 @@ function ScriptDetail() {
   }, [currentScript?.pdf_url]);
 
   const replicaCountByCharacter = useMemo(() => {
-    if (!currentScript?.replicas) return {};
     const counts = {};
-    currentScript.replicas.forEach((r) => {
+    replicas.forEach((r) => {
       counts[r.character_id] = (counts[r.character_id] || 0) + 1;
     });
     return counts;
-  }, [currentScript?.replicas]);
+  }, [replicas]);
 
   // Sommaire des passages
   const characterPassages = useMemo(() => {
-    if (!myCharacterId || !currentScript?.replicas) return [];
+    if (!myCharacterId || replicas.length === 0) return [];
 
     const passages = [];
     let currentPassage = null;
     const MAX_GAP = 15;
     const CONTEXT_WINDOW = 5;
 
-    currentScript.replicas.forEach((replica, index) => {
+    replicas.forEach((replica, index) => {
       if (replica.character_id === myCharacterId) {
         if (!currentPassage) {
           currentPassage = { startIndex: index, endIndex: index };
@@ -160,7 +194,7 @@ function ScriptDetail() {
 
     return passages.map((p, i) => {
       const anchorIndex = Math.max(0, p.startIndex - CONTEXT_WINDOW);
-      const anchorReplicaId = currentScript.replicas[anchorIndex].id;
+      const anchorReplicaId = replicas[anchorIndex].id;
 
       return {
         id: i + 1,
@@ -168,12 +202,20 @@ function ScriptDetail() {
         displayNumber: anchorIndex + 1,
       };
     });
-  }, [currentScript?.replicas, myCharacterId]);
+  }, [replicas, myCharacterId]);
 
-  // Répliques filtrées
+  // Mapping pour conserver le numéro d'origine de chaque réplique dans le script complet
+  const replicaGlobalNumberMap = useMemo(() => {
+    const map = {};
+    replicas.forEach((rep, idx) => {
+      map[rep.id] = idx + 1;
+    });
+    return map;
+  }, [replicas]);
+
+  // Répliques filtrées avec support de la recherche par #numéro ou texte
   const filteredReplicas = useMemo(() => {
-    if (!currentScript?.replicas) return [];
-    let result = currentScript.replicas;
+    let result = replicas;
 
     if (studyingGroup?.replicaIds?.length > 0) {
       const groupSet = new Set(studyingGroup.replicaIds);
@@ -184,8 +226,63 @@ function ScriptDetail() {
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
+    if (searchQuery.trim()) {
+      const queryNorm = normalizeStr(searchQuery.trim());
+      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
+      if (numMatch) {
+        const targetNum = parseInt(numMatch[1], 10);
+        const numMatched = result.filter(
+          (r) => replicaGlobalNumberMap[r.id] === targetNum
+        );
+        if (numMatched.length > 0) {
+          result = numMatched;
+        } else {
+          result = result.filter((r) =>
+            normalizeStr(stripHtml(r.text || "")).includes(queryNorm)
+          );
+        }
+      } else {
+        result = result.filter((r) => {
+          const charName =
+            characters.find((c) => c.id === r.character_id)?.name || "";
+          const plainText = normalizeStr(stripHtml(r.text || ""));
+          const charNameNorm = normalizeStr(charName);
+          return (
+            plainText.includes(queryNorm) || charNameNorm.includes(queryNorm)
+          );
+        });
+      }
+    }
+
     return result;
-  }, [currentScript?.replicas, selectedCharacter, studyingGroup]);
+  }, [
+    replicas,
+    selectedCharacter,
+    studyingGroup,
+    searchQuery,
+    characters,
+    replicaGlobalNumberMap,
+  ]);
+
+  // Auto-scroll et surbrillance lorsqu'une réplique exacte est ciblée par #numéro
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
+      if (numMatch && filteredReplicas.length === 1) {
+        const targetReplica = filteredReplicas[0];
+        const element = document.getElementById(
+          `replica-anchor-${targetReplica.id}`
+        );
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("ring-4", "ring-gold-400", "transition-all");
+          setTimeout(() => {
+            element.classList.remove("ring-4", "ring-gold-400");
+          }, 2000);
+        }
+      }
+    }
+  }, [searchQuery, filteredReplicas]);
 
   // Fonction d'interception du clic Coach (Sécurisée avec Paywall Premium)
   const handleCoachClick = (e, characterId) => {
@@ -476,31 +573,14 @@ function ScriptDetail() {
     );
   }
 
-  const {
-    title,
-    characters = [],
-    replicas = [],
-    stage_directions,
-    full_text,
-    original_filename,
-  } = currentScript;
-
-
-  const VIEW_MODE_LABELS = {
-    full: "📖 Complet",
-    gaps: "🔤 Trous",
-    first3: "3️⃣ 3 mots",
-    debut_fin: "🟢 Début/Fin",
-    last_word: "🟣 Derniers Mots",
-    cue: "🎭 Répliques",
-  };
+  // (title, characters, replicas are destructured safely at component top level)
 
   return (
     <div className="pb-32 min-h-screen bg-amber-50">
       {/* En-tête de la pièce */}
-      <div className="bg-black p-3 sm:p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
-          <div className="flex-1 min-w-0">
+      <div className="bg-black p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
             {editingTitle ? (
               <div className="flex items-center gap-2 mb-1">
                 <input
@@ -526,39 +606,53 @@ function ScriptDetail() {
               </div>
             ) : (
               <h1
-                className="text-xl sm:text-2xl font-display text-gold-400 mb-0.5 cursor-pointer hover:text-gold-300 flex items-center gap-2 group truncate"
+                className="text-2xl font-display text-gold-400 mb-1 cursor-pointer hover:text-gold-300 flex items-center gap-2 group"
                 onClick={() => {
                   setNewTitle(title);
                   setEditingTitle(true);
                 }}
                 title="Cliquer pour modifier le titre"
               >
-                <span className="truncate">{title}</span>
-                <span className="text-sm opacity-0 group-hover:opacity-100 transition shrink-0">
+                {title}
+                <span className="text-sm opacity-0 group-hover:opacity-100 transition">
                   ✏️
                 </span>
               </h1>
             )}
-            <p className="text-gray-300 text-xs sm:text-sm truncate">
+            <p className="text-gray-300 text-sm">
               {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          
-          {/* Alignment parfait sur mobile & desktop */}
-          <div className="flex items-center gap-2 shrink-0 self-center">
-            <Link
-              to={`/script/${id}/audio`}
-              className="h-10 px-3 sm:px-4 py-2 bg-gradient-to-r from-amber-400 via-amber-500 to-gold-500 hover:from-amber-300 hover:to-amber-400 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-md shadow-amber-500/20 transition active:scale-95 border border-amber-300/60 flex items-center justify-center gap-1.5 shrink-0"
-              title="Écouter et enregistrer les répliques"
+          <div className="flex gap-2">
+            {(originalFileUrl || full_text) && (
+              <button
+                onClick={() => setShowOriginalFile(true)}
+                className="p-2.5 rounded-lg transition shadow-md bg-blue-500 hover:bg-blue-600 text-white border-2 border-blue-600"
+                title="Voir le fichier original"
+              >
+                📄
+              </button>
+            )}
+            <button
+              onClick={() => setShowShareModal(true)}
+              className="p-2.5 rounded-lg transition shadow-md bg-green-500 hover:bg-green-600 text-white border-2 border-green-600"
+              title="Partager avec ma troupe"
             >
-              <span>🎙️</span>
-              <span>écouter/s'enregistrer</span>
+              👥
+            </button>
+            <Link
+              to={`/audio/${id}`}
+              className="p-2.5 rounded-lg transition shadow-md bg-gold-500 hover:bg-gold-400 text-black font-bold flex items-center gap-1.5 border-2 border-gold-400 shadow-lg hover:scale-105 active:scale-95"
+              title="Mode Audio - Écouter / S'enregistrer"
+            >
+              <span className="text-base">🎙️</span>
+              <span className="hidden sm:inline text-xs font-bold">Écouter</span>
             </Link>
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="h-10 w-10 flex items-center justify-center rounded-xl transition shadow-md bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shrink-0"
-              title="Supprimer ce texte"
+              className="p-2.5 rounded-lg transition shadow-md bg-red-500 hover:bg-red-600 text-white border-2 border-red-600"
+              title="Supprimer"
             >
               🗑️
             </button>
@@ -575,128 +669,7 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* 1. BLOC EXERCICE "EXERCEZ-VOUS !" : IMMÉDIATEMENT SOUS LE BANDEAU DE DÉPART */}
-        <div className="mb-4 bg-slate-900 border-2 border-amber-500/40 rounded-2xl p-3 shadow-xl text-white transition-all">
-          <div
-            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
-            className="cursor-pointer flex items-center justify-between gap-2 p-1 select-none"
-          >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-xl">🎯</span>
-              <span className="font-extrabold text-sm text-white tracking-tight">
-                Exercez-vous !
-              </span>
-              <span className="text-xs px-2.5 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 rounded-full font-bold truncate">
-                {VIEW_MODE_LABELS[viewMode] || "📖 Complet"}
-              </span>
-            </div>
-            <button
-              className="text-xs font-bold px-3 py-1.5 bg-amber-500 text-black hover:bg-amber-400 rounded-xl transition flex items-center gap-1 shadow shrink-0"
-              title="Afficher les modes d'exercice"
-            >
-              <span>{showExerciseMenu ? "Fermer" : "Choisir un exercice"}</span>
-              <span className={`transition-transform duration-200 inline-block ${showExerciseMenu ? "rotate-180" : ""}`}>
-                ▼
-              </span>
-            </button>
-          </div>
-
-          {showExerciseMenu && (
-            <div className="mt-3 pt-3 border-t border-gray-800 space-y-3">
-              {/* Grille des 6 modes de mémorisation */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                <button
-                  onClick={() => { setViewMode("full"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "full"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  📖 Complet
-                </button>
-                <button
-                  onClick={() => { setViewMode("gaps"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "gaps"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  🔤 Trous
-                </button>
-                <button
-                  onClick={() => { setViewMode("first3"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "first3"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  3️⃣ 3 mots
-                </button>
-                <button
-                  onClick={() => { setViewMode("debut_fin"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "debut_fin"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  🟢 Début/Fin
-                </button>
-                <button
-                  onClick={() => { setViewMode("last_word"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "last_word"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  🟣 Derniers Mots
-                </button>
-                <button
-                  onClick={() => { setViewMode("cue"); setShowExerciseMenu(false); }}
-                  className={`py-2.5 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    viewMode === "cue"
-                      ? "bg-amber-500 text-black border-amber-400 shadow-md font-extrabold"
-                      : "bg-gray-800/80 text-gray-200 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  🎭 Répliques
-                </button>
-              </div>
-
-              {/* Actions secondaires */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setEditMode(!editMode)}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition border ${
-                    editMode
-                      ? "bg-orange-500 text-white border-orange-400 shadow"
-                      : "bg-gray-800 text-gray-300 border-gray-700 hover:bg-gray-700"
-                  }`}
-                >
-                  {editMode ? "✅ Terminer" : "✏️ Mode édition"}
-                </button>
-                <button
-                  onClick={() => { setShowCharacterManager(true); setShowExerciseMenu(false); }}
-                  className="py-2 px-3 rounded-xl text-xs font-bold bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition"
-                >
-                  👥 Personnages
-                </button>
-                <button
-                  onClick={() => { setShowReplicaGroups(true); setShowExerciseMenu(false); }}
-                  className="py-2 px-3 rounded-xl text-xs font-bold bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition"
-                >
-                  📚 Groupes
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 2. FILTRES DES PERSONNAGES : POSITIONNÉS SOUS LE BLOC EXERCICES */}
+        {/* Filtres personnages et boutons d'action */}
         <div className="mb-4">
           {myCharacterId && (
             <div className="mb-2">
@@ -719,7 +692,7 @@ function ScriptDetail() {
               onClick={() => setSelectedCharacter(null)}
               className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow ${
                 !selectedCharacter
-                  ? "bg-gold-500 text-dark font-bold"
+                  ? "bg-gold-500 text-dark"
                   : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
               }`}
             >
@@ -835,6 +808,115 @@ function ScriptDetail() {
           </div>
         )}
 
+        {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
+        <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <input
+              type="text"
+              placeholder="Rechercher réplique par # (ex: #12 ou 12) ou mot-clé..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 bg-gray-50 hover:bg-gray-100 focus:bg-white text-gray-900 placeholder-gray-400 text-sm rounded-xl border border-gray-300 focus:border-gold-500 focus:outline-none transition font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold px-1"
+                title="Effacer la recherche"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <span
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 ${
+                filteredReplicas.length > 0
+                  ? "bg-gold-100 text-gold-900 border border-gold-300"
+                  : "bg-red-50 text-red-600 border border-red-200"
+              }`}
+            >
+              {filteredReplicas.length}{" "}
+              {filteredReplicas.length > 1 ? "répliques" : "réplique"}
+            </span>
+          )}
+        </div>
+
+        {/* Accordéon pour les exercices / modes de mémorisation */}
+        <div className="mb-4 bg-white rounded-2xl border border-gold-500/30 shadow-md overflow-hidden">
+          <button
+            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
+            className="w-full p-3.5 bg-gradient-to-r from-primary-900 to-primary-800 text-white font-bold text-sm flex items-center justify-between hover:from-primary-800 hover:to-primary-700 transition"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <span>Exercez-vous !</span>
+              <span className="text-xs text-gold-400 font-normal ml-2">
+                ({VIEW_MODE_LABELS[viewMode] || "Complet"})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-gold-500/20 text-gold-300 px-2.5 py-1 rounded-full border border-gold-500/30 font-semibold">
+                {showExerciseMenu ? "Masquer ▲" : "Choisir un exercice ▼"}
+              </span>
+            </div>
+          </button>
+
+          {showExerciseMenu && (
+            <div className="p-3 bg-amber-50/50 border-t border-amber-200/60 animate-fade-in">
+              <p className="text-xs text-gray-600 mb-2 font-medium px-1">
+                Choisissez un mode de mémorisation pour masquer progressivement le texte :
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Object.entries(VIEW_MODE_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setViewMode(key);
+                      setShowExerciseMenu(false);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition shadow-sm border text-left flex items-center justify-between ${
+                      viewMode === key
+                        ? "bg-primary-800 text-gold-400 border-gold-500 shadow-md ring-2 ring-gold-400/30"
+                        : "bg-white text-gray-700 border-gray-200 hover:bg-gold-50 hover:border-gold-300"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {viewMode === key && <span className="text-gold-400 font-extrabold">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Actions secondaires */}
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition ${
+              editMode
+                ? "bg-orange-500 text-white shadow-lg"
+                : "bg-white text-gray-600 border border-gray-300 hover:bg-orange-50"
+            }`}
+          >
+            {editMode ? "✅ Terminer" : "✏️ Mode édition"}
+          </button>
+          <button
+            onClick={() => setShowCharacterManager(true)}
+            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 border border-gray-300 hover:bg-purple-50 transition"
+          >
+            👥 Personnages
+          </button>
+          <button
+            onClick={() => setShowReplicaGroups(true)}
+            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 border border-gray-300 hover:bg-indigo-50 transition"
+          >
+            📚 Groupes
+          </button>
+        </div>
+
         {studyingGroup && (
           <div className="mb-4 p-3 bg-indigo-100 border border-indigo-300 rounded-lg flex items-center justify-between">
             <p className="text-indigo-800 text-sm">
@@ -865,8 +947,6 @@ function ScriptDetail() {
             </button>
           </div>
         )}
-
-        
 
         {/* DnD Liste des répliques */}
         <DndContext
@@ -907,7 +987,7 @@ function ScriptDetail() {
                       characters={characters}
                       viewMode={viewMode}
                       isRight={isRight}
-                      number={index + 1}
+                      number={replicaGlobalNumberMap[replica.id] || index + 1}
                       editMode={editMode}
                       myCharacterId={myCharacterId}
                       hideMyReplicas={hideMyReplicas}
@@ -1464,11 +1544,7 @@ function ChatBubble({
       );
     }
 
-    const stripHtml = (html) => {
-      const tmp = document.createElement("div");
-      tmp.innerHTML = html || "";
-      return tmp.textContent || tmp.innerText || "";
-    };
+
 
     const getFirst3Words = (text) => {
       const plain = stripHtml(text || "");
