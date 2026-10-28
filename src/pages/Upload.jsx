@@ -19,7 +19,7 @@ const UPLOAD_TIMEOUT_MS = 30_000;
 export default function Upload() {
   const navigate = useNavigate();
   const { user, isPremium } = useAuthStore();
-  const { createScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
+  const { addScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
 
   // Mode d'importation : "scan_standard" (1er) | "file" (2e) | "scan_premium" (3e)
   const [importMode, setImportMode] = useState("scan_standard");
@@ -135,7 +135,7 @@ export default function Upload() {
     parsedReplicas,
   }) => {
     // 1. Création de l'entrée script
-    const script = await createScript({
+    const script = await addScript({
       user_id: user?.id,
       title: scriptTitle || "Sans titre",
       full_text: rawText || "",
@@ -172,14 +172,26 @@ export default function Upload() {
         return {
           script_id: scriptId,
           character_id: characterMap[charName] || null,
-          order_index: idx,
+          order_index: (idx + 1) * 1000,
           text: rep.text || "",
           text_gaps: rep.textGaps || rep.text_gaps || "",
           cue_words: rep.cueWords || rep.cue_words || "",
+          act_title: rep.act_title || null,
+          scene_title: rep.scene_title || null,
+          is_context: !!rep.is_context,
+          page_number: rep.page_number || null,
         };
       });
 
-      await addReplicas(replicasToInsert);
+      if (typeof addReplicas === 'function') {
+        await addReplicas(replicasToInsert);
+      } else {
+        const { error: repErr } = await supabase.from('replicas').insert(replicasToInsert);
+        if (repErr) {
+          const basic = replicasToInsert.map(({ act_title, scene_title, is_context, page_number, ...rest }) => rest);
+          await supabase.from('replicas').insert(basic);
+        }
+      }
     }
 
     // 4. Rafraîchissement

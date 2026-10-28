@@ -1,4 +1,4 @@
-﻿"""Premium script extraction with Gemini Vision."""
+"""Premium script extraction with Gemini Vision with Act/Scene/Context segmentation."""
 
 from __future__ import annotations
 
@@ -25,24 +25,32 @@ Retourne uniquement un objet JSON valide conforme à ce schéma :
   "title": "Titre de la pièce",
   "characters": ["PERSONNAGE 1", "PERSONNAGE 2"],
   "replicas": [
-    {"character": "PERSONNAGE 1", "text": "Texte complet de la réplique"}
+    {
+      "act_title": "ACTE I",
+      "scene_title": "SCÈNE 1",
+      "is_context": false,
+      "character": "PERSONNAGE 1",
+      "text": "Texte complet de la réplique",
+      "page_number": 1
+    }
   ]
 }
 
 Consignes impératives :
-- Parcours toutes les pages dans l'ordre et extrais chaque réplique sans résumé,
+- Parcours toutes les pages dans l'ordre et extrais chaque réplique et méta-information sans résumé,
   omission ni réorganisation. Conserve fidèlement l'orthographe, la ponctuation,
   les accents, les didascalies utiles et les retours de sens.
+- Repère les structures majeures :
+  * act_title : Intitulé d'Acte s'il est présent (ex: "ACTE I", "ACTE 2", ou null si absent). Un acte s'applique jusqu'au suivant.
+  * scene_title : Intitulé de Scène s'il est présent (ex: "SCÈNE 1", "SCÈNE III - La rue", ou null si absent). Une scène s'applique jusqu'à la suivante.
+  * is_context : Mettre true pour les textes de contexte, décor, présentation globale de début d'histoire/d'acte/de scène ou didascalies scéniques majeures (ex: "RIDEAU", "Entrent Jeff et William"), sinon false.
+  * page_number : Numéro de page imprimé s'il est présent sur la page, sinon null.
 - Détecte tous les personnages qui parlent. Donne à chacun un nom canonique
-  unique en majuscules et rattache ses abréviations/alias au même nom.
+  unique en majuscules et rattache ses abréviations/alias au même nom. Pour le contexte ou la narration, utilise "CONTEXTE" ou "NARRATEUR".
 - Le champ character de chaque réplique doit correspondre exactement à un nom
   de characters. N'invente pas de texte manquant ; si l'attribution est
   réellement impossible, utilise le nom INCONNU et ajoute-le à characters.
-- Ignore les numéros de page, en-têtes/pieds de page et éléments qui ne sont
-  manifestement pas du texte de la pièce.
-- Les scènes/actes et didascalies peuvent rester dans le texte des répliques
-  lorsque leur emplacement structure le dialogue. Ne les transforme pas en
-  personnages.
+- Ignore les en-têtes/pieds de page répétitifs non théâtraux.
 - Produis un JSON compact : pas d'indentation ni de retours à la ligne inutiles,
   une réplique par objet sur une seule ligne, afin de limiter la taille de la réponse.
 - Aucun texte ni commentaire en dehors du JSON."""
@@ -107,7 +115,10 @@ def parse_gemini_response(response_text: str, fallback_title: str) -> Dict[str, 
             character_by_normalized_name[normalized_name] = character
             characters.append(character)
 
-    replicas: List[Dict[str, str]] = []
+    replicas: List[Dict[str, Any]] = []
+    current_act: Optional[str] = None
+    current_scene: Optional[str] = None
+
     for raw_replica in raw_replicas:
         if not isinstance(raw_replica, dict):
             raise GeminiOCRError("Gemini a renvoyé une réplique au format invalide.")
@@ -115,13 +126,39 @@ def parse_gemini_response(response_text: str, fallback_title: str) -> Dict[str, 
         text = raw_replica.get("text")
         if not isinstance(raw_character, str) or not isinstance(text, str) or not text.strip():
             raise GeminiOCRError("Gemini a renvoyé une réplique sans personnage ou sans texte.")
-        normalized_name = raw_character.strip().casefold()
+        
+        char_clean = raw_character.strip().upper()
+        normalized_name = char_clean.casefold()
         character = character_by_normalized_name.get(normalized_name)
         if not character:
-            raise GeminiOCRError(
-                "Une réplique renvoie vers un personnage absent de la liste détectée."
-            )
-        replicas.append({"character": character, "text": text.strip()})
+            character = char_clean
+            character_by_normalized_name[normalized_name] = character
+            if character not in characters:
+                characters.append(character)
+
+        # Extraction et propagation de l'acte et de la scène
+        raw_act = raw_replica.get("act_title")
+        if isinstance(raw_act, str) and raw_act.strip():
+            current_act = raw_act.strip()
+
+        raw_scene = raw_replica.get("scene_title")
+        if isinstance(raw_scene, str) and raw_scene.strip():
+            current_scene = raw_scene.strip()
+
+        is_context = bool(raw_replica.get("is_context", False))
+
+        page_number = raw_replica.get("page_number")
+        if not isinstance(page_number, int):
+            page_number = None
+
+        replicas.append({
+            "character": character,
+            "text": text.strip(),
+            "act_title": current_act,
+            "scene_title": current_scene,
+            "is_context": is_context,
+            "page_number": page_number,
+        })
 
     if not characters or not replicas:
         raise GeminiOCRError("Aucun personnage ou aucune réplique n'a été détecté dans ce PDF.")
@@ -196,8 +233,6 @@ def _extract_one_pdf(
                 response_mime_type="application/json",
                 temperature=0,
                 max_output_tokens=MAX_OUTPUT_TOKENS,
-                # Extraction structurée : le thinking consommerait le budget de
-                # sortie et tronquerait le JSON (finish_reason=MAX_TOKENS).
                 thinking_config=types.ThinkingConfig(thinking_budget=0),
             ),
         )
@@ -239,13 +274,17 @@ def _extract_one_pdf(
 def _merge_chunk_results(results: List[Dict[str, Any]], fallback_title: str) -> Dict[str, Any]:
     characters: List[str] = []
     seen: Dict[str, str] = {}
-    replicas: List[Dict[str, str]] = []
+    replicas: List[Dict[str, Any]] = []
+    current_act: Optional[str] = None
+    current_scene: Optional[str] = None
+
     for index, result in enumerate(results):
         for name in result["characters"]:
             key = name.casefold()
             if key not in seen:
                 seen[key] = name
                 characters.append(name)
+
         for position, replica in enumerate(result["replicas"]):
             # Une réplique coupée par un saut de tranche ouvre la tranche suivante
             # sans nom de locuteur : on la rattache à la réplique précédente.
@@ -257,9 +296,24 @@ def _merge_chunk_results(results: List[Dict[str, Any]], fallback_title: str) -> 
             ):
                 replicas[-1]["text"] = f'{replicas[-1]["text"]} {replica["text"]}'
                 continue
-            replicas.append(
-                {"character": seen[replica["character"].casefold()], "text": replica["text"]}
-            )
+
+            # Propagation dynamique d'Acte & Scène à travers les tranches PDF
+            if replica.get("act_title"):
+                current_act = replica["act_title"]
+            if replica.get("scene_title"):
+                current_scene = replica["scene_title"]
+
+            char_clean = seen.get(replica["character"].casefold(), replica["character"])
+
+            replicas.append({
+                "character": char_clean,
+                "text": replica["text"],
+                "act_title": replica.get("act_title") or current_act,
+                "scene_title": replica.get("scene_title") or current_scene,
+                "is_context": replica.get("is_context", False),
+                "page_number": replica.get("page_number"),
+            })
+
     used = {replica["character"].casefold() for replica in replicas}
     characters = [name for name in characters if name.casefold() in used]
     title = results[0]["title"] if results and results[0].get("title") else fallback_title

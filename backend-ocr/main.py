@@ -11,6 +11,8 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from dotenv import load_dotenv
+load_dotenv()
 from ocr.auth import get_premium_user
 from ocr.gemini_ocr import GeminiOCRError, extract_script_with_gemini
 
@@ -48,7 +50,7 @@ async def _save_uploaded_pdf(file: UploadFile, destination: Path) -> None:
 configured_origins = os.environ.get("FRONTEND_ORIGINS", "")
 allowed_origins = [
     origin.strip() for origin in configured_origins.split(",") if origin.strip()
-] or ["http://localhost:5173", "http://127.0.0.1:5173"]
+] or ["*"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -68,6 +70,10 @@ def _result_event(result: Dict[str, Any]) -> str:
         "title": result["title"],
         "characters": [{"name": name} for name in result["characters"]],
         "replicas": result["replicas"],
+        "has_scenes": result.get("has_scenes", any(
+            bool(r.get("act_title") or r.get("scene_title"))
+            for r in result.get("replicas", [])
+        )),
     }
     return f"event: result\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 

@@ -1,1599 +1,238 @@
-import {
-  detectKnownSpeakerCue,
-  resolveAgainstKnownList,
-} from "./characterListValidator.js";
-
 /**
- * Parser de scripts théâtraux - Version 3.1
- * CORRECTION: Encodage UTF-8 + nettoyage espaces début de ligne
- *
- * Formats supportés :
- * - Numéroté : "1. Maurice : texte"
- * - Majuscules + : "LE REPRÉSENTANT : texte"
- * - Nom composé 2-3 mots : "La mère Robert : texte" / "La petite teigne : texte"
- * - Initiale + point : "C. texte" / "R. (didascalie) texte"
- * - Nom + numéro : "Répondeur 1 : texte" / "Policier 2 : texte"
- * - Nom seul sur ligne : "L'ADJUDANT-CHEF" puis texte en dessous
- * - Prénom simple : "Rosette : texte" / "Consultant : texte"
- * - Colonnes avec espaces : "RIKIYA :      Ça va pas."
- * - Nom + didascalie : "PERSONNAGE (action) texte"
+ * scriptParser.js (v4) - Parseur de scripts de théâtre pour Scan Classique Standard (Front-end)
+ * Supporte :
+ * 1. Le format avec deux-points ("SAM : Bonjour")
+ * 2. Le format sans deux-points avec nom en majuscules ("IVANA\nEst-ce que tout le monde est prêt?")
+ * 3. La détection automatique des Actes et Scènes ("# Scène 1", "Scène 2", "Acte 1")
  */
 
-// Couleurs pour les personnages
-const CHARACTER_COLORS = [
-  "#8B1538",
-  "#2563EB",
-  "#059669",
-  "#D97706",
-  "#7C3AED",
-  "#DC2626",
-  "#0891B2",
-  "#4F46E5",
-  "#DB2777",
-  "#65A30D",
-];
-
-// Prénoms français pour détection de genre
-const PRENOMS_FEMININS = [
-  "marie",
-  "jeanne",
-  "anne",
-  "marguerite",
-  "catherine",
-  "françoise",
-  "louise",
-  "claire",
-  "sophie",
-  "julie",
-  "emma",
-  "léa",
-  "manon",
-  "chloé",
-  "camille",
-  "sarah",
-  "laura",
-  "audrey",
-  "valérie",
-  "fabienne",
-  "claudette",
-  "rolande",
-  "colette",
-  "suzanne",
-  "monique",
-  "nicole",
-  "sylvie",
-  "nathalie",
-  "isabelle",
-  "christine",
-  "patricia",
-  "martine",
-  "sandrine",
-  "véronique",
-  "céline",
-  "amavi",
-  "claudia",
-  "rosette",
-  "clémence",
-  "céleste",
-  "roberte",
-  "lucie",
-  "corinne",
-  "emmanuelle",
-  "elodie",
-  "élodie",
-  "adèle",
-  "adele",
-  "alice",
-  "charlotte",
-  "élise",
-  "elise",
-  "inès",
-  "ines",
-  "léonie",
-];
-
-const PRENOMS_MASCULINS = [
-  "jean",
-  "pierre",
-  "michel",
-  "jacques",
-  "louis",
-  "henri",
-  "paul",
-  "andré",
-  "maurice",
-  "christophe",
-  "philippe",
-  "alain",
-  "bernard",
-  "françois",
-  "richard",
-  "robert",
-  "daniel",
-  "david",
-  "thomas",
-  "nicolas",
-  "julien",
-  "charcut",
-  "repar",
-  "rikiya",
-  "chichiro",
-  "clément",
-  "consultant",
-];
-
-const MOTS_FEMININS = [
-  "la ",
-  "madame",
-  "mme",
-  "dame",
-  "femme",
-  "fille",
-  "mère",
-  "soeur",
-  "cliente",
-  "suspecte",
-  "chère",
-  "petite",
-  "rageologue",
-  "brigadière",
-];
-
-const MOTS_MASCULINS = [
-  "le ",
-  "monsieur",
-  "mr",
-  "homme",
-  "père",
-  "frère",
-  "fils",
-  "représentant",
-  "reporter",
-  "chef",
-  "policier",
-  "docteur",
-  "dr",
-  "professeur",
-  "pr",
-  "gros",
-  "combinard",
-  "adjudant",
-  "consultant",
-  "répondeur",
-];
+// Regex pour repérer les actes et scènes
+const ACT_REGEX = /^(?:#\s*)?(?:ACTE|Acte)\s+([IVXLCDM\d]+|\bUN\b|\bDEUX\b|\bTROIS\b|\bQUATRE\b|\bCINQ\b|PREMIER)/i;
+const SCENE_REGEX = /^(?:#\s*)?(?:SCÈNE|SCENE|Scène|Scene)\s*([\dIVXLCDM]+)?\s*[:\-\.]?\s*(.*)/i;
+const ACT_SCENE_INLINE_REGEX = /(?:ACTE|Acte)\s*([\dIVXLCDM]+)?\s*(?:SCÈNE|SCENE|Scène|Scene)\s*([\dIVXLCDM]+)?\s*[:\-\.]?\s*(.*)/i;
 
 /**
- * Pré-traitement : découpe les longues lignes OCR contenant plusieurs répliques inline.
- * Ex: "MARY : texte LOLA : autre" ou
- * "texte JACQUES (didascalie) - réplique LUCIE - autre"
- * → 3 lignes séparées.
- * C'est la correction principale pour les PDF dont l'OCR fusionne plusieurs répliques.
+ * Nettoie et normalise une ligne de texte
  */
-function splitInlineTransitions(text, knownCharacters = null) {
-  const lines = text.split("\n");
-  const result = [];
-  const hasKnownList =
-    Array.isArray(knownCharacters) && knownCharacters.length > 0;
-
-  // Pattern générique (casse libre) utilisé UNIQUEMENT quand une liste de
-  // personnages de référence existe (saisie par l'utilisateur en pop-up).
-  // Contrairement à dashPattern/colonPattern ci-dessous (tout en majuscules),
-  // il capture aussi les noms en casse mixte comme "William FARELL :".
-  // Chaque candidat est ensuite validé via resolveAgainstKnownList (seuil
-  // élevé) pour ne couper QUE sur un personnage réellement connu et éviter
-  // les faux positifs sur du texte narratif capitalisé.
-  const genericCuePattern =
-    /\s+([A-ZÀ-Üa-zà-ü][A-ZÀ-Üa-zà-ü'’\-]*(?:\s+[A-ZÀ-Üa-zà-ü][A-ZÀ-Üa-zà-ü'’\-]*){0,3})\s*(?:\([^)]*\))?\s*[-–—:]\s+/g;
-
-  // Mots français courants en majuscules qui ne sont PAS des personnages
-  const COMMON_CAPS = new Set([
-    "MAIS",
-    "DONC",
-    "ALORS",
-    "BIEN",
-    "VRAI",
-    "VOILÀ",
-    "VOILA",
-    "VOICI",
-    "AVANT",
-    "APRÈS",
-    "APRES",
-    "ENFIN",
-    "ENCORE",
-    "BREF",
-    "TOUT",
-    "RIEN",
-    "JAMAIS",
-    "TOUJOURS",
-    "VITE",
-    "VRAI",
-    "FAUX",
-    "NON",
-    "OUI",
-    "LUI",
-    "MOI",
-    "TOI",
-    "SOI",
-    "ELLE",
-    "EUX",
-    "ICI",
-    "LÀ",
-    "LA",
-    "LE",
-    "LES",
-    "DES",
-    "UNE",
-    "CAR",
-    "CAD",
-    "SVP",
-    "STP",
-    "OK",
-    "HEY",
-    "HOP",
-    "AH",
-    "OH",
-    "EH",
-    "BEN",
-    "BON",
-    "DIEU",
-    "SUPER",
-    "STOP",
-    "HELP",
-    "AIDE",
-    "SNCF",
-    "EDF",
-    "OUI",
-    "NON",
-    "NOM",
-    "AVIS",
-    "ACTE",
-    "SCENE",
-    "SCÈNE",
-    "TABLEAU",
-    "FIN",
-    "RIDEAU",
-    "PAGE",
-    "NOTE",
-    "JETTES",
-    "MERCI",
-    "PARDON",
-  ]);
-
-  for (const line of lines) {
-    // Chercher les transitions de personnage au milieu d'une ligne.
-    // Les PDF/OCR produisent souvent plusieurs répliques sur une même ligne,
-    // notamment avec deux-points : "MARY : ... LOLA : ...".
-    const dashPattern =
-      /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*[-–—]\s/g;
-    const colonPattern =
-      /\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\([^)]*\))?\s*:\s+/g;
-
-    const splits = []; // positions de début de nom à l'intérieur de la ligne
-
-    if (hasKnownList) {
-      // Liste de référence disponible : on découpe sur tout personnage
-      // CONNU, quelle que soit sa casse (résout "William FARELL :" fusionné
-      // avec la réplique précédente).
-      genericCuePattern.lastIndex = 0;
-      let m;
-      while ((m = genericCuePattern.exec(line)) !== null) {
-        const namePos = m.index + m[0].search(/[A-ZÀ-Üa-zà-ü]/);
-        if (namePos <= 0) continue; // ne pas couper en début de ligne
-
-        const capturedName = m[1].trim();
-        if (capturedName.length < 3) continue;
-        if (!resolveAgainstKnownList(capturedName, knownCharacters, 0.82)) {
-          continue; // pas un personnage connu : ne pas couper (évite les faux positifs)
-        }
-
-        splits.push(namePos);
-      }
-    } else {
-      for (const pattern of [dashPattern, colonPattern]) {
-        let m;
-        while ((m = pattern.exec(line)) !== null) {
-          // Position du début du nom (après l'espace initial dans le match)
-          const namePos = m.index + m[0].search(/[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]/);
-          if (namePos <= 0) continue; // ne pas couper en début de ligne
-
-          // Extraire juste le nom capturé
-          const capturedName = m[1].trim();
-          if (COMMON_CAPS.has(capturedName)) continue; // ignorer les mots courants
-          if (capturedName.length < 3) continue;
-
-          splits.push(namePos);
-        }
-      }
-    }
-
-    if (splits.length === 0) {
-      result.push(line);
-      continue;
-    }
-
-    const uniqueSplits = [...new Set(splits)].sort((a, b) => a - b);
-
-    // Découper la ligne aux positions identifiées
-    let prev = 0;
-    for (const pos of uniqueSplits) {
-      const part = line.substring(prev, pos).trim();
-      if (part) result.push(part);
-      prev = pos;
-    }
-    const last = line.substring(prev).trim();
-    if (last) result.push(last);
-  }
-
-  return result.join("\n");
+function cleanLine(line) {
+  if (!line) return '';
+  return line.trim();
 }
 
 /**
- * Calcul de la distance de Levenshtein entre deux chaînes
+ * Détermine si une ligne contient un personnage avec deux-points ("JOHN : Bonjour")
  */
-function getLevenshteinDistance(a, b) {
-  if (a.length === 0) return b.length;
-  if (b.length === 0) return a.length;
-
-  const matrix = [];
-
-  for (let i = 0; i <= b.length; i++) {
-    matrix[i] = [i];
-  }
-
-  for (let j = 0; j <= a.length; j++) {
-    matrix[0][j] = j;
-  }
-
-  for (let i = 1; i <= b.length; i++) {
-    for (let j = 1; j <= a.length; j++) {
-      if (b.charAt(i - 1) === a.charAt(j - 1)) {
-        matrix[i][j] = matrix[i - 1][j - 1];
-      } else {
-        matrix[i][j] = Math.min(
-          matrix[i - 1][j - 1] + 1,
-          Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1),
-        );
-      }
-    }
-  }
-
-  return matrix[b.length][a.length];
-}
-
-/**
- * Compare deux noms et retourne un score de similarité entre 0 et 1
- */
-function getSimilarity(s1, s2) {
-  const longer = s1.length > s2.length ? s1 : s2;
-  const shorter = s1.length > s2.length ? s2 : s1;
-  const longerLength = longer.length;
-  if (longerLength === 0) return 1.0;
-  return (
-    (longerLength - getLevenshteinDistance(longer, shorter)) /
-    parseFloat(longerLength)
-  );
-}
-
-export class CharacterResolver {
-  constructor(refs) {
-    this.mainNames = [];
-    this.aliasMap = new Map();
-    this.refListEmpty = !refs || refs.length === 0;
-
-    if (!this.refListEmpty) {
-      for (const charStr of refs) {
-        const match = charStr.match(/^(.+?)(?:\s*\((.+?)\))?$/);
-        if (match) {
-          const mainName = match[1].trim().toUpperCase();
-          this.mainNames.push(mainName);
-          this.aliasMap.set(mainName, mainName);
-
-          if (match[2]) {
-            const aliases = match[2]
-              .split(",")
-              .map((a) => a.trim().toUpperCase());
-            for (const alias of aliases) {
-              this.aliasMap.set(alias, mainName);
-            }
-          }
-        }
-      }
-    }
-  }
-
-  resolve(name) {
-    if (!name) return null;
-    const cleanName = name.trim().toUpperCase();
-    const excludedIfNotListed = ["CQ", "TOUS", "VOIX"];
-
-    if (this.refListEmpty) {
-      if (excludedIfNotListed.includes(cleanName)) return null;
-      if (cleanName.length < 3 && cleanName.length > 0) {
-        // Si pas de liste de ref, on jette quand même le bruit < 3 lettres, sauf si c'est normal ?
-        // Les initiales "C." etc sont déjà normalisées sans le ".".
-        // Mais dans le doute, appliquons la règle demandée si < 3.
-        if (cleanName.length < 3) return null;
-      }
-      return cleanName;
-    }
-
-    if (this.aliasMap.has(cleanName)) {
-      return this.aliasMap.get(cleanName);
-    }
-
-    let bestMatch = null;
-    let bestScore = 0.75;
-
-    for (const mainName of this.mainNames) {
-      const score = getSimilarity(cleanName, mainName);
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = mainName;
-      }
-    }
-
-    if (bestMatch) return bestMatch;
-
-    if (cleanName.length < 3) return null;
-    if (excludedIfNotListed.includes(cleanName)) return null;
-
-    return cleanName;
-  }
-}
-
-/**
- * Parse un texte de script et extrait les personnages et répliques
- */
-export function parseScript(text, filename = "", referenceCharacters = null) {
-  const cleanedText = cleanText(text);
-  // Pré-traitement : séparer les répliques inline sur une même ligne (artefact OCR PDF)
-  const preprocessedText = splitInlineTransitions(
-    cleanedText,
-    referenceCharacters,
-  );
-
-  // DEBUG : afficher les premières lignes après pré-traitement
-  const _dbgLines = preprocessedText.split("\n");
-  console.log(
-    `[Parser DEBUG] ${filename}: ${_dbgLines.length} lignes après splitInlineTransitions`,
-  );
-  console.log(
-    `[Parser DEBUG] Lignes 0-14:`,
-    _dbgLines
-      .slice(0, 15)
-      .map((l, i) => `${i}:"${l.substring(0, 70)}"`)
-      .join("\n"),
-  );
-
-  const title = extractTitle(preprocessedText, filename);
-
-  // Détecter le format du script
-  const format = detectScriptFormat(preprocessedText);
-  console.log(`[Parser DEBUG] Format détecté: "${format}" pour "${title}"`);
-
-  // Extraire la distribution (mapping rôle -> acteur)
-  const distribution = extractDistribution(preprocessedText, format);
-
-  // Extraire personnages et répliques selon le format
-  const { characters, replicas } = extractCharactersAndReplicas(
-    preprocessedText,
-    distribution,
-    format,
-    referenceCharacters,
-  );
-
-  // Assigner couleurs et genre
-  const coloredCharacters = characters.map((char, index) => ({
-    ...char,
-    color: CHARACTER_COLORS[index % CHARACTER_COLORS.length],
-    gender: detectGender(char.name, distribution),
-  }));
-
-  // Générer textes à trous et indices
-  const enrichedReplicas = replicas.map((replica, index) => ({
-    ...replica,
-    textGaps: generateGapsText(replica.text),
-    cueWords: generateCueWords(replicas, index),
-  }));
-
-  console.log(
-    `[Parser] ${title}: ${coloredCharacters.length} personnages, ${enrichedReplicas.length} répliques`,
-  );
-  console.log(
-    `[Parser DEBUG] Personnages détectés:`,
-    coloredCharacters.map((c) => c.name).join(", "),
-  );
-  if (enrichedReplicas.length > 0) {
-    console.log(
-      `[Parser DEBUG] Répliques 1-3:`,
-      enrichedReplicas
-        .slice(0, 3)
-        .map(
-          (r, i) => `#${i + 1} [${r.character}]: "${r.text.substring(0, 50)}"`,
-        )
-        .join("\n"),
-    );
-  }
-
-  return { title, characters: coloredCharacters, replicas: enrichedReplicas };
-}
-
-/**
- * Nettoie le texte extrait
- * CORRECTION v3.1: Encodage UTF-8 correct + nettoyage espaces
- */
-function cleanText(text) {
-  return (
-    text
-      .replace(/\r\n/g, "\n")
-      .replace(/\r/g, "\n")
-      .replace(/\t/g, " ")
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/Page \d+ sur \d+/gi, "")
-      .replace(/^\d+\s*\/\s*\d+$/gm, "")
-      // Nettoyer les caractères spéciaux (carrés colorés, puces, etc.)
-      // CORRECTION: Utiliser les codes Unicode explicites pour éviter les problèmes d'encodage
-      .replace(
-        /[\u25A0\u25A1\u25AA\u25AB\u25CF\u25CB\u25C6\u25C7\u2605\u2606\u25B6\u25BA\u25B7\u25B8\u25C0\u25C1\u25C2\u25C3\u2B1B\u2B1C]/g,
-        "",
-      )
-      .replace(
-        /[\u{1F535}\u{1F7E2}\u{1F7E1}\u{1F7E0}\u{1F534}\u26AB\u26AA]/gu,
-        "",
-      )
-      .replace(/[\u2580-\u259F]/g, "") // Block elements
-      .replace(/[\uE000-\uF8FF]/g, "") // Private use area
-      .replace(/^\s*[\|\[\]]\s*/gm, "") // Pipes et crochets en début de ligne
-      // CORRECTION v3.1: Nettoyer les espaces en début de ligne (après suppression des carrés colorés)
-      .replace(/^[ \t]+/gm, "")
-      .trim()
-  );
-}
-
-/**
- * Extrait le titre du script
- */
-function extractTitle(text, filename) {
-  const lines = text.split("\n").slice(0, 5);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    const titleMatch = trimmed.match(/^N[°o]?\s*\d+\s*[-–]?\s*(.+)$/i);
-    if (titleMatch) return trimmed;
-
-    if (
-      trimmed.length > 3 &&
-      trimmed.length < 50 &&
-      trimmed === trimmed.toUpperCase()
-    ) {
-      if (
-        !/^(LE|LA|UN|UNE|LES|DES)\s/.test(trimmed) &&
-        !trimmed.includes(":")
-      ) {
-        return trimmed;
-      }
-    }
-  }
-
-  return (
-    filename
-      .replace(/\.pdf$/i, "")
-      .replace(/[-_]/g, " ")
-      .trim() || "Sans titre"
-  );
-}
-
-/**
- * Détecte le format du script
- */
-function detectScriptFormat(text) {
-  const lines = text.split("\n").slice(0, 50);
-
-  // Format initiales : C. : JEAN ou C. Alors...
-  if (lines.some((l) => /^[A-Z]\.\s*[:=]\s*[A-Z]/.test(l.trim()))) {
-    return "initials";
-  }
-  if (lines.some((l) => /^[A-Z]\.\s+[A-ZÀ-ÿ]/.test(l.trim()))) {
-    return "initials";
-  }
-
-  // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte" (très courant dans les scripts français)
-  // Inclut tiret court (-), demi-cadratin (–) et cadratin (—) pour couvrir les artefacts OCR
-  const dashCount = lines.filter((l) =>
-    /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–—]\s+\S/.test(
-      l.trim(),
-    ),
-  ).length;
-  if (dashCount >= 2) return "dash";
-
-  // Format nom seul sur ligne (majuscules sans :)
-  let hasStandaloneNames = false;
-  for (let i = 0; i < lines.length - 1; i++) {
-    const line = lines[i].trim();
-    const nextLine = lines[i + 1]?.trim() || "";
-    // Nom en majuscules seul, suivi d'une ligne qui commence par une majuscule ou minuscule
-    if (
-      /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(line) &&
-      line.length > 3 &&
-      line.length < 30 &&
-      nextLine &&
-      /^[A-ZÀ-ÿ]/.test(nextLine) &&
-      !nextLine.includes(":")
-    ) {
-      hasStandaloneNames = true;
-      break;
-    }
-  }
-  if (hasStandaloneNames) return "standalone";
-
-  // Format colonnes (beaucoup d'espaces)
-  if (lines.some((l) => /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+\s*:\s{3,}/.test(l.trim()))) {
-    return "columns";
-  }
-
-  // Format avec titre : "LE Pr. CHARCUT :" ou "LE Dr REPAR :"
-  if (
-    lines.some((l) =>
-      /^LE\s+(Pr|Dr)[.,]?\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+\s*\.?\s*:/i.test(l.trim()),
-    )
-  ) {
-    return "titled";
-  }
-
-  // Format nom composé 3+ mots : "La mère Robert :"
-  if (lines.some((l) => /^(La|Le)\s+\w+\s+\w+\s*:/i.test(l.trim()))) {
-    return "compound3";
-  }
-
-  // Format nom + numéro : "Répondeur 1 :" ou "Policier 2 :"
-  if (lines.some((l) => /^[A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d\s*:/u.test(l.trim()))) {
-    return "numbered";
-  }
-
-  // Format prénom + nom composé : "Jacques Lasségué :" ou "Corinne Lasségué :"
-  // Détecté AVANT firstname car plus spécifique (2 mots capitalisés)
-  if (
-    lines.some((l) =>
-      /^[A-ZÀ-Ÿ][a-zà-ÿ\-]+\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)?\s*(?:\([^)]+\))?\s*:/u.test(
-        l.trim(),
-      ),
-    )
-  ) {
-    return "fullname";
-  }
-
-  // Format prénom simple avec : "Rosette :" ou "Consultant :"
-  if (lines.some((l) => /^[A-ZÀ-Ÿ][a-zà-ÿ]+\s*:/u.test(l.trim()))) {
-    return "firstname";
-  }
-
-  // Format standard avec : (majuscules)
-  return "standard";
-}
-
-/**
- * Extrait la distribution selon le format
- */
-function extractDistribution(text, format) {
-  const distribution = new Map();
-  const lines = text.split("\n").slice(0, 30);
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.length > 80) continue;
-
-    let match;
-
-    // Format initiales : "C. : JEAN" ou "R. : FABIENNE"
-    if (format === "initials") {
-      match = trimmed.match(
-        /^([A-Z])\.\s*[:=]\s*([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀ-ÿa-zà-ÿ\-]+)\s*$/,
-      );
-      if (match) {
-        distribution.set(match[1], match[2]);
-        continue;
-      }
-    }
-
-    // Format nom + numéro : "Répondeur 1    : Audrey" (avec espaces multiples)
-    match = trimmed.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d)\s*[:=]\s*([A-ZÀ-Ÿ][a-zà-ÿ\-]+)\s*$/u,
-    );
-    if (match) {
-      distribution.set(normalizeCharacterName(match[1]), match[2]);
-      continue;
-    }
-
-    // Format prénom simple : "Consultant    : Jean" (avec espaces multiples)
-    match = trimmed.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ]+)\s*[:=]\s*([A-ZÀ-Ÿ][a-zà-ÿ\-]+)\s*$/u,
-    );
-    if (match && match[2].length <= 20) {
-      distribution.set(normalizeCharacterName(match[1]), match[2]);
-      continue;
-    }
-
-    // Format nom composé : "La mère Robert : MARIE-PIERRE"
-    match = trimmed.match(
-      /^((?:La|Le)\s+\w+\s+\w+)\s*[:=]\s*([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀ-ÿ\-]+)\s*$/i,
-    );
-    if (match) {
-      distribution.set(normalizeCharacterName(match[1]), match[2]);
-      continue;
-    }
-
-    // Format avec titre : "LE Pr. CHARCUT : JEAN" ou "LE Dr REPAR : MAURICE"
-    match = trimmed.match(
-      /^(LE\s+(?:Pr|Dr)[.,]?\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*\.?\s*[:=]\s*([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*$/i,
-    );
-    if (match) {
-      distribution.set(normalizeCharacterName(match[1]), match[2]);
-      continue;
-    }
-
-    // Format standard : "PERSONNAGE : ACTEUR"
-    match = trimmed.match(
-      /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\d\-']+?)\s*[:=]\s*([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀ-ÿa-zà-ÿ\-]+)\s*$/,
-    );
-    if (match && match[2].length <= 20) {
-      distribution.set(match[1].trim(), match[2]);
-    }
-  }
-
-  return distribution;
-}
-
-/**
- * Extrait les personnages et répliques
- */
-function extractCharactersAndReplicas(
-  text,
-  distribution,
-  format,
-  referenceCharacters = null,
-) {
-  const characters = new Map();
-  const replicas = [];
-  const knownCharacters = new Set(distribution.keys());
-
-  const resolver = new CharacterResolver(referenceCharacters);
-
-  /**
-   * Helper pour corriger un nom de personnage via Fuzzy Matching
-   */
-  const getCorrectedName = (rawName) => {
-    return resolver.resolve(rawName);
-  };
-
-  /**
-   * Helper pour séparer les noms conjoints (ex: "JACQUES ET JEAN")
-   */
-  const splitJointNames = (name) => {
-    if (!name) return [];
-    // Gère " ET ", " & ", "/"
-    const parts = name.split(/\s+ET\s+|\s*[/&]\s*/i);
-    return parts.map((p) => getCorrectedName(p)).filter(Boolean);
-  };
-
-  // Pré-remplir les personnages de la distribution
-  for (const [charName, actorName] of distribution) {
-    const correctedNames = splitJointNames(charName);
-    for (const name of correctedNames) {
-      if (!characters.has(name)) {
-        characters.set(name, { name, actor: actorName });
-      }
-    }
-  }
-
-  const lines = text.split("\n");
-  let currentCharacter = null;
-  let currentText = "";
-
-  // Trouver où commence le dialogue
-  const dialogueStart = findDialogueStart(lines, format);
-
-  const hasReferenceList =
-    referenceCharacters && referenceCharacters.length > 0;
-
-  for (let i = dialogueStart; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    if (/^Page \d+/i.test(line) || /^\d+\s*\/\s*\d+$/.test(line)) continue;
-
-    let match = null;
-    let isFromReferenceList = false;
-
-    if (hasReferenceList) {
-      const knownCue = detectKnownSpeakerCue(line, referenceCharacters);
-      if (knownCue) {
-        match = {
-          character: knownCue.character,
-          text: knownCue.text,
-        };
-        isFromReferenceList = true;
-      }
-    } else {
-      match = matchReplicaLine(line, lines, i, knownCharacters, format);
-    }
-
-    if (match) {
-      const correctedNames = isFromReferenceList
-        ? [match.character]
-        : splitJointNames(match.character);
-
-      if (correctedNames.length > 0) {
-        // Sauvegarder la réplique précédente
-        if (currentCharacter && currentText.trim()) {
-          replicas.push({
-            character: currentCharacter,
-            text: cleanReplicaText(currentText),
-          });
-        }
-
-        currentCharacter = correctedNames[0];
-        currentText = match.text;
-
-        // Ajouter le personnage
-        if (!characters.has(currentCharacter)) {
-          characters.set(currentCharacter, { name: currentCharacter });
-          knownCharacters.add(currentCharacter);
-        }
-      }
-
-      // Si format standalone, sauter les lignes déjà consommées
-      if (match.skipLines) {
-        i += match.skipLines;
-      }
-    } else if (currentCharacter) {
-      if (hasReferenceList) {
-        const inlineDash = matchInlineDash(line, knownCharacters);
-        if (inlineDash) {
-          const resolvedDashChar = resolveAgainstKnownList(
-            inlineDash.character,
-            referenceCharacters,
-          );
-          if (resolvedDashChar) {
-            if (currentText.trim()) {
-              replicas.push({
-                character: currentCharacter,
-                text: cleanReplicaText(currentText),
-              });
-            }
-            currentCharacter = resolvedDashChar;
-            currentText = inlineDash.text;
-            if (!characters.has(currentCharacter)) {
-              characters.set(currentCharacter, { name: currentCharacter });
-              knownCharacters.add(currentCharacter);
-            }
-          } else {
-            currentText += " " + line;
-          }
-        } else {
-          currentText += " " + line;
-        }
-      } else {
-        const inlineDash = matchInlineDash(line, knownCharacters);
-        if (inlineDash) {
-          const correctedNames = splitJointNames(inlineDash.character);
-          if (correctedNames.length > 0) {
-            if (currentText.trim()) {
-              replicas.push({
-                character: currentCharacter,
-                text: cleanReplicaText(currentText),
-              });
-            }
-            currentCharacter = correctedNames[0];
-            currentText = inlineDash.text;
-            if (!characters.has(currentCharacter)) {
-              characters.set(currentCharacter, { name: currentCharacter });
-              knownCharacters.add(currentCharacter);
-            }
-          } else {
-            currentText += " " + line;
-          }
-        } else {
-          currentText += " " + line;
-        }
-      }
-    }
-  }
-
-  // Sauvegarder la dernière réplique
-  if (currentCharacter && currentText.trim()) {
-    replicas.push({
-      character: currentCharacter,
-      text: cleanReplicaText(currentText),
-    });
-  }
-
-  if (replicas.length === 0) {
-    console.warn("[Parser] Aucune réplique détectée, parsing alternatif...");
-    return fallbackParsing(text);
-  }
-
-  return { characters: Array.from(characters.values()), replicas };
-}
-
-/**
- * Trouve où commence le dialogue
- */
-function findDialogueStart(lines, format) {
-  for (let i = 0; i < Math.min(lines.length, 40); i++) {
-    const line = lines[i].trim();
-
-    // Didascalie d'ouverture
-    if (/^\([^)]+\)\s*$/.test(line) && i > 3) return i + 1;
-
-    // Première réplique détectée
-    if (format === "initials" && /^[A-Z]\.\s+[A-ZÀ-ÿ]/.test(line)) return i;
-    if (
-      format === "standalone" &&
-      /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(line)
-    )
-      return i;
-    if (
-      format === "dash" &&
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{1,25}\s*(?:\([^)]+\))?\s*[-–—]\s+\S/.test(
-        line,
-      )
-    )
-      return i;
-    // Format dash mixte OCR : nom seul avant les répliques (ex: "LUCIE" sur sa ligne avant "(off) - texte")
-    if (
-      format === "dash" &&
-      i > 3 &&
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(
-        line,
-      ) &&
-      line.length >= 3 &&
-      line.length <= 25 &&
-      ![
-        "ACTE",
-        "SCENE",
-        "SCÈNE",
-        "TABLEAU",
-        "FIN",
-        "RIDEAU",
-        "PAGE",
-        "NOTE",
-        "TOUT",
-        "BASCULE",
-      ].includes(line)
-    )
-      return i;
-    if (
-      format === "fullname" &&
-      /^[A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*\s*(?:\([^)]+\))?\s*:/u.test(
-        line,
-      )
-    )
-      return i;
-    if (/^[A-ZÀ-Ÿ][a-zà-ÿ]+\s*:/.test(line) && line.length > 20) return i;
-  }
-
-  return Math.min(8, lines.length);
-}
-
-/**
- * Matcher une ligne de réplique selon le format
- */
-function matchReplicaLine(line, lines, lineIndex, knownChars, format) {
-  let match;
-
-  // Format tiret : "NOM - texte" ou "NOM (didascalie) - texte"
-  if (format === "dash") {
-    match = line.match(
-      /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']{0,25}?)\s*(?:\(([^)]+)\))?\s*[-–—]\s+(.{2,})$/,
-    );
-    if (match) {
-      const didascalie = match[2] ? `(${match[2]}) ` : "";
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: didascalie + match[3],
-      };
-    }
-    // Nom seul en majuscules (format mixte OCR page 1 : nom sur sa propre ligne)
-    // ex: "LUCIE" ou "JEAN TOURILLE" → personnage sans texte, le texte suit sur la ligne d'après
-    if (
-      /^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?$/.test(
-        line,
-      ) &&
-      line.length >= 3 &&
-      line.length <= 25 &&
-      !COMMON_CAPS_EXCL.has(line.split(" ")[0])
-    ) {
-      return { character: normalizeCharacterName(line), text: "" };
-    }
-  }
-
-  // Format initiales : "C. texte" ou "R. (didascalie) texte"
-  if (format === "initials") {
-    match = line.match(/^([A-Z])\.\s*(\([^)]+\))?\s*(.+)$/);
-    if (match) {
-      const didascalie = match[2] ? match[2] + " " : "";
-      return {
-        character: match[1],
-        text: didascalie + match[3],
-      };
-    }
-  }
-
-  // Format nom seul sur ligne (standalone)
-  if (format === "standalone") {
-    // Vérifier si c'est un nom seul en majuscules
-    if (
-      /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(line) &&
-      line.length > 3 &&
-      line.length < 40 &&
-      !line.includes(":")
-    ) {
-      // Chercher le texte sur les lignes suivantes
-      let textLines = [];
-      let skipCount = 0;
-      for (let j = lineIndex + 1; j < lines.length; j++) {
-        const nextLine = lines[j].trim();
-        if (!nextLine) break;
-        // Si on trouve un autre nom en majuscules, on arrête
-        if (
-          /^(L')?[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-]+$/.test(
-            nextLine,
-          ) &&
-          nextLine.length > 3 &&
-          nextLine.length < 40
-        )
-          break;
-        textLines.push(nextLine);
-        skipCount++;
-      }
-      if (textLines.length > 0) {
-        return {
-          character: normalizeCharacterName(line),
-          text: textLines.join(" "),
-          skipLines: skipCount,
-        };
-      }
-    }
-  }
-
-  // Format colonnes : "RIKIYA :      Ça va pas."
-  if (format === "columns") {
-    match = line.match(/^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*:\s{2,}(.+)$/);
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-    // Aussi accepter le format normal
-    match = line.match(/^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*:\s*(\([^)]+\))?\s*(.+)$/);
-    if (match) {
-      const didascalie = match[2] ? match[2] + " " : "";
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: didascalie + match[3],
-      };
-    }
-  }
-
-  // Format nom composé 3 mots : "La mère Robert : texte"
-  if (format === "compound3") {
-    match = line.match(/^((?:La|Le)\s+\w+\s+\w+)\s*:\s*(.+)$/i);
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-  }
-
-  // Format avec titre : "LE Pr. CHARCUT : texte" ou "LE Dr REPAR : texte"
-  if (format === "titled") {
-    // Gérer les variations: "LE Pr. CHARCUT", "LE Dr REPAR", "LE Pr, CHARCUT" (virgule OCR), "LE Pr. CHARCUT."
-    match = line.match(
-      /^(LE\s+(?:Pr|Dr)[.,]?\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*\.?\s*:\s*(.+)$/i,
-    );
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-    // Avec didascalie : "LE Pr. CHARCUT : (sortant...) texte"
-    match = line.match(
-      /^(LE\s+(?:Pr|Dr)[.,]?\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]+)\s*\.?\s*:\s*(\([^)]+\))\s*(.+)$/i,
-    );
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2] + " " + match[3],
-      };
-    }
-  }
-
-  // Format nom + numéro : "Répondeur 1 : texte" (format numbered)
-  if (format === "numbered" || format === "firstname") {
-    // D'abord essayer nom + numéro
-    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d)\s*:\s*(.+)$/u);
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-    // Puis prénom simple
-    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+)\s*:\s*(.+)$/u);
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-    // Avec didascalie : "Consultant (raccroche) : texte"
-    match = line.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+\d)?)\s*(\([^)]+\))\s*:\s*(.+)$/u,
-    );
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2] + " " + match[3],
-      };
-    }
-    // Didascalie après le : "Consultant : (s'adressant au public) texte"
-    match = line.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+\d)?)\s*:\s*(\([^)]+\))\s*(.+)$/u,
-    );
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2] + " " + match[3],
-      };
-    }
-  }
-
-  // Format prénom simple : "Rosette : texte" ou "Consultant : texte"
-  if (format === "firstname") {
-    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s+\d)?)\s*:\s*(.+)$/u);
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-    // Aussi gérer "Clémence :" (3ème personnage qui apparaît)
-    match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+)\s+(.+)$/u);
-    if (match && knownChars.has(match[1].toUpperCase())) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2],
-      };
-    }
-  }
-
-  // Format prénom + nom composé : "Jacques Lasségué : texte", "Lucie : texte", "Jean Tourille (irrité) : texte"
-  if (format === "fullname") {
-    // Avec ou sans didascalie avant le ":"
-    match = line.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*)\s*(\([^)]+\))?\s*:\s*(.+)$/u,
-    );
-    if (match) {
-      const didascalie = match[2] ? match[2] + " " : "";
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: didascalie + match[3],
-      };
-    }
-    // Avec didascalie après le ":" : "Jacques Lasségué : (entrant) texte"
-    match = line.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+)*)\s*:\s*(\([^)]+\))\s*(.+)$/u,
-    );
-    if (match) {
-      return {
-        character: normalizeCharacterName(match[1]),
-        text: match[2] + " " + match[3],
-      };
-    }
-  }
-
-  // Formats génériques (pour tous les formats)
-
-  // Numéroté : "1. Maurice : texte"
-  match = line.match(/^(\d+)\.\s*([A-ZÀ-ÿ][A-ZÀ-ÿa-zà-ÿ\-]+)\s*:\s*(.+)$/);
+function parseColonCharacterLine(line) {
+  const match = line.match(/^([A-ZÀ-ÖØ-ß0-9\s'\-\.\+]{2,35})\s*:\s*(.*)/);
   if (match) {
-    return {
-      character: normalizeCharacterName(match[2]),
-      text: match[3],
-    };
-  }
-
-  // Nom + numéro avec espaces multiples (format colonnes) : "Répondeur 3 :     Tapez..."
-  match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿéèêë]+\s+\d)\s*:\s+(.+)$/u);
-  if (match) {
-    return {
-      character: normalizeCharacterName(match[1]),
-      text: match[2].trim(),
-    };
-  }
-
-  // Nom composé 2 mots : "La petite teigne : texte"
-  match = line.match(
-    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][a-zàâäéèêëïîôùûüÿœæç]+\s+[a-zàâäéèêëïîôùûüÿœæç]+(?:\s+[a-zàâäéèêëïîôùûüÿœæç]+)?)\s*:\s*(.+)$/,
-  );
-  if (match) {
-    return {
-      character: normalizeCharacterName(match[1]),
-      text: match[2],
-    };
-  }
-
-  // Prénom Nom mixte (fallback) : "Jacques Lasségué : texte", "Michel Rolors : texte"
-  // Deux mots max, les deux avec majuscule, pas de mots de mise en scène
-  {
-    const STAGE_WORDS = [
-      "scène",
-      "scene",
-      "acte",
-      "décor",
-      "rideau",
-      "note",
-      "fin",
-      "début",
-      "suite",
-      "tableau",
-    ];
-    const mixedMatch = line.match(
-      /^([A-ZÀ-Ÿ][a-zà-ÿ\-]+(?:\s+[A-ZÀ-Ÿ][a-zà-ÿ\-]+){1,2})\s*(?:\([^)]+\))?\s*:\s*(.+)$/u,
-    );
-    if (mixedMatch) {
-      const charName = mixedMatch[1].trim();
-      const textPart = mixedMatch[2].trim();
-      if (
-        textPart.length > 0 &&
-        !STAGE_WORDS.some((w) => charName.toLowerCase().startsWith(w))
-      ) {
-        return { character: normalizeCharacterName(charName), text: textPart };
-      }
+    const rawChar = match[1].trim();
+    const rest = match[2].trim();
+    if (ACT_REGEX.test(rawChar) || SCENE_REGEX.test(rawChar) || rawChar.startsWith('PAGE')) {
+      return null;
     }
+    return { character: rawChar, text: rest };
   }
-
-  // Nom + numéro : "Répondeur 1 : texte" ou "Policier 3 : texte"
-  match = line.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d)\s*:\s*(.+)$/u);
-  if (match) {
-    return {
-      character: normalizeCharacterName(match[1]),
-      text: match[2],
-    };
-  }
-
-  // Majuscules avec : "LE REPRÉSENTANT : texte"
-  match = line.match(
-    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\d\-']+?)\s*:\s*(.+)$/,
-  );
-  if (match) {
-    const charName = match[1].trim();
-    const textPart = match[2].trim();
-    if (textPart.length > 15 || !/^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\-]+$/.test(textPart)) {
-      return {
-        character: normalizeCharacterName(charName),
-        text: textPart,
-      };
-    }
-  }
-
-  // Majuscules avec didascalie : "PERSONNAGE (action) texte"
-  match = line.match(
-    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ\s\-']+?)\s*(\([^)]+\))\s*(.+)$/,
-  );
-  if (match) {
-    return {
-      character: normalizeCharacterName(match[1]),
-      text: match[2] + " " + match[3],
-    };
-  }
-
   return null;
 }
 
 /**
- * Détecte un changement de personnage via format tiret.
- * Après splitInlineTransitions, la ligne commence déjà par le nom du personnage.
- * Accepte les personnages connus ET les nouveaux noms qui ne sont pas des mots courants.
+ * Détermine si une ligne est un nom de personnage seul en majuscules ("IVANA" ou "LINA + AYA")
  */
-const COMMON_CAPS_EXCL = new Set([
-  "MAIS",
-  "DONC",
-  "ALORS",
-  "BIEN",
-  "VRAI",
-  "VOILÀ",
-  "VOILA",
-  "VOICI",
-  "AVANT",
-  "APRÈS",
-  "APRES",
-  "ENFIN",
-  "ENCORE",
-  "BREF",
-  "TOUT",
-  "RIEN",
-  "JAMAIS",
-  "TOUJOURS",
-  "VITE",
-  "FAUX",
-  "ICI",
-  "DIEU",
-  "SUPER",
-  "STOP",
-  "ACTE",
-  "SCENE",
-  "SCÈNE",
-  "TABLEAU",
-  "FIN",
-  "RIDEAU",
-  "PAGE",
-  "NOTE",
-  "MERCI",
-  "PARDON",
-  "JETTES",
-  "AIDE",
-  "SNCF",
-  "EDF",
-]);
+function isStandaloneCharacterLine(line) {
+  if (!line || line.length < 2 || line.length > 35) return false;
+  
+  // Doit être en majuscules
+  if (line !== line.toUpperCase()) return false;
 
-function matchInlineDash(line, knownCharacters) {
-  const match = line.match(
-    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,}(?:\s+[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{2,})?)\s*(?:\(([^)]+)\))?\s*[-–—]\s+(.{5,})$/,
-  );
-  if (!match) return null;
-  const charName = normalizeCharacterName(match[1].trim());
-  if (COMMON_CAPS_EXCL.has(charName)) return null;
-  const didascalie = match[2] ? `(${match[2]}) ` : "";
-  return { character: charName, text: didascalie + match[3] };
+  // Exclure mots-clés système / didascalies isolées
+  if (ACT_REGEX.test(line) || SCENE_REGEX.test(line) || line.startsWith('PAGE') || line === 'NOIR' || line === '(NOIR)' || line === 'FIN' || line === '(FIN)') {
+    return false;
+  }
+
+  // Ne doit pas se terminer par une ponctuation de phrase
+  if (/[\?\!\;\,\.]$/.test(line)) return false;
+
+  return true;
 }
 
 /**
- * Parsing de secours
+ * Fonction principale de parsing du texte d'un script PDF / Textuel
+ * @param {string} fullText - Le texte brut extrait du PDF
+ * @param {string} fileName - Nom du fichier
+ * @returns {Object} { title, characters, replicas, stats }
  */
-function fallbackParsing(text) {
-  const characters = new Map();
+export function parseScriptText(fullText, fileName = '') {
+  if (!fullText || typeof fullText !== 'string') {
+    return {
+      title: fileName.replace(/\.[^/.]+$|\$/, '') || 'Sans titre',
+      characters: [],
+      replicas: [],
+      stats: { charactersCount: 0, replicasCount: 0 }
+    };
+  }
+
+  const rawLines = fullText.split(/\r?\n/);
   const replicas = [];
-  const lines = text.split("\n");
+  const characterSet = new Set();
 
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.length < 10) continue;
+  let currentActTitle = null;
+  let currentSceneTitle = null;
+  let currentCharacter = null;
+  let currentReplicaText = '';
+  let currentPageNumber = 1;
+  let currentActNumber = 0;
+  let currentSceneNumber = 0;
 
-    let match;
+  rawLines.forEach((rawLine, lineIndex) => {
+    const line = cleanLine(rawLine);
+    if (!line) return;
 
-    // Pattern nom + numéro : "Répondeur 1 : texte"
-    match = trimmed.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+\s+\d)\s*:\s*(.{5,})$/u);
-    if (match) {
-      const charName = normalizeCharacterName(match[1]);
-      if (!characters.has(charName)) {
-        characters.set(charName, { name: charName });
+    // Détection de numéro de page
+    const pageMatch = line.match(/^(?:Page|\-\s*)\s*(\d+)\s*\-?$/i);
+    if (pageMatch) {
+      currentPageNumber = parseInt(pageMatch[1], 10);
+      return;
+    }
+
+    // 1. Détection "Acte X Scène Y"
+    const actSceneMatch = line.match(ACT_SCENE_INLINE_REGEX);
+    if (actSceneMatch) {
+      if (currentReplicaText && currentCharacter) {
+        pushReplica();
       }
-      replicas.push({ character: charName, text: match[2].trim() });
-      continue;
+      currentActNumber = actSceneMatch[1] ? actSceneMatch[1] : (currentActNumber + 1);
+      currentSceneNumber = actSceneMatch[2] ? actSceneMatch[2] : (currentSceneNumber + 1);
+      currentActTitle = `Acte ${currentActNumber}`;
+      const subtitle = actSceneMatch[3] ? ` : ${actSceneMatch[3].trim()}` : '';
+      currentSceneTitle = `Scène ${currentSceneNumber}${subtitle}`;
+      return;
     }
 
-    // Pattern prénom simple : "Consultant : texte"
-    match = trimmed.match(/^([A-ZÀ-Ÿ][a-zà-ÿ]+)\s*:\s*(.{5,})$/u);
-    if (match) {
-      const charName = normalizeCharacterName(match[1]);
-      const excludeWords = [
-        "ACTE",
-        "SCENE",
-        "SCÈNE",
-        "FIN",
-        "DÉBUT",
-        "RIDEAU",
-        "PAGE",
-      ];
-      if (!excludeWords.includes(charName)) {
-        if (!characters.has(charName)) {
-          characters.set(charName, { name: charName });
-        }
-        replicas.push({ character: charName, text: match[2].trim() });
-        continue;
+    // 2. Détection "Acte X" seul
+    const actMatch = line.match(ACT_REGEX);
+    if (actMatch) {
+      if (currentReplicaText && currentCharacter) {
+        pushReplica();
+      }
+      currentActNumber++;
+      currentActTitle = `Acte ${actMatch[1] || currentActNumber}`;
+      currentSceneTitle = null;
+      currentSceneNumber = 0;
+      return;
+    }
+
+    // 3. Détection "Scène Y" seul (ex: "# Scène 1" ou "Scène 2")
+    const sceneMatch = line.match(SCENE_REGEX);
+    if (sceneMatch && !parseColonCharacterLine(line)) {
+      if (currentReplicaText && currentCharacter) {
+        pushReplica();
+      }
+      currentSceneNumber++;
+      const sceneNum = sceneMatch[1] || currentSceneNumber;
+      const sceneSub = sceneMatch[2] ? ` : ${sceneMatch[2].trim()}` : '';
+      currentSceneTitle = `Scène ${sceneNum}${sceneSub}`;
+      return;
+    }
+
+    // 4. Détection Personnage avec deux-points ("SAM : Bonjour")
+    const colonChar = parseColonCharacterLine(line);
+    if (colonChar) {
+      if (currentReplicaText && currentCharacter) {
+        pushReplica();
+      }
+      currentCharacter = colonChar.character;
+      characterSet.add(currentCharacter);
+      currentReplicaText = colonChar.text;
+      return;
+    }
+
+    // 5. Détection Personnage seul en majuscules ("IVANA" ou "LINA + AYA")
+    if (isStandaloneCharacterLine(line)) {
+      if (currentReplicaText && currentCharacter) {
+        pushReplica();
+      }
+      currentCharacter = line;
+      characterSet.add(currentCharacter);
+      currentReplicaText = '';
+      return;
+    }
+
+    // 6. Continuation du texte ou didascalie/contexte
+    if (currentCharacter) {
+      if (currentReplicaText) {
+        currentReplicaText += ' ' + line;
+      } else {
+        currentReplicaText = line;
+      }
+    } else {
+      // Didascalie de décor/ambiance avant première réplique
+      if (line.startsWith('(') || line.startsWith('[')) {
+        replicas.push({
+          id: `rep-ctx-${lineIndex}`,
+          character: 'CONTEXTE',
+          character_name: 'CONTEXTE',
+          text: line,
+          act_title: currentActTitle,
+          scene_title: currentSceneTitle,
+          is_context: true,
+          page_number: currentPageNumber,
+          order_index: (replicas.length + 1) * 1000
+        });
       }
     }
-
-    // Pattern générique majuscules
-    match = trimmed.match(
-      /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ][A-ZÀ-ÿa-zà-ÿ\s\-']{1,30}?)\s*:\s*([A-Za-zÀ-ÿ«(].{10,})$/,
-    );
-    if (match) {
-      const charName = normalizeCharacterName(match[1]);
-      const text = match[2].trim();
-
-      const excludeWords = [
-        "ACTE",
-        "SCENE",
-        "SCÈNE",
-        "FIN",
-        "DÉBUT",
-        "RIDEAU",
-        "PAGE",
-      ];
-      if (excludeWords.some((w) => charName.includes(w))) continue;
-
-      if (!characters.has(charName)) {
-        characters.set(charName, { name: charName });
-      }
-      replicas.push({ character: charName, text });
-    }
-  }
-
-  if (replicas.length === 0) {
-    const narrator = "NARRATEUR";
-    characters.set(narrator, { name: narrator });
-    const paragraphs = text.split(/\n\n+/).filter((p) => p.trim().length > 30);
-    paragraphs.forEach((p) => {
-      replicas.push({ character: narrator, text: cleanReplicaText(p) });
-    });
-  }
-
-  return { characters: Array.from(characters.values()), replicas };
-}
-
-// Prénoms connus pour corriger les artefacts OCR (ex: FEMMANUELLE → EMMANUELLE)
-const ALL_PRENOMS_UPPER = [
-  "MARIE",
-  "JEANNE",
-  "ANNE",
-  "CATHERINE",
-  "FRANÇOISE",
-  "LOUISE",
-  "CLAIRE",
-  "SOPHIE",
-  "JULIE",
-  "EMMA",
-  "LÉA",
-  "LEA",
-  "MANON",
-  "CHLOÉ",
-  "CHLOE",
-  "CAMILLE",
-  "SARAH",
-  "LAURA",
-  "AUDREY",
-  "VALÉRIE",
-  "VALERIE",
-  "FABIENNE",
-  "COLETTE",
-  "SUZANNE",
-  "MONIQUE",
-  "NICOLE",
-  "SYLVIE",
-  "NATHALIE",
-  "ISABELLE",
-  "CHRISTINE",
-  "PATRICIA",
-  "MARTINE",
-  "SANDRINE",
-  "VÉRONIQUE",
-  "VERONIQUE",
-  "CÉLINE",
-  "CELINE",
-  "ROSETTE",
-  "LUCIE",
-  "CORINNE",
-  "EMMANUELLE",
-  "ÉLODIE",
-  "ELODIE",
-  "ALICE",
-  "CHARLOTTE",
-  "ÉLISE",
-  "ELISE",
-  "JEAN",
-  "PIERRE",
-  "MICHEL",
-  "JACQUES",
-  "LOUIS",
-  "HENRI",
-  "PAUL",
-  "ANDRÉ",
-  "ANDRE",
-  "MAURICE",
-  "CHRISTOPHE",
-  "PHILIPPE",
-  "ALAIN",
-  "BERNARD",
-  "FRANCOIS",
-  "RICHARD",
-  "ROBERT",
-  "DANIEL",
-  "DAVID",
-  "THOMAS",
-  "NICOLAS",
-  "JULIEN",
-];
-
-/**
- * Normalise un nom de personnage
- */
-function normalizeCharacterName(name) {
-  let normalized = name
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, " ")
-    .replace(/[:\.\-]+$/, "")
-    .trim();
-  // Normaliser les variations de ponctuation après Pr/Dr
-  normalized = normalized.replace(/^(LE\s+(?:PR|DR))[,.]?\s+/i, "$1. ");
-  // Artefact OCR : lettre isolée + espace avant nom (ex: "F EMMANUELLE" → "EMMANUELLE")
-  normalized = normalized.replace(
-    /^([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ])\s+([A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{3})/,
-    "$2",
-  );
-  // Artefact OCR : lettre isolée fusionnée sans espace (ex: "FEMMANUELLE" → "EMMANUELLE")
-  if (/^[A-ZÀÂÄÉÈÊËÏÎÔÙÛÜŸŒÆÇ]{5,}$/.test(normalized)) {
-    const withoutFirst = normalized.slice(1);
-    if (
-      ALL_PRENOMS_UPPER.some(
-        (p) =>
-          withoutFirst === p || (withoutFirst.startsWith(p) && p.length >= 4),
-      )
-    ) {
-      normalized = withoutFirst;
-    }
-  }
-  return normalized;
-}
-
-/**
- * Nettoie le texte d'une réplique
- */
-function cleanReplicaText(text) {
-  return text
-    .replace(/\s+/g, " ")
-    .replace(/^\s*[:\.\-–—]\s*/, "")
-    .trim();
-}
-
-/**
- * Détecte le genre d'un personnage
- */
-function detectGender(characterName, distribution) {
-  const name = characterName.toLowerCase();
-  const acteur = distribution.get(characterName)?.toLowerCase() || "";
-
-  if (acteur) {
-    if (PRENOMS_FEMININS.some((p) => acteur.includes(p))) return "female";
-    if (PRENOMS_MASCULINS.some((p) => acteur.includes(p))) return "male";
-  }
-
-  if (MOTS_FEMININS.some((m) => name.includes(m))) return "female";
-  if (MOTS_MASCULINS.some((m) => name.includes(m))) return "male";
-
-  const words = name.split(/\s+/);
-  for (const word of words) {
-    if (PRENOMS_FEMININS.includes(word)) return "female";
-    if (PRENOMS_MASCULINS.includes(word)) return "male";
-  }
-
-  return "unknown";
-}
-
-/**
- * Génère le texte à trous
- */
-function generateGapsText(text) {
-  return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
-    return first + "_".repeat(Math.min(rest.length, 5));
   });
+
+  if (currentReplicaText && currentCharacter) {
+    pushReplica();
+  }
+
+  function pushReplica() {
+    if (!currentReplicaText.trim()) return;
+    const isContext = currentReplicaText.trim().startsWith('(') && currentReplicaText.trim().endsWith(')');
+
+    replicas.push({
+      id: `rep-${replicas.length + 1}`,
+      character: currentCharacter,
+      character_name: currentCharacter,
+      text: currentReplicaText.trim(),
+      act_title: currentActTitle,
+      scene_title: currentSceneTitle,
+      is_context: isContext,
+      page_number: currentPageNumber,
+      order_index: (replicas.length + 1) * 1000
+    });
+
+    currentReplicaText = '';
+  }
+
+  const characters = Array.from(characterSet).map((name, idx) => ({
+    name,
+    color: getRandomColor(idx)
+  }));
+
+  const title = fileName ? fileName.replace(/\.[^/.]+$|\$/, '') : 'Sans titre';
+
+  return {
+    title,
+    characters,
+    replicas,
+    stats: {
+      charactersCount: characters.length,
+      replicasCount: replicas.length,
+      actsCount: currentActNumber,
+      scenesCount: currentSceneNumber
+    }
+  };
 }
 
-/**
- * Génère les mots d'indices
- */
-function generateCueWords(replicas, currentIndex) {
-  if (currentIndex === 0) return "";
-  const previousReplica = replicas[currentIndex - 1];
-  if (!previousReplica) return "";
-
-  const cleanedText = previousReplica.text.replace(/\([^)]+\)/g, "").trim();
-  const words = cleanedText.split(/\s+/);
-  return "..." + words.slice(-3).join(" ");
+function getRandomColor(index) {
+  const colors = [
+    '#E53E3E', '#DD6B20', '#D69E2E', '#38A169', '#319795',
+    '#3182CE', '#00B5D8', '#805AD5', '#D53F8C', '#B83280',
+  ];
+  return colors[index % colors.length];
 }
 
-export { generateGapsText, generateCueWords, detectGender };
+// Exports multiples pour compatibilité avec Upload.jsx et scriptStore.js
+export const parseScript = parseScriptText;
+export default parseScriptText;
