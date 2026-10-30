@@ -963,8 +963,18 @@ function ScriptDetail() {
                         onClick={() => {
                           setSelectedSceneKey(sceneKey);
                           setIsSceneDrawerOpen(false);
-                          const el = document.getElementById(`replica-anchor-${scene.firstReplicaId}`);
-                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                          setTimeout(() => {
+                            const el = document.getElementById(`scene-header-${scene.firstReplicaId}`) ||
+                                       document.getElementById(`replica-anchor-${scene.firstReplicaId}`);
+                            if (el) {
+                              const headerOffset = 130;
+                              const elementPosition = el.getBoundingClientRect().top + window.scrollY;
+                              window.scrollTo({
+                                top: Math.max(0, elementPosition - headerOffset),
+                                behavior: "smooth"
+                              });
+                            }
+                          }, 100);
                         }}
                         className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition flex flex-col gap-0.5 border ${
                           isSelected
@@ -1152,7 +1162,7 @@ function ScriptDetail() {
 
                       if (isNewAct || isNewScene) {
                         return (
-                          <div className="w-full my-6 text-center space-y-2 clear-both">
+                          <div id={`scene-header-${replica.id}`} className="w-full my-6 text-center space-y-2 clear-both scroll-mt-32">
                             {isNewAct && (
                               <div className="py-2 px-6 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 text-white rounded-2xl shadow-lg border border-amber-300/40 inline-block">
                                 <h2 className="text-lg sm:text-xl font-extrabold uppercase tracking-widest font-display">

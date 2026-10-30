@@ -950,10 +950,25 @@ function AudioMode() {
                         onClick={() => {
                           setSelectedSceneKey(sceneKey);
                           setIsSceneDrawerOpen(false);
-                          setCurrentIndex(0);
+                          const targetIdx = currentScript?.replicas?.findIndex(
+                            (r) => r.id === scene.firstReplicaId
+                          );
+                          if (targetIdx !== undefined && targetIdx >= 0) {
+                            setCurrentIndex(targetIdx);
+                          }
                           stop();
-                          const el = document.getElementById(`audio-replica-${scene.firstReplicaId}`);
-                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                          setTimeout(() => {
+                            const el = document.getElementById(`scene-header-${scene.firstReplicaId}`) ||
+                                       document.getElementById(`audio-replica-${scene.firstReplicaId}`);
+                            if (el) {
+                              const headerOffset = 130;
+                              const elementPosition = el.getBoundingClientRect().top + window.scrollY;
+                              window.scrollTo({
+                                top: Math.max(0, elementPosition - headerOffset),
+                                behavior: "smooth"
+                              });
+                            }
+                          }, 100);
                         }}
                         className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition flex flex-col gap-0.5 border ${
                           isSelected
@@ -1235,7 +1250,7 @@ function AudioMode() {
           return (
             <div key={replica.id}>
               {(isNewAct || isNewScene) && (
-                <div className="w-full my-6 text-center animate-fade-in clear-both">
+                <div id={`scene-header-${replica.id}`} className="w-full my-6 text-center animate-fade-in clear-both scroll-mt-32">
                   {isNewAct && (
                     <div className="py-2 px-6 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 text-white rounded-2xl shadow-lg border border-amber-300/40 inline-block mb-2">
                       <h2 className="text-lg sm:text-xl font-extrabold uppercase tracking-widest font-display">
