@@ -85,6 +85,8 @@ function ScriptDetail() {
   const [viewMode, setViewMode] = useState("full");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [selectedSceneKey, setSelectedSceneKey] = useState(null);
+  const [isSceneDrawerOpen, setIsSceneDrawerOpen] = useState(false);
   const [editingReplica, setEditingReplica] = useState(null);
   const [showOriginalFile, setShowOriginalFile] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -231,6 +233,13 @@ function ScriptDetail() {
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
+    if (selectedSceneKey) {
+      result = result.filter((r) => {
+        const key = `${r.act_title || ""}_${r.scene_title || ""}`;
+        return key === selectedSceneKey;
+      });
+    }
+
     if (searchQuery.trim()) {
       const query = normalizeStr(searchQuery.trim());
       const numMatch = query.match(/^#?\s*(\d+)$/);
@@ -264,6 +273,7 @@ function ScriptDetail() {
     currentScript?.replicas,
     currentScript?.characters,
     selectedCharacter,
+    selectedSceneKey,
     studyingGroup,
     searchQuery,
     replicaGlobalNumberMap,
@@ -842,29 +852,89 @@ function ScriptDetail() {
           </div>
         )}
 
-                {/* 📍 Sélecteur / Navigation par Scène (Sticky) */}
-        {hasScenes && (
-          <div className="sticky top-16 z-20 bg-gray-900/95 backdrop-blur-md p-3 mb-4 rounded-2xl border border-gray-800 shadow-xl flex items-center justify-between gap-2">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              📍 <span className="hidden sm:inline">Navigation par</span> Scène ({scenes.length})
+              {/* 📌 MENU FLOTTANT À GAUCHE POUR LA NAVIGATION PAR SCÈNE */}
+      {hasScenes && (
+        <>
+          {/* Bouton Onglet Flottant à Gauche */}
+          <button
+            onClick={() => setIsSceneDrawerOpen(!isSceneDrawerOpen)}
+            className="fixed left-0 top-36 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
+            title="Ouvrir le sommaire des scènes"
+          >
+            <span className="text-base">📍</span>
+            <span className="[writing-mode:vertical-lr] rotate-180 uppercase tracking-widest font-bold">
+              Scènes ({scenes.length})
             </span>
-            <select
-              onChange={(e) => {
-                if (!e.target.value) return;
-                const el = document.getElementById(e.target.value);
-                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className="bg-gray-800 text-white text-xs sm:text-sm px-3 py-1.5 rounded-xl border border-gray-700 focus:outline-none focus:border-amber-500 font-medium max-w-[220px] sm:max-w-xs truncate cursor-pointer"
-            >
-              <option value="">-- Atteindre une scène --</option>
-              {scenes.map((scene) => (
-                <option key={scene.id} value={`replica-anchor-${scene.firstReplicaId}`}>
-                  {scene.fullLabel}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
+          </button>
+
+          {/* Tiroir Latéral Rétractable */}
+          {isSceneDrawerOpen && (
+            <div className="fixed inset-0 z-50 flex">
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => setIsSceneDrawerOpen(false)}
+              />
+              <div className="relative w-72 max-w-[80vw] bg-gray-900 border-r border-gray-800 text-white p-4 flex flex-col h-full shadow-2xl z-10 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📍</span>
+                    <h3 className="font-extrabold text-gold-400 text-sm uppercase tracking-wider">
+                      Sommaire des Scènes
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsSceneDrawerOpen(false)}
+                    className="p-1 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  <button
+                    onClick={() => {
+                      setSelectedSceneKey(null);
+                      setIsSceneDrawerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between ${
+                      !selectedSceneKey
+                        ? "bg-amber-500 text-black"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    <span>📜 Pièce entière</span>
+                    <span className="text-[10px] opacity-80">{replicas.length} rép.</span>
+                  </button>
+
+                  {scenes.map((scene) => {
+                    const sceneKey = `${scene.actTitle || ""}_${scene.sceneTitle || ""}`;
+                    const isSelected = selectedSceneKey === sceneKey;
+
+                    return (
+                      <button
+                        key={scene.id}
+                        onClick={() => {
+                          setSelectedSceneKey(sceneKey);
+                          setIsSceneDrawerOpen(false);
+                          const el = document.getElementById(`replica-anchor-${scene.firstReplicaId}`);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition flex flex-col gap-0.5 border ${
+                          isSelected
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                            : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
+                        }`}
+                      >
+                        <span className="font-bold">{scene.fullLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
         {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
         <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">

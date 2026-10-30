@@ -19,7 +19,7 @@ const UPLOAD_TIMEOUT_MS = 30_000;
 export default function Upload() {
   const navigate = useNavigate();
   const { user, isPremium } = useAuthStore();
-  const { addScript, addCharacter, addReplicas, fetchScripts } = useScriptStore();
+  const { addScript, addCharacter, addReplicas, fetchScripts, fetchScript } = useScriptStore();
 
   // Mode d'importation : "scan_standard" (1er) | "file" (2e) | "scan_premium" (3e)
   const [importMode, setImportMode] = useState("scan_standard");
@@ -275,6 +275,7 @@ export default function Upload() {
           parsedReplicas: replicas,
         });
 
+        if (scriptId) { await fetchScript(scriptId); }
         navigate(`/script/${scriptId}`);
       } catch (err) {
         console.error("Erreur lors de l'importation de fichier:", err);
@@ -315,6 +316,7 @@ export default function Upload() {
           parsedReplicas: geminiResult.replicas || [],
         });
 
+        if (scriptId) { await fetchScript(scriptId); }
         navigate(`/script/${scriptId}`);
       } catch (err) {
         console.error("Erreur Scan Premium IA:", err);
@@ -368,7 +370,8 @@ export default function Upload() {
       });
 
       setShowCharModal(false);
-      navigate(`/script/${scriptId}`);
+      if (scriptId) { await fetchScript(scriptId); }
+        navigate(`/script/${scriptId}`);
     } catch (err) {
       console.error("Erreur Scan Classique:", err);
       setError("Le Scan Classique n'a pas pu extraire le texte de ce document.");
@@ -747,3 +750,5 @@ export default function Upload() {
     </div>
   );
 }
+
+

@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useScriptStore } from "../store/scriptStore";
+import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
   fetchCharacterRecordings,
