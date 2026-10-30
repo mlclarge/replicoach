@@ -16,7 +16,7 @@ export async function callTts(action, payload = {}) {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        Authorization: ,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ action, ...payload }),
     });
@@ -51,7 +51,7 @@ export async function fetchTroupeTtsAudioUrl(scriptId, replicaId) {
   try {
     const { data, error } = await supabase.storage
       .from("tts-cache")
-      .createSignedUrl(, 3600);
+      .createSignedUrl(`${scriptId}/${replicaId}.mp3`, 3600);
 
     if (!error && data?.signedUrl) {
       return { ok: true, url: data.signedUrl, cached: true };
