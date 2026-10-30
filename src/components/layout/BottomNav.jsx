@@ -4,8 +4,7 @@ export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const handleOpenTutorial = () => {
-    localStorage.removeItem("replicoach-onboarding-seen");
+  const handleTutoConsignesClick = () => {
     window.dispatchEvent(new CustomEvent("open-onboarding"));
   };
 
@@ -72,9 +71,10 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
         </NavLink>
 
-        {/* 4. Consignes */}
+        {/* 4. Fusion Tuto / Consignes */}
         <NavLink
           to="/?tab=director"
+          onClick={handleTutoConsignesClick}
           className={() =>
             `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
               isDirectorActive
@@ -82,9 +82,10 @@ export default function BottomNav() {
                 : "text-white font-medium hover:text-amber-300"
             }`
           }
+          title="Consignes et Tutoriel"
         >
           <span className="text-base sm:text-lg">📁</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Consignes</span>
+          <span className="text-[10px] sm:text-xs text-white font-medium">Tuto/Consignes</span>
         </NavLink>
 
         {/* 5. Partagés */}
@@ -101,16 +102,6 @@ export default function BottomNav() {
           <span className="text-base sm:text-lg">👥</span>
           <span className="text-[10px] sm:text-xs text-white font-medium">Partagés</span>
         </NavLink>
-
-        {/* 6. Tutoriel */}
-        <button
-          onClick={handleOpenTutorial}
-          className="flex flex-col items-center py-1 px-2 rounded-xl text-white font-medium hover:text-amber-300 transition text-center"
-          title="Accéder au tutoriel"
-        >
-          <span className="text-base sm:text-lg">📖</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Tutoriel</span>
-        </button>
       </div>
     </nav>
   );
