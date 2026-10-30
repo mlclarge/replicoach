@@ -2,14 +2,25 @@ import { useRef, useState } from "react";
 import { TTS_VOICES, ttsSamplePath } from "../lib/ttsVoices";
 
 /**
- * Choix de la voix Premium d'un personnage.
- * Une fois verrouillée, la voix ne peut plus être changée pour ce script.
+ * Choix de la voix Premium Google Cloud d'un personnage (10 Féminines / 5 Masculines).
+ * Permet au metteur en scène (ou créateur Premium) de sélectionner et verrouiller
+ * la voix HD unique de chaque personnage pour tout le script.
  */
 function PremiumVoicePicker({ character, lockedVoiceId, onLock }) {
   const [selected, setSelected] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showAllGenders, setShowAllGenders] = useState(false);
   const sampleRef = useRef(null);
+
+  // Détection du genre du personnage
+  const charGender = character?.gender || "female";
+
+  // Filtrage intelligent : Voix correspondant au genre par défaut (10F ou 5M), ou toutes si activé
+  const filteredVoices = TTS_VOICES.filter((voice) => {
+    if (showAllGenders) return true;
+    return voice.gender === charGender;
+  });
 
   const playSample = (voiceId) => {
     if (sampleRef.current) sampleRef.current.pause();
@@ -20,33 +31,56 @@ function PremiumVoicePicker({ character, lockedVoiceId, onLock }) {
 
   const confirmLock = async () => {
     if (!selected) return;
-    const label = TTS_VOICES.find((v) => v.id === selected)?.label;
+    const voiceObj = TTS_VOICES.find((v) => v.id === selected);
+    const label = voiceObj?.label || selected;
     const ok = window.confirm(
-      `Verrouiller la voix « ${label} » pour ${character.name} ?\n\nCe choix est définitif pour ce script : il ne pourra plus être modifié.`
+      
     );
     if (!ok) return;
     setSaving(true);
     setError("");
     const result = await onLock(character.id, selected);
-    if (!result.ok) setError(result.message);
+    if (!result.ok) setError(result.message || "Erreur lors du verrouillage");
     setSaving(false);
   };
 
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        <span
-          className="w-3 h-3 rounded-full flex-shrink-0"
-          style={{ backgroundColor: character.color }}
-        />
-        <span className="text-gray-700 text-sm font-semibold truncate">{character.name}</span>
-        {lockedVoiceId && <span className="text-xs text-green-700">🔒 voix verrouillée</span>}
+    <div className="space-y-2 p-3 bg-white/90 rounded-xl border border-amber-200 shadow-sm">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-100 pb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <span
+            className="w-3.5 h-3.5 rounded-full flex-shrink-0 shadow-xs"
+            style={{ backgroundColor: character.color || "#D97706" }}
+          />
+          <span className="text-gray-900 text-xs sm:text-sm font-extrabold truncate">
+            {character.name}
+          </span>
+          <span className="text-[10px] px-2 py-0.5 rounded-full font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300">
+            {charGender === "female" ? "♀ Rôle Féminin" : "♂ Rôle Masculin"}
+          </span>
+        </div>
+
+        {lockedVoiceId ? (
+          <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center gap-1 flex-shrink-0">
+            🔒 Voix verrouillée
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowAllGenders(!showAllGenders)}
+            className="text-[10px] text-gray-500 hover:text-amber-800 font-semibold underline flex-shrink-0"
+          >
+            {showAllGenders ? "Filtrer par genre" : "Voir toutes les 15 voix"}
+          </button>
+        )}
       </div>
-      <div className="flex flex-wrap gap-1">
-        {TTS_VOICES.map((voice) => {
+
+      <div className="flex flex-wrap gap-1.5 pt-1">
+        {filteredVoices.map((voice) => {
           const isLocked = lockedVoiceId === voice.id;
           const disabledByLock = !!lockedVoiceId && !isLocked;
           const isSelected = !lockedVoiceId && selected === voice.id;
+
           return (
             <button
               key={voice.id}
@@ -55,36 +89,35 @@ function PremiumVoicePicker({ character, lockedVoiceId, onLock }) {
                 playSample(voice.id);
                 if (!lockedVoiceId) setSelected(voice.id);
               }}
-              className={`px-2 py-1 rounded-full text-xs border transition ${
-                isLocked
-                  ? "bg-green-100 border-green-400 text-green-800 font-bold"
-                  : disabledByLock
-                    ? "bg-gray-100 border-gray-200 text-gray-400"
-                    : isSelected
-                      ? "bg-purple-100 border-purple-400 text-purple-800 font-bold"
-                      : "bg-white border-gray-300 text-gray-700"
-              }`}
-              title="Écouter l'échantillon"
+              className={}
+              title="Écouter l'échantillon audio HD"
             >
-              ▶ {voice.label} {voice.gender === "female" ? "♀" : "♂"}
+              <span className="text-[10px]">▶</span>
+              <span>{voice.label}</span>
+              <span className="text-[10px] opacity-75">{voice.gender === "female" ? "♀" : "♂"}</span>
             </button>
           );
         })}
       </div>
+
       {!lockedVoiceId && (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-100">
           <button
             type="button"
             disabled={!selected || saving}
             onClick={confirmLock}
-            className="px-3 py-1 rounded-lg text-xs font-semibold bg-purple-600 text-white disabled:opacity-40"
+            className="px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-40 transition shadow-md flex items-center gap-1.5"
           >
-            {saving ? "…" : "Valider et verrouiller"}
+            <span>🔒</span>
+            <span>{saving ? "Enregistrement..." : "Valider & Verrouiller la voix"}</span>
           </button>
-          <span className="text-xs text-gray-500">Choix définitif pour ce script.</span>
+          <span className="text-[10px] text-gray-500 italic">
+            Verrouillage définitif pour cette pièce
+          </span>
         </div>
       )}
-      {error && <p className="text-xs text-red-600">{error}</p>}
+
+      {error && <p className="text-xs text-red-600 font-bold mt-1">⚠️ {error}</p>}
     </div>
   );
 }

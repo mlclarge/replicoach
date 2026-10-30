@@ -12,6 +12,7 @@ import {
   fetchTtsStatus,
   lockTtsVoice,
   fetchTtsAudioUrl,
+  fetchTroupeTtsAudioUrl,
 } from "../lib/premiumTts";
 
 const MALE_NAMES = [
@@ -24,6 +25,30 @@ const FEMALE_NAMES = [
   "valérie", "fabienne", "audrey", "marie", "anne", "sophie", "christine",
   "nathalie", "isabelle", "catherine", "sylvie", "martine", "françoise",
   "claire", "julie", "céline", "amavi", "laura", "emma", "léa", "sarah",
+];
+
+
+// 👩 10 Profils Vocaux Féminins Locaux (Combinaison unique Voix + Pitch + Rythme)
+const LOCAL_FEMALE_PROFILES = [
+  { id: "f1", label: "Femme 1 (Aiguë & Dynamique)", pitch: 1.35, rateMul: 1.05 },
+  { id: "f2", label: "Femme 2 (Grave & Posée)", pitch: 0.85, rateMul: 0.92 },
+  { id: "f3", label: "Femme 3 (Médium & Naturelle)", pitch: 1.05, rateMul: 1.0 },
+  { id: "f4", label: "Femme 4 (Aiguë & Rapide)", pitch: 1.45, rateMul: 1.15 },
+  { id: "f5", label: "Femme 5 (Douce & Lente)", pitch: 0.95, rateMul: 0.88 },
+  { id: "f6", label: "Femme 6 (Théâtrale Expressive)", pitch: 1.25, rateMul: 0.95 },
+  { id: "f7", label: "Femme 7 (Très Aiguë & Vive)", pitch: 1.6, rateMul: 1.1 },
+  { id: "f8", label: "Femme 8 (Chaleureuse Médium)", pitch: 0.9, rateMul: 0.98 },
+  { id: "f9", label: "Femme 9 (Dynamique Aiguë)", pitch: 1.3, rateMul: 1.12 },
+  { id: "f10", label: "Femme 10 (Sérieuse & Posée)", pitch: 0.8, rateMul: 0.9 },
+];
+
+// 👨 5 Profils Vocaux Masculins Locaux (Combinaison unique Voix + Pitch + Rythme)
+const LOCAL_MALE_PROFILES = [
+  { id: "m1", label: "Homme 1 (Grave & Clair)", pitch: 0.65, rateMul: 0.95 },
+  { id: "m2", label: "Homme 2 (Médium Dynamique)", pitch: 0.95, rateMul: 1.05 },
+  { id: "m3", label: "Homme 3 (Très Grave Théâtral)", pitch: 0.5, rateMul: 0.9 },
+  { id: "m4", label: "Homme 4 (Jeune & Rythmé)", pitch: 1.1, rateMul: 1.12 },
+  { id: "m5", label: "Homme 5 (Chaleureux & Posé)", pitch: 0.75, rateMul: 0.92 },
 ];
 
 function detectGender(name) {
@@ -437,12 +462,16 @@ function AudioMode() {
 
       utterance.lang = "fr-FR";
 
+      // Sélection du profil acoustique local (10F / 5M)
+      const charIndex = currentScript?.characters?.findIndex((c) => c.id === characterId) || 0;
       if (gender === "female") {
-        utterance.pitch = femalePitch;
-        utterance.rate = rate * 1.05;
+        const profile = LOCAL_FEMALE_PROFILES[charIndex % LOCAL_FEMALE_PROFILES.length];
+        utterance.pitch = profile.pitch;
+        utterance.rate = rate * profile.rateMul;
       } else {
-        utterance.pitch = malePitch;
-        utterance.rate = rate * 0.95;
+        const profile = LOCAL_MALE_PROFILES[charIndex % LOCAL_MALE_PROFILES.length];
+        utterance.pitch = profile.pitch;
+        utterance.rate = rate * profile.rateMul;
       }
 
       utterance.onend = resolve;
@@ -513,12 +542,13 @@ function AudioMode() {
     }
   };
 
-  // Google Cloud TTS (Premium) avec Cache et Préchargement
+  // Google Cloud TTS (Premium & Cache Troupe) avec Préchargement
   const speakPremium = async (replicaId) => {
     let cached = ttsCacheRef.current[replicaId];
 
     if (!cached) {
-      const res = await fetchTtsAudioUrl(id, replicaId);
+      // Pour les membres de la troupe (Accès Standard), tente d'abord la récupération en cache
+      const res = await fetchTroupeTtsAudioUrl(id, replicaId);
       if (!res.ok) {
         setPremiumNotice(
           "Veuillez vérifier vos voix Premium verrouillées pour ce script."
@@ -580,20 +610,14 @@ function AudioMode() {
       return await speakRecorded(characterId);
     }
 
-    if (isPremium) {
-      if (replicaId && premiumLocks[characterId]) {
-        // Lancé en arrière-plan : Précharger la réplique suivante immédiatement
-        if (nextReplica && premiumLocks[nextReplica.character_id]) {
-          preloadNextTts(nextReplica);
-        }
-
-        const played = await speakPremium(replicaId);
-        if (played) return;
+    // Synergie Troupe & Premium : Si une voix est verrouillée pour ce personnage (par le metteur en scène),
+    // lit le fichier audio HD en cache, même pour un comédien au statut Standard
+    if (replicaId && premiumLocks[characterId]) {
+      if (nextReplica && premiumLocks[nextReplica.character_id]) {
+        preloadNextTts(nextReplica);
       }
-      setPremiumNotice(
-        "Veuillez sélectionner et verrouiller une voix Premium pour ce personnage."
-      );
-      return;
+      const played = await speakPremium(replicaId);
+      if (played) return;
     }
 
     return await speakSynth(cleanedForDecision, characterId);
@@ -1204,7 +1228,7 @@ function AudioMode() {
                     </div>
                   )}
                   {isNewScene && (
-                    <div>
+                    <div id={}>
                       <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900 px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md inline-block">
                         🎭 {replica.scene_title}
                       </h3>
