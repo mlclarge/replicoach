@@ -16,7 +16,7 @@ export async function callTts(action, payload = {}) {
       cache: "no-store",
       headers: {
         "Content-Type": "application/json",
-        Authorization: "Bearer " + token,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ action, ...payload }),
     });
@@ -33,22 +33,6 @@ export async function callTts(action, payload = {}) {
 // Interroge le statut des voix verrouillées et du quota mensuel
 export const fetchTtsStatus = (scriptId) => callTts("status", { scriptId });
 
-// Récupère les verrous de voix directement depuis Supabase (Fallback pour membres gratuits / Troupe)
-export async function fetchScriptVoiceLocks(scriptId) {
-  try {
-    const { data, error } = await supabase
-      .from("tts_voice_locks")
-      .select("character_id, voice_id")
-      .eq("script_id", scriptId);
-    if (!error && data) {
-      return Object.fromEntries(data.map((l) => [l.character_id, l.voice_id]));
-    }
-  } catch (e) {
-    console.warn("Erreur chargement verrous voix:", e);
-  }
-  return {};
-}
-
 // Verrouille la voix Google Cloud HD choisie pour un personnage
 export const lockTtsVoice = (scriptId, characterId, voiceId) =>
   callTts("lock", { scriptId, characterId, voiceId });
@@ -59,27 +43,18 @@ export const fetchTtsAudioUrl = (scriptId, replicaId) =>
 
 // Récupère l'audio pré-généré en cache pour les membres de la troupe (Accès Standard / Gratuit)
 export async function fetchTroupeTtsAudioUrl(scriptId, replicaId) {
-  // 1. Si l'utilisateur est Premium, tenter via l'API serveur
+  // Essaie d'abord via l'API standard tts
   const res = await fetchTtsAudioUrl(scriptId, replicaId);
-  if (res && res.ok) return res;
+  if (res.ok) return res;
 
-  // 2. Fallback Troupe : recherche directe dans la table tts_audio_cache de Supabase
+  // Fallback : recherche directe dans le stockage Supabase si la pièce est partagée dans la troupe
   try {
-    const { data: cachedRow } = await supabase
-      .from("tts_audio_cache")
-      .select("storage_path")
-      .eq("script_id", scriptId)
-      .eq("replica_id", replicaId)
-      .maybeSingle();
+    const { data, error } = await supabase.storage
+      .from("tts-cache")
+      .createSignedUrl(`${scriptId}/${replicaId}.mp3`, 3600);
 
-    if (cachedRow?.storage_path) {
-      const { data, error } = await supabase.storage
-        .from("tts-cache")
-        .createSignedUrl(cachedRow.storage_path, 3600);
-
-      if (!error && data?.signedUrl) {
-        return { ok: true, url: data.signedUrl, cached: true };
-      }
+    if (!error && data?.signedUrl) {
+      return { ok: true, url: data.signedUrl, cached: true };
     }
   } catch (e) {
     console.warn("Erreur récupération cache troupe:", e);
