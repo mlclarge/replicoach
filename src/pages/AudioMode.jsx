@@ -805,6 +805,28 @@ function AudioMode() {
     );
   };
 
+  const replicas = useMemo(() => {
+    return currentScript?.replicas || [];
+  }, [currentScript]);
+
+  const characters = useMemo(() => {
+    return currentScript?.characters || [];
+  }, [currentScript]);
+
+  // 📍 Extraction des scènes (Hook exécuté TOUJOURS avant tout retour conditionnel)
+  const { hasScenes, scenes } = useMemo(() => {
+    return extractScenes(replicas);
+  }, [replicas]);
+
+  // 📍 Répliques filtrées selon la scène sélectionnée (Hook exécuté TOUJOURS)
+  const displayReplicas = useMemo(() => {
+    if (!selectedSceneKey) return replicas;
+    return replicas.filter((r) => {
+      const key = `${r.act_title || ""}_${r.scene_title || ""}`;
+      return key === selectedSceneKey;
+    });
+  }, [replicas, selectedSceneKey]);
+
   if (loading || !currentScript) {
     return (
       <div className="flex justify-center py-12 bg-amber-50 min-h-screen">
@@ -813,23 +835,9 @@ function AudioMode() {
     );
   }
 
-  const { title, characters = [], replicas = [] } = currentScript;
-
-  // 📍 Extraction des scènes
-  const { hasScenes, scenes } = useMemo(() => {
-    return extractScenes(replicas || []);
-  }, [replicas]);
-
-  // 📍 Répliques filtrées selon la scène sélectionnée
-  const displayReplicas = useMemo(() => {
-    if (!selectedSceneKey) return replicas || [];
-    return (replicas || []).filter((r) => {
-      const key = `${r.act_title || ""}_${r.scene_title || ""}`;
-      return key === selectedSceneKey;
-    });
-  }, [replicas, selectedSceneKey]);
+  const { title } = currentScript;
   const progress =
-    replicas.length > 0 ? ((currentIndex + 1) / replicas.length) * 100 : 0;
+    displayReplicas.length > 0 ? ((currentIndex + 1) / displayReplicas.length) * 100 : 0;
 
   const characterPositions = {};
   characters.forEach((char, index) => {
