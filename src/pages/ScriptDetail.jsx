@@ -858,7 +858,7 @@ function ScriptDetail() {
           {/* Bouton Onglet Flottant à Gauche */}
           <button
             onClick={() => setIsSceneDrawerOpen(!isSceneDrawerOpen)}
-            className="fixed left-0 top-36 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
+            className="fixed left-0 bottom-28 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
             title="Ouvrir le sommaire des scènes"
           >
             <span className="text-base">📍</span>
