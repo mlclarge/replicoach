@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
-import { useScriptStore } from "../store/scriptStore";
+import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
@@ -118,6 +118,11 @@ function ScriptDetail() {
 
   // État pour le Paywall Premium Coach IA
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+
+  // Extraction ordonnée des actes et scènes du script
+  const { hasScenes, scenes } = useMemo(() => {
+    return extractScenes(currentScript?.replicas || []);
+  }, [currentScript?.replicas]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -837,7 +842,31 @@ function ScriptDetail() {
           </div>
         )}
 
-                {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
+                {/* 📍 Sélecteur / Navigation par Scène (Sticky) */}
+        {hasScenes && (
+          <div className="sticky top-16 z-20 bg-gray-900/95 backdrop-blur-md p-3 mb-4 rounded-2xl border border-gray-800 shadow-xl flex items-center justify-between gap-2">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              📍 <span className="hidden sm:inline">Navigation par</span> Scène ({scenes.length})
+            </span>
+            <select
+              onChange={(e) => {
+                if (!e.target.value) return;
+                const el = document.getElementById(e.target.value);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="bg-gray-800 text-white text-xs sm:text-sm px-3 py-1.5 rounded-xl border border-gray-700 focus:outline-none focus:border-amber-500 font-medium max-w-[220px] sm:max-w-xs truncate cursor-pointer"
+            >
+              <option value="">-- Atteindre une scène --</option>
+              {scenes.map((scene) => (
+                <option key={scene.id} value={`replica-anchor-${scene.firstReplicaId}`}>
+                  {scene.fullLabel}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
         <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
           <div className="relative flex-1">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
@@ -998,6 +1027,34 @@ function ScriptDetail() {
 
                 return (
                   <div key={replica.id} id={`replica-anchor-${replica.id}`}>
+                    {/* Détection et affichage des bandeaux d'Acte et de Scène */}
+                    {(() => {
+                      const prevReplica = index > 0 ? filteredReplicas[index - 1] : null;
+                      const isNewAct = replica.act_title && replica.act_title !== prevReplica?.act_title;
+                      const isNewScene = replica.scene_title && replica.scene_title !== prevReplica?.scene_title;
+
+                      if (isNewAct || isNewScene) {
+                        return (
+                          <div className="w-full my-6 text-center space-y-2 clear-both">
+                            {isNewAct && (
+                              <div className="py-2 px-6 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 text-white rounded-2xl shadow-lg border border-amber-300/40 inline-block">
+                                <h2 className="text-lg sm:text-xl font-extrabold uppercase tracking-widest font-display">
+                                  {replica.act_title}
+                                </h2>
+                              </div>
+                            )}
+                            {isNewScene && (
+                              <div>
+                                <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900/90 inline-block px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md">
+                                  🎭 {replica.scene_title}
+                                </h3>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
                     {editMode && index === 0 && (
                       <button
                         onClick={() => {
