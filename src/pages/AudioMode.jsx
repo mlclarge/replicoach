@@ -10,6 +10,7 @@ import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import {
   fetchTtsStatus,
+  fetchScriptVoiceLocks,
   lockTtsVoice,
   fetchTtsAudioUrl,
   fetchTroupeTtsAudioUrl,
@@ -170,15 +171,30 @@ function AudioMode() {
   // 🚀 CACHE & PRÉCHARGEMENT AUDIO PREMIUM (Optimisation latence entre répliques)
   const ttsCacheRef = useRef({}); // Cache : { [replicaId]: { url, audio, usage } }
 
-  // Charger le statut Premium
+  // Charger le statut Premium et/ou les verrous de voix du script (Troupe)
   useEffect(() => {
-    if (!isPremium || !id) return;
+    if (!id) return;
     let cancelled = false;
-    fetchTtsStatus(id).then((res) => {
-      if (cancelled || !res.ok) return;
-      setPremiumLocks(res.locks || {});
-      setTtsUsage(res.usage || null);
-    });
+
+    async function loadVoiceLocks() {
+      if (isPremium) {
+        const res = await fetchTtsStatus(id);
+        if (!cancelled && res.ok) {
+          setPremiumLocks(res.locks || {});
+          setTtsUsage(res.usage || null);
+          return;
+        }
+      }
+      // Pour les comptes Standard / Gratuit (ou si la requête serveur échoue) :
+      // Récupérer les voix verrouillées par le metteur en scène directement depuis Supabase
+      const locks = await fetchScriptVoiceLocks(id);
+      if (!cancelled) {
+        setPremiumLocks(locks || {});
+      }
+    }
+
+    loadVoiceLocks();
+
     return () => {
       cancelled = true;
     };
@@ -530,8 +546,8 @@ function AudioMode() {
     if (!nextReplica || ttsCacheRef.current[nextReplica.id]) return;
 
     try {
-      const res = await fetchTtsAudioUrl(id, nextReplica.id);
-      if (res.ok && res.url) {
+      let res = await fetchTroupeTtsAudioUrl(id, nextReplica.id);
+      if (res && res.ok && res.url) {
         const audio = new Audio();
         audio.preload = "auto";
         audio.src = res.url;
