@@ -107,6 +107,7 @@ function ScriptDetail() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [showExerciseMenu, setShowExerciseMenu] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [newTitle, setNewTitle] = useState("");
 
@@ -646,16 +647,62 @@ function ScriptDetail() {
               {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Bouton principal S'enregistrer / Écouter */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Bouton Mode Audio (Optimisé mobile) */}
             <Link
               to={`/script/${id}/audio`}
-              className="px-4 py-2.5 bg-gradient-to-r from-gold-400 via-gold-500 to-amber-500 hover:from-gold-300 hover:to-amber-400 text-black font-extrabold text-sm sm:text-base rounded-xl shadow-lg border-2 border-gold-300 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2"
+              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-gold-400 via-gold-500 to-amber-500 hover:from-gold-300 hover:to-amber-400 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-lg border-2 border-gold-300 transition flex items-center gap-1.5 active:scale-95"
               title="Mode Audio - S'enregistrer & Écouter"
             >
-              <span className="text-xl">🎙️</span>
-              <span className="font-extrabold tracking-tight">S'enregistrer / Écouter</span>
+              <span className="text-lg sm:text-xl">🎙️</span>
+              <span className="hidden sm:inline font-extrabold tracking-tight">S'enregistrer / Écouter</span>
+              <span className="sm:hidden font-extrabold">Audio</span>
             </Link>
+
+            {/* Bouton + Ajouter avec Menu Déroulant */}
+            <div className="relative">
+              <button
+                onClick={() => setShowAddDropdown(!showAddDropdown)}
+                className="px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg border border-emerald-400 transition flex items-center gap-1.5 active:scale-95"
+                title="Ajouter du contenu"
+              >
+                <span>➕</span>
+                <span className="hidden sm:inline">Ajouter</span>
+                <span className="text-[10px]">{showAddDropdown ? "▲" : "▼"}</span>
+              </button>
+
+              {showAddDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1 animate-fade-in">
+                  <button
+                    onClick={() => {
+                      setShowAddReplica(true);
+                      setShowAddDropdown(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-green-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
+                  >
+                    💬 Ajouter réplique
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddCharacter(true);
+                      setShowAddDropdown(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-purple-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
+                  >
+                    👤 Ajouter personnage
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowAddNote({ afterReplicaId: null });
+                      setShowAddDropdown(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-amber-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
+                  >
+                    📝 Ajouter note
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* Menu des options secondaires */}
             <div className="relative">
@@ -858,7 +905,7 @@ function ScriptDetail() {
           {/* Bouton Onglet Flottant à Gauche */}
           <button
             onClick={() => setIsSceneDrawerOpen(!isSceneDrawerOpen)}
-            className="fixed left-0 bottom-28 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
+            className="fixed left-0 top-36 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
             title="Ouvrir le sommaire des scènes"
           >
             <span className="text-base">📍</span>
@@ -1189,12 +1236,7 @@ function ScriptDetail() {
         )}
       </div>
 
-      <FloatingActionMenu
-        onAddNote={() => setShowAddNote({ afterReplicaId: null })}
-        onAddCharacter={() => setShowAddCharacter(true)}
-        onAddReplica={() => setShowAddReplica(true)}
-        audioLink={`/script/${id}/audio`}
-      />
+
 
       {editingReplica && (
         <EditReplicaModal

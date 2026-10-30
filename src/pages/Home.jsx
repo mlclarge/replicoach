@@ -41,7 +41,6 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
 
 function DirectorNotesSection({
@@ -897,7 +896,7 @@ export default function Home() {
         </div>
       )}
 
-      <FloatingActionButton />
+      
     </div>
   );
 }
@@ -1058,3 +1057,4 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
     </div>
   );
 }
+
