@@ -96,9 +96,9 @@ function AudioMode() {
   const [waitingForClick, setWaitingForClick] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // 📍 Filtrage par Scène
+  // 📍 Filtrage par Scène + Tiroir Flottant à Gauche
   const [selectedSceneKey, setSelectedSceneKey] = useState(null);
-  const [showSceneList, setShowSceneList] = useState(false);
+  const [isSceneDrawerOpen, setIsSceneDrawerOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
@@ -207,7 +207,95 @@ function AudioMode() {
   const progress = activeReplicas.length > 0 ? ((currentIndex + 1) / activeReplicas.length) * 100 : 0;
 
   return (
-    <div className="min-h-screen bg-amber-50/60 pb-56 w-full">
+    <div className="min-h-screen bg-amber-50/60 pb-56 w-full relative">
+      {/* 📌 MENU FLOTTANT À GAUCHE POUR LA NAVIGATION PAR SCÈNE (IDENTIQUE À SCRIPT DETAIL) */}
+      {hasScenes && (
+        <>
+          {/* Bouton Onglet Flottant à Gauche */}
+          <button
+            onClick={() => setIsSceneDrawerOpen(!isSceneDrawerOpen)}
+            className="fixed left-0 top-36 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
+            title="Ouvrir le sommaire des scènes"
+          >
+            <span className="text-base">📍</span>
+            <span className="[writing-mode:vertical-lr] rotate-180 uppercase tracking-widest font-bold">
+              Scènes ({scenes.length})
+            </span>
+          </button>
+
+          {/* Tiroir Latéral Rétractable */}
+          {isSceneDrawerOpen && (
+            <div className="fixed inset-0 z-50 flex">
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => setIsSceneDrawerOpen(false)}
+              />
+              <div className="relative w-72 max-w-[80vw] bg-gray-900 border-r border-gray-800 text-white p-4 flex flex-col h-full shadow-2xl z-10 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📍</span>
+                    <h3 className="font-extrabold text-gold-400 text-sm uppercase tracking-wider">
+                      Sommaire des Scènes
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsSceneDrawerOpen(false)}
+                    className="p-1 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  <button
+                    onClick={() => {
+                      setSelectedSceneKey(null);
+                      setCurrentIndex(0);
+                      setIsSceneDrawerOpen(false);
+                      stop();
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition flex items-center justify-between ${
+                      !selectedSceneKey
+                        ? "bg-amber-500 text-black"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    <span>📜 Pièce entière</span>
+                    <span className="text-[10px] opacity-80">{replicas.length} rép.</span>
+                  </button>
+
+                  {scenes.map((scene) => {
+                    const sceneKey = `${scene.actTitle || ""}_${scene.sceneTitle || ""}`;
+                    const isSelected = selectedSceneKey === sceneKey;
+
+                    return (
+                      <button
+                        key={scene.id}
+                        onClick={() => {
+                          setSelectedSceneKey(sceneKey);
+                          setCurrentIndex(0);
+                          setIsSceneDrawerOpen(false);
+                          stop();
+                          const el = document.getElementById(`audio-replica-${scene.firstReplicaId}`);
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition flex flex-col gap-0.5 border ${
+                          isSelected
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                            : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
+                        }`}
+                      >
+                        <span className="font-bold">{scene.fullLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
       {/* Header */}
       <div className="bg-gradient-to-b from-primary-800 to-primary-900 p-4 shadow-lg sticky top-0 z-30">
         <div className="flex items-center justify-between gap-3 w-full max-w-7xl mx-auto">
@@ -229,31 +317,6 @@ function AudioMode() {
           </button>
         </div>
 
-        {/* 📍 BLOC SELECTION DE SCENE HAUTE VISIBILITE */}
-        {hasScenes && (
-          <div className="mt-3 w-full max-w-7xl mx-auto bg-gray-900/90 p-2.5 rounded-xl border border-amber-500/50 flex items-center justify-between gap-2">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1">
-              📍 Scène ({scenes.length}) :
-            </span>
-            <select
-              value={selectedSceneKey || ""}
-              onChange={(e) => {
-                setSelectedSceneKey(e.target.value || null);
-                setCurrentIndex(0);
-                stop();
-              }}
-              className="bg-gray-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-gray-700 focus:outline-none focus:border-amber-400 flex-1 max-w-xs"
-            >
-              <option value="">📜 Toute la pièce ({replicas.length} répliques)</option>
-              {scenes.map((s) => (
-                <option key={s.id} value={`${s.actTitle || ""}_${s.sceneTitle || ""}`}>
-                  {s.fullLabel}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
         <div className="mt-2 w-full max-w-7xl mx-auto">
           <div className="h-1.5 bg-white/20 rounded-full overflow-hidden">
             <div className="h-full bg-gold-500 transition-all duration-300" style={{ width: `${progress}%` }} />
@@ -274,7 +337,7 @@ function AudioMode() {
           const isNewScene = replica.scene_title && replica.scene_title !== prevReplica?.scene_title;
 
           return (
-            <div key={replica.id}>
+            <div key={replica.id} id={`audio-replica-${replica.id}`}>
               {(isNewAct || isNewScene) && (
                 <div className="w-full my-4 text-center">
                   {isNewAct && (
