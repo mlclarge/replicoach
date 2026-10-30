@@ -3,13 +3,22 @@
   "short_name": "RépliCoach",
   "description": "Mémorisez vos répliques facilement - Application pour comédiens",
   "start_url": "/",
-  "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#7c1d3e",
-  "orientation": "portrait",
   "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "fullscreen",
+    "minimal-ui"
+  ],
+  "background_color": "#1a1a2e",
+  "theme_color": "#661730",
+  "orientation": "portrait",
   "lang": "fr-FR",
-  "categories": ["education", "entertainment", "productivity"],
+  "categories": [
+    "education",
+    "entertainment",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/icon-72x72.png",
@@ -58,22 +67,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable any"
-    }
-  ],
-  "shortcuts": [
-    {
-      "name": "Mes textes",
-      "short_name": "Textes",
-      "description": "Voir mes textes",
-      "url": "/",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
-    },
-    {
-      "name": "Textes partagés",
-      "short_name": "Partagés",
-      "description": "Voir les textes partagés",
-      "url": "/shared",
-      "icons": [{ "src": "/icons/icon-96x96.png", "sizes": "96x96" }]
     }
   ]
 }

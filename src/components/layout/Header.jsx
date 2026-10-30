@@ -17,7 +17,6 @@ export default function Header() {
 
   return (
     <header className="bg-gradient-to-r from-primary-900 via-primary-800 to-primary-950 text-white px-4 py-3 flex items-center justify-between relative shadow-lg border-b border-primary-700/50 z-40">
-      {/* Logo cliquable vers l'accueil avec sous-titre */}
       <Link to="/" className="hover:opacity-90 transition active:scale-95 flex items-center gap-2.5">
         <span className="text-2xl sm:text-3xl">🎭</span>
         <div>
@@ -30,9 +29,7 @@ export default function Header() {
         </div>
       </Link>
 
-      {/* Profil connecté */}
       <div className="flex items-center gap-2 relative">
-        {/* Avatar Profil */}
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-gray-950 font-extrabold flex items-center justify-center hover:scale-105 transition active:scale-95 shadow-md border-2 border-amber-300"
@@ -41,7 +38,6 @@ export default function Header() {
           {initials}
         </button>
 
-        {/* Menu déroulant Profil / Déconnexion */}
         {showMenu && (
           <>
             <div
@@ -54,7 +50,6 @@ export default function Header() {
                 <p className="text-xs font-bold text-white truncate">{user?.email}</p>
               </div>
 
-              {/* Lien vers la page Profil */}
               <Link
                 to="/profile"
                 onClick={() => setShowMenu(false)}
@@ -63,7 +58,6 @@ export default function Header() {
                 <span>👤</span> Mon Profil
               </Link>
 
-              {/* Se déconnecter */}
               <button
                 onClick={handleSignOut}
                 className="w-full text-left px-4 py-2.5 text-xs font-bold text-rose-400 hover:bg-rose-950/40 flex items-center gap-2 transition border-t border-gray-800"
