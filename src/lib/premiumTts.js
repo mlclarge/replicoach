@@ -33,6 +33,21 @@ export async function callTts(action, payload = {}) {
 // Interroge le statut des voix verrouillées et du quota mensuel
 export const fetchTtsStatus = (scriptId) => callTts("status", { scriptId });
 
+// Récupère les verrous de voix directement dans la table Supabase (accessible aux membres de la troupe/comédiens)
+export async function fetchScriptVoiceLocks(scriptId) {
+  if (!scriptId) return {};
+  try {
+    const { data, error } = await supabase
+      .from("tts_voice_locks")
+      .select("character_id, voice_id")
+      .eq("script_id", scriptId);
+    if (error || !data) return {};
+    return Object.fromEntries(data.map((l) => [l.character_id, l.voice_id]));
+  } catch {
+    return {};
+  }
+}
+
 // Verrouille la voix Google Cloud HD choisie pour un personnage
 export const lockTtsVoice = (scriptId, characterId, voiceId) =>
   callTts("lock", { scriptId, characterId, voiceId });
