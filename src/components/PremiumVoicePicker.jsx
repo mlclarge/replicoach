@@ -89,7 +89,15 @@ function PremiumVoicePicker({ character, lockedVoiceId, onLock }) {
                 playSample(voice.id);
                 if (!lockedVoiceId) setSelected(voice.id);
               }}
-              className={}
+              className={`px-2.5 py-1 rounded-full text-xs border font-medium transition flex items-center gap-1 ${
+                isLocked
+                  ? "bg-emerald-600 text-white border-emerald-700 font-bold shadow-sm"
+                  : disabledByLock
+                    ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed opacity-50"
+                    : isSelected
+                      ? "bg-amber-500 text-black border-amber-600 font-extrabold shadow-md scale-[1.02]"
+                      : "bg-gray-50 hover:bg-gray-100 border-gray-300 text-gray-800"
+              }`}
               title="Écouter l'échantillon audio HD"
             >
               <span className="text-[10px]">▶</span>

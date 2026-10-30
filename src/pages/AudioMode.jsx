@@ -1228,7 +1228,7 @@ function AudioMode() {
                     </div>
                   )}
                   {isNewScene && (
-                    <div id={}>
+                    <div>
                       <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900 px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md inline-block">
                         🎭 {replica.scene_title}
                       </h3>
