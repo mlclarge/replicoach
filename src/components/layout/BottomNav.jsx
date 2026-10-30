@@ -25,12 +25,12 @@ export default function BottomNav() {
       </button>
 
       {/* Groupe de navigation principal */}
-      <div className="flex items-center justify-around flex-1 gap-1 sm:gap-3">
+      <div className="flex items-center justify-around flex-1 gap-1 sm:gap-2">
         {/* 1. Textes-biblio */}
         <NavLink
           to="/?tab=library#library"
           className={() =>
-            `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
+            `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
               isLibraryActive
                 ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
                 : "text-white font-medium hover:text-amber-300"
@@ -38,14 +38,14 @@ export default function BottomNav() {
           }
         >
           <span className="text-base sm:text-lg">📚</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Textes-biblio</span>
+          <span className="text-[10px] sm:text-xs text-white font-medium">Textes</span>
         </NavLink>
 
         {/* 2. Importer */}
         <NavLink
           to="/upload"
           className={({ isActive }) =>
-            `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
+            `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
               isActive
                 ? "text-blue-400 font-bold bg-blue-500/10 border border-blue-500/30"
                 : "text-white font-medium hover:text-amber-300"
@@ -56,11 +56,27 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Importer</span>
         </NavLink>
 
-        {/* 3. Consignes */}
+        {/* 3. Studio Enregistrement (Page /free-recordings) */}
+        <NavLink
+          to="/free-recordings"
+          className={({ isActive }) =>
+            `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+              isActive
+                ? "text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30"
+                : "text-white font-medium hover:text-amber-300"
+            }`
+          }
+          title="Studio d'enregistrement libre"
+        >
+          <span className="text-base sm:text-lg">🎙️</span>
+          <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
+        </NavLink>
+
+        {/* 4. Consignes */}
         <NavLink
           to="/?tab=director"
           className={() =>
-            `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
+            `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
               isDirectorActive
                 ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
                 : "text-white font-medium hover:text-amber-300"
@@ -71,11 +87,11 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Consignes</span>
         </NavLink>
 
-        {/* 4. Partagés */}
+        {/* 5. Partagés */}
         <NavLink
           to="/shared"
           className={({ isActive }) =>
-            `flex flex-col items-center py-1 px-2.5 rounded-xl transition text-center ${
+            `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
               isActive
                 ? "text-purple-400 font-bold bg-purple-500/10 border border-purple-500/30"
                 : "text-white font-medium hover:text-amber-300"
@@ -86,10 +102,10 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Partagés</span>
         </NavLink>
 
-        {/* 5. Tutoriel */}
+        {/* 6. Tutoriel */}
         <button
           onClick={handleOpenTutorial}
-          className="flex flex-col items-center py-1 px-2.5 rounded-xl text-white font-medium hover:text-amber-300 transition text-center"
+          className="flex flex-col items-center py-1 px-2 rounded-xl text-white font-medium hover:text-amber-300 transition text-center"
           title="Accéder au tutoriel"
         >
           <span className="text-base sm:text-lg">📖</span>
