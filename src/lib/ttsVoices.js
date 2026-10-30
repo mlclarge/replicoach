@@ -16,7 +16,7 @@ export const TTS_VOICES = [
   { id: "fr-FR-Chirp3-HD-Kore", label: "Kore HD (Studio Expressive)", gender: "female" },
 
   // 👨 5 Voix Masculines Premium Google Cloud
-  { id: "fr-FR-Neural2-B", label: "Neural B (Grave & Prodonde)", gender: "male" },
+  { id: "fr-FR-Neural2-B", label: "Neural B (Grave & Profonde)", gender: "male" },
   { id: "fr-FR-Neural2-D", label: "Neural D (Médium Chaleureux)", gender: "male" },
   { id: "fr-FR-Wavenet-B", label: "Wavenet B (Théâtre Classique)", gender: "male" },
   { id: "fr-FR-Wavenet-D", label: "Wavenet D (Rythmée)", gender: "male" },
@@ -26,12 +26,35 @@ export const TTS_VOICES = [
 export const TTS_SAMPLE_TEXT =
   "Bonjour, voici un aperçu de ma voix. Je suis prêt à donner la réplique.";
 
+const MALE_NAMES = [
+  "maurice", "jean", "christophe", "pierre", "paul", "jacques", "michel",
+  "philippe", "alain", "bernard", "françois", "patrick", "daniel", "nicolas",
+  "marc", "david", "thomas", "louis", "antoine", "charles", "henri", "robert",
+  "john", "sam", "jack", "bob", "alex", "luc", "eric", "stephane"
+];
+
+const FEMALE_NAMES = [
+  "valérie", "fabienne", "audrey", "marie", "anne", "sophie", "christine",
+  "nathalie", "isabelle", "catherine", "sylvie", "martine", "françoise",
+  "claire", "julie", "céline", "amavi", "laura", "emma", "léa", "sarah",
+  "alice", "jeanne", "lucie", "chloe", "juliet", "rose"
+];
+
+export function detectGender(name) {
+  if (!name) return "male";
+  const lowerName = name.toLowerCase().split("-")[0].trim();
+  if (MALE_NAMES.includes(lowerName)) return "male";
+  if (FEMALE_NAMES.includes(lowerName)) return "female";
+  if (lowerName.endsWith("e") || lowerName.endsWith("a")) return "female";
+  return "male";
+}
+
 export function isAllowedVoice(voiceId) {
   return TTS_VOICES.some((v) => v.id === voiceId);
 }
 
 export function ttsSamplePath(voiceId) {
-  return ;
+  return `/tts-samples/${voiceId}.mp3`;
 }
 
 export function cleanTextForTts(text) {
