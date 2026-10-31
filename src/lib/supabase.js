@@ -668,14 +668,15 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
   const { data: originalReplicas } = await supabase
     .from("replicas")
     .select("*")
-    .eq("script_id", originalScriptId);
+    .eq("script_id", originalScriptId)
+    .order("order_index", { ascending: true });
 
   console.log("✅ Script original récupéré:", original.title);
 
   // 3. Créer la copie du script
   const scriptData = {
     user_id: userId,
-    title: `${original.title} (copie)`,
+    title: ,
   };
 
   if (original.full_text) scriptData.full_text = original.full_text;
@@ -694,7 +695,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
   }
   console.log("✅ Nouveau script créé:", newScript.id);
 
-  // 4. Copier les personnages
+  // 4. Copier les personnages (avec conservation du genre)
   const characterMap = {};
   for (const char of originalCharacters || []) {
     const charData = {
@@ -702,6 +703,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
       name: char.name,
       color: char.color,
     };
+    if (char.gender) charData.gender = char.gender;
 
     const { data: newChar, error: charError } = await supabase
       .from("characters")
@@ -716,7 +718,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     characterMap[char.id] = newChar.id;
   }
 
-  // 5. Copier les répliques
+  // 5. Copier les répliques EN CONSERVANT LA SEGMENTATION (act_title, scene_title, is_context, page_number)
   const replicasToInsert = (originalReplicas || []).map((rep) => ({
     script_id: newScript.id,
     character_id: characterMap[rep.character_id] || null,
@@ -724,6 +726,10 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
     text: rep.text,
     text_gaps: rep.text_gaps,
     cue_words: rep.cue_words,
+    act_title: rep.act_title || null,
+    scene_title: rep.scene_title || null,
+    is_context: !!rep.is_context,
+    page_number: rep.page_number || null,
   }));
 
   if (replicasToInsert.length > 0) {
@@ -732,8 +738,10 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
       .insert(replicasToInsert);
 
     if (repError) {
-      console.error("❌ Erreur création répliques:", repError);
-      throw repError;
+      console.warn("⚠️ Fallback sans segmentation:", repError);
+      const basicReplicas = replicasToInsert.map(({ act_title, scene_title, is_context, page_number, ...rest }) => rest);
+      const { error: fallbackError } = await supabase.from("replicas").insert(basicReplicas);
+      if (fallbackError) throw fallbackError;
     }
   }
 
@@ -1528,3 +1536,5 @@ export const getAudioUrl = (audioPath) => {
     .getPublicUrl(audioPath);
   return data.publicUrl;
 };
+
+
