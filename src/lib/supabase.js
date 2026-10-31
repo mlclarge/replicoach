@@ -676,7 +676,7 @@ export const copySharedScript = async (originalScriptId, troupeId, userId) => {
   // 3. Créer la copie du script
   const scriptData = {
     user_id: userId,
-    title: ,
+    title: `${original.title} (copie)`,
   };
 
   if (original.full_text) scriptData.full_text = original.full_text;
@@ -1536,5 +1536,5 @@ export const getAudioUrl = (audioPath) => {
     .getPublicUrl(audioPath);
   return data.publicUrl;
 };
-// v3 OK
+
 
