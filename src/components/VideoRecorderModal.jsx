@@ -28,12 +28,14 @@ export default function VideoRecorderModal({
 
   useEffect(() => {
     if (isOpen) {
+      if (initialTargetReplicaId) setTargetReplicaId(initialTargetReplicaId);
+      else if (replicas.length > 0 && !targetReplicaId) setTargetReplicaId(replicas[0].id);
       startCamera();
     } else {
       stopCamera();
     }
     return () => stopCamera();
-  }, [isOpen]);
+  }, [isOpen, initialTargetReplicaId, replicas]);
 
   const startCamera = async () => {
     try {
@@ -124,7 +126,7 @@ export default function VideoRecorderModal({
   };
 
   const handleSave = () => {
-    if (!recordedBlob) return;
+    if (!recordedBlob || !targetReplicaId) return;
     const reader = new FileReader();
     reader.onloadend = () => {
       const videoData = {
@@ -146,10 +148,10 @@ export default function VideoRecorderModal({
     <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
       <div className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-lg p-5 text-white shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
+        <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">🎥</span>
-            <h3 className="font-extrabold text-amber-400 text-base">
+            <h3 className="font-extrabold text-amber-300 text-sm sm:text-base">
               Studio Vidéo — Se filmer
             </h3>
           </div>
@@ -161,25 +163,34 @@ export default function VideoRecorderModal({
           </button>
         </div>
 
+        {/* Dynamic Body */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {/* Écran Caméra ou Aperçu */}
-          <div className="relative bg-black rounded-2xl overflow-hidden aspect-video border border-gray-800 shadow-inner flex items-center justify-center">
+          <div className="relative bg-black rounded-2xl overflow-hidden aspect-video shadow-2xl border border-gray-800 flex items-center justify-center">
             {videoPreviewUrl ? (
-              <video src={videoPreviewUrl} controls className="w-full h-full object-cover" />
+              <video
+                src={videoPreviewUrl}
+                controls
+                className="w-full h-full object-cover"
+              />
             ) : (
-              <video ref={videoLiveRef} autoPlay playsInline muted className="w-full h-full object-cover transform -scale-x-100" />
+              <video
+                ref={videoLiveRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover transform -scale-x-100"
+              />
             )}
 
             {isRecording && (
-              <div className="absolute top-3 left-3 bg-red-600 text-white px-3 py-1 rounded-full text-xs font-bold animate-pulse flex items-center gap-1.5 shadow-md">
-                <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                <span>REC {recordingDuration}s</span>
+              <div className="absolute top-3 left-3 bg-red-600/90 text-white text-xs font-mono font-extrabold px-3 py-1 rounded-full animate-pulse flex items-center gap-1.5 shadow-lg">
+                <span>🔴</span> REC {Math.floor(recordingDuration / 60)}:{(recordingDuration % 60).toString().padStart(2, "0")}
               </div>
             )}
           </div>
 
-          {/* Boutons d'Enregistrement */}
-          <div className="flex items-center justify-center gap-3 py-2">
+          {/* Controls */}
+          <div className="flex items-center justify-center gap-3">
             {!isRecording && !videoPreviewUrl && (
               <button
                 onClick={startRecording}
@@ -274,7 +285,7 @@ export default function VideoRecorderModal({
             disabled={!recordedBlob}
             className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-gray-950 font-extrabold rounded-xl text-xs shadow-lg disabled:opacity-40 transition"
           >
-            💾 Inserer dans le script
+            💾 Insérer dans le script
           </button>
         </div>
       </div>

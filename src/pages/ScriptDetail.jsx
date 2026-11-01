@@ -1378,6 +1378,15 @@ function ScriptDetail() {
                       }
                     />
 
+                    {/* Affichage de la vidéo ancrée si présente */}
+                    {(replicaVideos[replica.id] || replicaVideos[String(replica.id)]) && (
+                      <VideoBubble
+                        video={replicaVideos[replica.id] || replicaVideos[String(replica.id)]}
+                        character={characters.find((c) => c.id === (replicaVideos[replica.id] || replicaVideos[String(replica.id)])?.characterId) || character}
+                        onDelete={() => handleDeleteVideo(replica.id)}
+                      />
+                    )}
+
                     {notesAfterThisReplica.map((note) => (
                       <NoteBubble
                         key={note.id}

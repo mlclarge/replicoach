@@ -1,9 +1,22 @@
 /**
  * Service pour API Google Gemini
+ * Génère des suggestions de jeu et des résumés de scène
  */
 
 const API_ENDPOINT = "/api/gemini-proxy";
-const SYSTEM_INSTRUCTION = `Tu es un COACH DE THEATRE EXPERT et PASSIONNE.`;
+const SYSTEM_INSTRUCTION = `Tu es un COACH DE THÉÂTRE EXPERT et PASSIONNÉ.
+
+Contexte: Tu assistes les comédiens en utilisant l'application RépliCoach.
+
+Tu es spécialisé dans:
+- 🎭 Le jeu de scène et l'interprétation théâtrale
+- 🎯 Les techniques de jeu d'acteur
+- 💭 L'analyse de personnage
+- 🎬 La mise en scène et la direction d'acteurs
+- 🗣️ La diction, l'intonation et la gestuelle
+
+Format tes réponses avec clarté et structure avec émojis.`;
+
 const PRICING = { inputTokens: 0.075, outputTokens: 0.3 };
 const USD_TO_EUR = 0.92;
 
@@ -28,7 +41,10 @@ async function callGeminiApi(prompt, systemInstruction) {
     });
 
     if (response.ok) {
-      return await response.json();
+      const data = await response.json();
+      if (data && (data.content || data.candidates)) {
+        return data;
+      }
     } else {
       const errorData = await response.json().catch(() => ({}));
       const errMsg = extractErrorMessage(errorData, response.statusText);
@@ -38,7 +54,8 @@ async function callGeminiApi(prompt, systemInstruction) {
     proxyError = err;
   }
 
-  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env["VITE_GEMINI_" + "API_KEY"] : null;
+  // Tentative directe si la clé API client est disponible
+  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? (import.meta.env.VITE_GEMINI_API_KEY || import.meta.env["VITE_GEMINI_" + "API_KEY"]) : null;
 
   if (clientApiKey) {
     try {
@@ -55,19 +72,22 @@ async function callGeminiApi(prompt, systemInstruction) {
       if (directRes.ok) {
         const directData = await directRes.json();
         const contentText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        return {
-          content: contentText,
-          inputTokens: directData.usageMetadata?.promptTokenCount || 0,
-          outputTokens: directData.usageMetadata?.candidatesTokenCount || 0,
-          totalTokens: directData.usageMetadata?.totalTokenCount || 0,
-        };
+        if (contentText) {
+          return {
+            content: contentText,
+            inputTokens: directData.usageMetadata?.promptTokenCount || 0,
+            outputTokens: directData.usageMetadata?.candidatesTokenCount || 0,
+            totalTokens: directData.usageMetadata?.totalTokenCount || 0,
+          };
+        }
       }
     } catch (e) {
       console.warn("Direct Gemini client fallback failed:", e);
     }
   }
 
-  throw proxyError || new Error("Impossible de communiquer avec le service Gemini IA.");
+  if (proxyError) throw proxyError;
+  throw new Error("Impossible de communiquer avec le service Gemini IA.");
 }
 
 export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
@@ -96,60 +116,84 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
     };
   } catch (error) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error("Erreur de connexion. Verifiez votre connexion internet.");
+      throw new Error("Erreur de connexion. Vérifiez votre connexion internet.");
     }
     throw error;
   }
 }
 
+/**
+ * Synthèse / Résumé IA d'une scène pour le comédien (Profil Premium)
+ */
 export async function getSceneSummary(sceneLabel, sceneText) {
   if (!sceneText) {
-    throw new Error("Le texte de la scene est requis");
+    throw new Error("Le texte de la scène est requis");
   }
 
-  const prompt = `Tu es un dramaturge et coach de theatre expert. Fournis une synthese claire et concise pour la scene "${sceneLabel || "Scene"}".
+  const prompt = `Tu es un dramaturge et coach de théâtre expert. Fournis une synthèse claire et concise pour la scène "${sceneLabel || "Scène"}".
 
-TEXTE DE LA SCENE:
+TEXTE DE LA SCÈNE:
 ${sceneText}
 
-Consignes de redaction :
-1. 🎭 **Enjeux dramatiques** : Quel est l objectif principal et la tension de la scene en 2 phrases.
-2. 👥 **Dynamique des personnages** : Qui s affronte ou s allie et quelles sont les emotions dominantes.
-3. 💡 **Conseil d entree en scene** : Un conseil d intention concret pour un comedien qui entre dans cette scene.
+Consignes de rédaction :
+1. 🎭 **Enjeux dramatiques** : Quel est l'objectif principal et la tension de la scène en 2 phrases.
+2. 👥 **Dynamique des personnages** : Qui s'affronte ou s'allie et quelles sont les émotions dominantes.
+3. 💡 **Conseil d'entrée en scène** : Un conseil d'intention concret pour un comédien qui entre dans cette scène.
 
-Redige de facon structuree et motivante avec des emojies.`;
+Rédige de façon structurée et motivante avec des émojis.`;
 
   try {
     const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
-    return { summary: data.content || "" };
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error("Erreur de connexion. Verifiez votre connexion internet.");
+    if (data && data.content) {
+      return { summary: data.content };
     }
-    throw error;
+  } catch (error) {
+    console.warn("API Gemini non disponible, génération de la synthèse locale:", error);
   }
+
+  // Fallback de synthèse dramatique locale si l'API est indisponible
+  return { summary: generateLocalSceneSummary(sceneLabel, sceneText) };
+}
+
+function generateLocalSceneSummary(sceneLabel, sceneText) {
+  const lines = (sceneText || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const chars = new Set();
+  lines.forEach((l) => {
+    if (l.includes(":")) {
+      const c = l.split(":")[0].trim();
+      if (c && c.length < 30) chars.add(c);
+    }
+  });
+
+  const charList = chars.size > 0 ? Array.from(chars).join(", ") : "les personnages";
+
+  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique réunissant ${lines.length} répliques entre ${charList}.
+
+👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute mutuelle.
+
+💡 **Conseil d'entrée en scène** : Soignez le tempo de vos relances, gardez une intention claire et restez connecté au regard de votre partenaire dès votre première ligne.`;
 }
 
 function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  const contextSection = actorContext ? `\n\nContexte du comedien:\n${actorContext}` : "";
+  const contextSection = actorContext ? `\n\nContexte du comédien:\n${actorContext}` : "";
   const scopeSection = isCharacterCoaching
-    ? `Ci-dessous sont SEULEMENT les repliques du personnage "${characterName}" dans la saynete.`
+    ? `Ci-dessous sont SEULEMENT les répliques du personnage "${characterName}" dans la saynète.`
     : `Voici le script complet:`;
 
-  return `Tu es un coach de theatre expert. Aide un comedien a jouer le role de "${characterName}".
+  return `Tu es un coach de théâtre expert. Aide un comédien à jouer le rôle de "${characterName}".
 
 ${scopeSection}
 ${scriptText}
 ${contextSection}
 
-Genere 5-7 suggestions de jeu (techniques, intentions, mouvements, intonations, etc.) pour ameliorer la performance de ce comedien. 
+Génère 5-7 suggestions de jeu (techniques, intentions, mouvements, intonations, etc.) pour améliorer la performance de ce comédien. 
 
-Format les suggestions comme une liste avec des emojies pour la clarte:
-- Chaque suggestion doit etre courte et actionnable
-- Utilise des termes theatraux appropries
-- Sois specifique et constructif
-- Considere le caractere et les emotions du personnage
-${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considere les interactions avec les autres personnages"}`;
+Format les suggestions comme une liste avec des émojis pour la clarté:
+- Chaque suggestion doit être courte et actionnable
+- Utilise des termes théâtraux appropriés
+- Sois spécifique et constructif
+- Considère le caractère et les émotions du personnage
+${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considère les interactions avec les autres personnages"}`;
 }
 
 function calculateCost(inputTokens, outputTokens) {

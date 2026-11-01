@@ -1572,6 +1572,14 @@ function AudioMode() {
               playReplicaRecording={playReplicaRecording}
               releaseMicrophone={releaseMicrophone}
             />
+
+              {(replicaVideos[replica.id] || replicaVideos[String(replica.id)]) && (
+                <VideoBubble
+                  video={replicaVideos[replica.id] || replicaVideos[String(replica.id)]}
+                  character={characters.find((c) => c.id === (replicaVideos[replica.id] || replicaVideos[String(replica.id)])?.characterId) || character}
+                  onDelete={() => handleDeleteVideo(replica.id)}
+                />
+              )}
             </div>
           );
         })}
