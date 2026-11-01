@@ -249,7 +249,7 @@ function ScriptDetail() {
     return map;
   }, [currentScript?.replicas]);
 
-  // Répliques filtrées avec support de la recherche par #numéro ou texte
+  // Répliques filtrées avec support de la recherche par #numéro ou texte (Stabilisé)
   const filteredReplicas = useMemo(() => {
     if (!currentScript?.replicas) return [];
     let result = currentScript.replicas;
@@ -259,19 +259,39 @@ function ScriptDetail() {
       result = result.filter((r) => groupSet.has(r.id));
     }
 
-    if (selectedCharacter) {
-      result = result.filter((r) => r.character_id === selectedCharacter);
-    }
-
-    if (filterMode === "role" && myCharacterId) {
-      result = result.filter((r) => r.character_id === myCharacterId || r.is_context);
-    }
-
     if (selectedSceneKey) {
       result = result.filter((r) => {
         const key = `${r.act_title || ""}_${r.scene_title || ""}`;
         return key === selectedSceneKey;
       });
+    }
+
+    if (myCharacterId) {
+      if (filterMode === "role") {
+        // Mode répliques du rôle + amorces de contexte
+        const mySet = new Set();
+        result.forEach((r, idx) => {
+          if (r.character_id === myCharacterId) mySet.add(idx);
+        });
+
+        const includedIndices = new Set();
+        mySet.forEach((idx) => {
+          // Inclure la réplique d'amorce précédente si elle appartient à un autre personnage
+          if (idx > 0 && !mySet.has(idx - 1)) {
+            includedIndices.add(idx - 1);
+          }
+          includedIndices.add(idx);
+        });
+
+        result = result
+          .filter((_, idx) => includedIndices.has(idx))
+          .map((r) => ({
+            ...r,
+            isContextLine: r.character_id !== myCharacterId,
+          }));
+      }
+    } else if (selectedCharacter) {
+      result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
     if (searchQuery.trim()) {
@@ -800,6 +820,7 @@ function ScriptDetail() {
               <button
                 onClick={() => {
                   setMyCharacterId(null);
+                  setSelectedCharacter(null);
                   setFilterMode("all");
                 }}
                 className="text-xs text-rose-600 hover:text-rose-800 font-bold underline flex items-center gap-1"
@@ -813,6 +834,7 @@ function ScriptDetail() {
             <button
               onClick={() => {
                 setMyCharacterId(null);
+                setSelectedCharacter(null);
                 setFilterMode("all");
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
@@ -830,7 +852,13 @@ function ScriptDetail() {
                 <button
                   key={char.id}
                   onClick={() => {
-                    setMyCharacterId(isMyRole ? null : char.id);
+                    setSelectedCharacter(null);
+                    if (isMyRole) {
+                      setMyCharacterId(null);
+                      setFilterMode("all");
+                    } else {
+                      setMyCharacterId(char.id);
+                    }
                   }}
                   className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
                     isMyRole
@@ -1695,6 +1723,23 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
   );
 }
 
+function CueContextCard({ replica, character, number }) {
+  return (
+    <div className="my-2.5 p-3 bg-slate-100/90 border-l-4 border-amber-500 rounded-r-2xl shadow-sm text-gray-800 text-xs sm:text-sm animate-fade-in max-w-[90%] sm:max-w-[80%] mx-auto">
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 font-extrabold text-amber-900">
+          <span>💬</span>
+          <span>Réplique d'amorce — {character?.name || "Partenaire"}</span>
+        </div>
+        <span className="text-[10px] text-gray-400 font-mono font-bold">#{number}</span>
+      </div>
+      <p className="italic text-gray-700 whitespace-pre-wrap leading-relaxed">
+        "{stripHtml(replica.text)}"
+      </p>
+    </div>
+  );
+}
+
 function SortableReplicaBubble({
   replica,
   character,
@@ -1719,6 +1764,14 @@ function SortableReplicaBubble({
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 50 : 1,
   };
+
+  if (replica.isContextLine) {
+    return (
+      <div ref={setNodeRef} style={style} id={`replica-anchor-${replica.id}`}>
+        <CueContextCard replica={replica} character={character} number={number} />
+      </div>
+    );
+  }
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
@@ -1769,6 +1822,8 @@ function ChatBubble({
   const [showMenu, setShowMenu] = useState(false);
 
   const bubbleColor = character?.color || "#6B7280";
+  const isMyRole = myCharacterId && replica.character_id === myCharacterId;
+  const isDimmed = myCharacterId && !isMyRole;
 
   const hexToRgba = (hex, alpha) => {
     if (!hex) return `rgba(107, 114, 128, ${alpha})`;
@@ -1949,14 +2004,27 @@ function ChatBubble({
         onClick={handleBubbleClick}
       >
         <div
-          className={`px-4 py-3 rounded-2xl relative shadow-lg ${
+          className={`px-4 py-3 rounded-2xl relative transition-all duration-200 ${
             isRight ? "rounded-br-md" : "rounded-bl-md"
+          } ${
+            isMyRole
+              ? "ring-4 ring-amber-400 border-2 border-amber-500 shadow-2xl scale-[1.01] z-20"
+              : isDimmed
+              ? "opacity-60 hover:opacity-100 shadow-sm"
+              : "shadow-lg"
           }`}
           style={{
-            backgroundColor: hexToRgba(bubbleColor, 0.85),
-            border: `2px solid ${hexToRgba(bubbleColor, 0.9)}`,
+            backgroundColor: hexToRgba(bubbleColor, isMyRole ? 0.98 : 0.85),
+            border: isMyRole
+              ? "3px solid #F59E0B"
+              : `2px solid ${hexToRgba(bubbleColor, 0.9)}`,
           }}
         >
+          {isMyRole && (
+            <div className="absolute -top-3 left-4 bg-gradient-to-r from-amber-400 to-amber-500 text-gray-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 z-30">
+              <span>👑</span> Mon rôle
+            </div>
+          )}
           <div
             className={`absolute bottom-0 w-3 h-3 ${
               isRight ? "-right-1.5" : "-left-1.5"
