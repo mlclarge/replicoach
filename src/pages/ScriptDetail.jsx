@@ -1178,13 +1178,6 @@ function ScriptDetail() {
         {/* Actions secondaires */}
         <div className="flex gap-2 mb-4">
           <button
-            onClick={() => setShowVideoRecorder(true)}
-            className="py-2 px-4 rounded-lg text-sm font-bold bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow hover:from-rose-400 hover:to-pink-500 transition flex items-center gap-1.5 active:scale-95"
-            title="Se filmer pour une scène ou réplique"
-          >
-            <span>🎥</span> Se filmer
-          </button>
-          <button
             onClick={() => setEditMode(!editMode)}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition ${
               editMode

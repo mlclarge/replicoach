@@ -159,6 +159,7 @@ function AudioMode() {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [summaryScene, setSummaryScene] = useState(null);
   const [sceneSummaries, setSceneSummaries] = useState({});
+  const [showStudioMenu, setShowStudioMenu] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replicaVideos, setReplicaVideos] = useState({});
 
@@ -218,6 +219,14 @@ function AudioMode() {
       }
     }
   };
+
+  useEffect(() => {
+    const handleStudioMenuEvent = () => {
+      setShowStudioMenu(true);
+    };
+    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
+    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
+  }, []);
 
   useEffect(() => {
     const handleAICoachEvent = () => {
@@ -1229,14 +1238,7 @@ function AudioMode() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowVideoRecorder(true)}
-              className="px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md active:scale-95"
-              title="Se filmer pour une réplique/scène"
-            >
-              <span>🎥</span>
-              <span>Se filmer</span>
-            </button>
+            
             <button
               onClick={() => setShowSettings(!showSettings)}
               className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
