@@ -1,223 +1,199 @@
-/**
- * Service pour API Google Gemini
- * Génère des suggestions de jeu et des résumés de scène
- */
+import { supabase } from "./supabase";
+import { withTimeout } from "./withTimeout";
 
-const API_ENDPOINT = "/api/gemini-proxy";
-const SYSTEM_INSTRUCTION = `Tu es un COACH DE THÉÂTRE EXPERT et PASSIONNÉ.
+const SESSION_TIMEOUT_MS = 15_000;
+// Gemini met ~1 à 2 min sur un long script, plus un éventuel démarrage à froid de Render.
+const REQUEST_TIMEOUT_MS = 6 * 60_000;
 
-Contexte: Tu assistes les comédiens en utilisant l'application RépliCoach.
+function getEndpoint() {
+  const configuredUrl =
+    import.meta.env.VITE_BACKEND_OCR_URL || import.meta.env.VITE_API_URL;
+  const backendUrl =
+    configuredUrl || (import.meta.env.DEV ? "http://127.0.0.1:8000" : null);
 
-Tu es spécialisé dans:
-- 🎭 Le jeu de scène et l'interprétation théâtrale
-- 🎯 Les techniques de jeu d'acteur
-- 💭 L'analyse de personnage
-- 🎬 La mise en scène et la direction d'acteurs
-- 🗣️ La diction, l'intonation et la gestuelle
-
-Format tes réponses avec clarté et structure avec émojis.`;
-
-const PRICING = { inputTokens: 0.075, outputTokens: 0.3 };
-const USD_TO_EUR = 0.92;
-
-function extractErrorMessage(errorData, fallbackText) {
-  if (!errorData) return fallbackText;
-  if (typeof errorData.error === "string") return errorData.error;
-  if (typeof errorData.error === "object" && errorData.error !== null) {
-    return errorData.error.message || errorData.error.details || JSON.stringify(errorData.error);
+  if (!backendUrl) {
+    throw new Error(
+      "Le service OCR Premium n'est pas configuré. Définissez VITE_BACKEND_OCR_URL.",
+    );
   }
-  if (typeof errorData.message === "string") return errorData.message;
-  return fallbackText;
+
+  const normalizedUrl = backendUrl.replace(/\/+$/, "");
+  if (normalizedUrl.endsWith("/api/extract-premium")) return normalizedUrl;
+  if (normalizedUrl.endsWith("/api/ocr")) {
+    return normalizedUrl.replace(/\/api\/ocr$/, "/api/extract-premium");
+  }
+  return `${normalizedUrl}/api/extract-premium`;
 }
 
-async function callGeminiApi(prompt, systemInstruction) {
-  let proxyError = null;
-
+// Réveille le backend Render (démarrage à froid ~30 s) dès l'arrivée sur la page d'import.
+export function warmUpOcrBackend() {
   try {
-    const response = await fetch(API_ENDPOINT, {
+    const healthUrl = getEndpoint().replace(/\/api\/extract-premium$/, "/api/health");
+    fetch(healthUrl, { mode: "no-cors", cache: "no-store" }).catch(() => {});
+  } catch {
+    // backend non configuré : rien à réveiller
+  }
+}
+
+async function readErrorMessage(response) {
+  try {
+    const payload = await response.json();
+    return payload.detail || payload.error || response.statusText;
+  } catch {
+    return response.statusText || "Réponse invalide du serveur OCR.";
+  }
+}
+
+export async function processWithGemini(file, onProgress) {
+  if (!file) throw new Error("Aucun fichier fourni pour le scan Premium.");
+  if (!file.name.toLowerCase().endsWith(".pdf")) {
+    throw new Error("Le scan Premium prend uniquement en charge les PDF.");
+  }
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await withTimeout(
+    supabase.auth.getSession(),
+    SESSION_TIMEOUT_MS,
+    "La vérification de votre session a expiré. Rechargez la page et réessayez.",
+  );
+  if (sessionError) {
+    throw new Error(`Impossible de vérifier la session : ${sessionError.message}`);
+  }
+  if (!session?.access_token) {
+    throw new Error("Connectez-vous pour lancer le scan Premium.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("title", file.name.replace(/\.pdf$/i, ""));
+
+  if (onProgress) onProgress("uploading_to_backend");
+  const controller = new AbortController();
+  const abortTimer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const response = await fetch(getEndpoint(), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt, systemInstruction: systemInstruction || SYSTEM_INSTRUCTION }),
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: formData,
+      signal: controller.signal,
     });
 
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.content) return data;
+    if (!response.ok) {
+      const message = await readErrorMessage(response);
+      throw new Error(`Erreur du service Gemini Vision : ${message}`);
+    }
+
+    let result;
+    if (response.headers.get("content-type")?.includes("text/event-stream")) {
+      result = await readProgressStream(response, onProgress);
     } else {
-      const errorData = await response.json().catch(() => ({}));
-      const errMsg = extractErrorMessage(errorData, response.statusText);
-      proxyError = new Error(errMsg);
-    }
-  } catch (err) {
-    proxyError = err;
-  }
-
-  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env["VITE_GEMINI_API_KEY"] : null;
-
-  if (clientApiKey) {
-    try {
-      const directUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + clientApiKey;
-      const directRes = await fetch(directUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction || SYSTEM_INSTRUCTION }] },
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      });
-
-      if (directRes.ok) {
-        const directData = await directRes.json();
-        const contentText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (contentText) {
-          return {
-            content: contentText,
-            inputTokens: directData.usageMetadata?.promptTokenCount || 0,
-            outputTokens: directData.usageMetadata?.candidatesTokenCount || 0,
-            totalTokens: directData.usageMetadata?.totalTokenCount || 0,
-          };
-        }
+      // Compatibilité pendant un déploiement progressif du backend.
+      try {
+        result = await response.json();
+      } catch {
+        throw new Error(
+          "Le service Gemini Vision a renvoyé une réponse invalide.",
+        );
       }
-    } catch (e) {
-      console.warn("Direct Gemini client fallback failed:", e);
+      if (onProgress) onProgress("result_received");
     }
-  }
 
-  throw proxyError || new Error("Service Gemini IA indisponible.");
-}
+    if (
+      typeof result.title !== "string" ||
+      !Array.isArray(result.characters) ||
+      !Array.isArray(result.replicas)
+    ) {
+      throw new Error("La réponse du service Gemini Vision est incomplète.");
+    }
 
-export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  if (!characterName || !scriptText) {
-    throw new Error("Nom du personnage et texte du script sont obligatoires");
-  }
-
-  const prompt = buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching);
-
-  try {
-    const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
-    const inputTokens = data.inputTokens || 0;
-    const outputTokens = data.outputTokens || 0;
-    const totalTokens = data.totalTokens || 0;
-    const costs = calculateCost(inputTokens, outputTokens);
-
-    return {
-      suggestions: data.content || "",
-      inputTokens,
-      outputTokens,
-      totalTokens,
-      estimatedCost: costs.eur,
-      estimatedCostUSD: costs.usd,
-      estimatedCostEUR: costs.eur,
-      costInEuroAsNumber: costs.eurasNumber,
-    };
+    return result;
   } catch (error) {
-    console.warn("Génération de suggestions locales suite à indisponibilité API Gemini:", error);
-    return {
-      suggestions: `🎭 **Conseils d'interprétation pour ${characterName}** :
-
-1. 🎯 **Intentions & Objectifs** : Définissez clairement ce que ${characterName} cherche à obtenir dans chaque réplique.
-2. 🗣️ **Diction & Projections** : Projetez votre voix en gardant une articulation fluide.
-3. 👂 **Écoute active** : Recevez la réplique du partenaire avant de répondre.
-4. ⚡ **Engagement physique** : Ancrez vos appuis et adaptez vos mouvements au sous-texte.
-5. 💭 **Sous-texte** : Identifiez l'émotion profonde derrière les mots.`,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      estimatedCost: "0.00€",
-      estimatedCostUSD: "-bash.0000",
-      estimatedCostEUR: "0.00€",
-      costInEuroAsNumber: 0,
-    };
-  }
-}
-
-export async function getSceneSummary(sceneLabel, sceneText) {
-  if (!sceneText) {
-    throw new Error("Le texte de la scène est requis");
-  }
-
-  const prompt = `Tu es un dramaturge et coach de théâtre expert. Fournis une synthèse claire et concise pour la scène "${sceneLabel || "Scène"}".
-
-TEXTE DE LA SCÈNE:
-${sceneText}
-
-Consignes de rédaction :
-1. 🎭 **Enjeux dramatiques** : Quel est l'objectif principal et la tension de la scène en 2 phrases.
-2. 👥 **Dynamique des personnages** : Qui s'affronte ou s'allie et quelles sont les émotions dominantes.
-3. 💡 **Conseil d'entrée en scène** : Un conseil d'intention concret pour un comédien qui entre dans cette scène.
-
-Rédige de façon structurée et motivante avec des émojis.`;
-
-  try {
-    const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
-    if (data && data.content) {
-      return { summary: data.content };
+    if (error.name === "AbortError") {
+      throw new Error(
+        "Le service OCR Premium n'a pas répondu à temps. Réessayez dans un instant.",
+      );
     }
-  } catch (error) {
-    console.warn("Génération de synthèse locale suite à indisponibilité API Gemini:", error);
+    throw error;
+  } finally {
+    clearTimeout(abortTimer);
+  }
+}
+
+async function readProgressStream(response, onProgress) {
+  if (!response.body) {
+    throw new Error("Le service OCR Premium n'a pas fourni de flux de progression.");
   }
 
-  return { summary: generateLocalSceneSummary(sceneLabel, sceneText) };
-}
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result = null;
 
-function generateLocalSceneSummary(sceneLabel, sceneText) {
-  const lines = (sceneText || "").split("
-").map((l) => l.trim()).filter(Boolean);
-  const chars = new Set();
-  lines.forEach((l) => {
-    if (l.includes(":")) {
-      const c = l.split(":")[0].trim();
-      if (c && c.length < 30) chars.add(c);
+  const dispatch = (block) => {
+    let event = "message";
+    const data = [];
+    for (const line of block.split("\n")) {
+      const normalizedLine = line.endsWith("\r") ? line.slice(0, -1) : line;
+      if (normalizedLine.startsWith("event:")) {
+        event = normalizedLine.slice(6).trim();
+      } else if (normalizedLine.startsWith("data:")) {
+        data.push(normalizedLine.slice(5).trimStart());
+      }
     }
-  });
+    if (data.length === 0) return;
 
-  const charList = chars.size > 0 ? Array.from(chars).join(", ") : "les personnages";
+    let payload;
+    try {
+      payload = JSON.parse(data.join("\n"));
+    } catch {
+      throw new Error("Le service OCR Premium a transmis un événement invalide.");
+    }
 
-  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique ("${sceneLabel || 'Scène'}") réunissant ${lines.length} répliques entre ${charList}. L'objectif est de créer un véritable point de bascule dans l'action.
-
-👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute réciproque. Les émotions évoluent rapidement entre confrontation et recherche de compromis.
-
-💡 **Conseil d'entrée en scène** : Prenez un temps d'immobilité avant de parler. Soignez le tempo de vos relances et affirmez clairement votre intention physique dès la première réplique.`;
-}
-
-function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  const contextSection = actorContext ? `
-
-Contexte du comédien:
-${actorContext}` : "";
-  const scopeSection = isCharacterCoaching
-    ? `Ci-dessous sont SEULEMENT les répliques du personnage "${characterName}" dans la saynète.`
-    : `Voici le script complet:`;
-
-  return `Tu es un coach de théâtre expert. Aide un comédien à jouer le rôle de "${characterName}".
-
-${scopeSection}
-${scriptText}
-${contextSection}
-
-Génère 5-7 suggestions de jeu (techniques, intentions, mouvements, intonations, etc.) pour améliorer la performance de ce comédien. 
-
-Format les suggestions comme une liste avec des émojis pour la clarté:
-- Chaque suggestion doit être courte et actionnable
-- Utilise des termes théâtraux appropriés
-- Sois spécifique et constructif
-- Considère le caractère et les émotions du personnage
-${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considère les interactions avec les autres personnages"}`;
-}
-
-function calculateCost(inputTokens, outputTokens) {
-  const inputCost = (inputTokens / 1_000_000) * PRICING.inputTokens;
-  const outputCost = (outputTokens / 1_000_000) * PRICING.outputTokens;
-  const totalCostUSD = inputCost + outputCost;
-  const totalCostEUR = totalCostUSD * USD_TO_EUR;
-
-  return {
-    usd: `$${totalCostUSD.toFixed(4)}`,
-    eur: `${totalCostEUR.toFixed(2)}€`,
-    eurasNumber: totalCostEUR,
+    if (event === "progress") {
+      if (typeof payload.stage !== "string") {
+        throw new Error("Le service OCR Premium a transmis une étape invalide.");
+      }
+      if (onProgress) onProgress(payload.stage);
+    } else if (event === "result") {
+      result = payload;
+      if (onProgress) onProgress("result_received");
+    } else if (event === "error") {
+      throw new Error(
+        `Erreur du service Gemini Vision : ${
+          payload.detail || "Le traitement OCR Premium a échoué."
+        }`,
+      );
+    }
   };
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      buffer += decoder
+        .decode(value, { stream: !done })
+        .replace(/\r\n/g, "\n");
+
+      let boundary;
+      while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+        dispatch(buffer.slice(0, boundary));
+        buffer = buffer.slice(boundary + 2);
+      }
+
+      if (done) break;
+    }
+
+    if (buffer.trim()) dispatch(buffer);
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!result) {
+    throw new Error("Le service Gemini Vision n'a pas transmis de résultat final.");
+  }
+  return result;
 }
 
-export function isApiConfigured() {
-  return true;
-}
