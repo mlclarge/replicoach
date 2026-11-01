@@ -163,6 +163,7 @@ function AudioMode() {
   const currentReplicaRef = useRef(null);
   const singleBubbleRef = useRef(false);
   const mediaRecorderRef = useRef(null);
+  const mediaStreamRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
@@ -343,30 +344,88 @@ function AudioMode() {
     return () => clearTimeout(timer);
   }, [currentIndex, currentScript]);
 
+  const releaseMicrophone = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (mediaRecorderRef.current) {
+      try {
+        if (mediaRecorderRef.current.state !== "inactive") {
+          mediaRecorderRef.current.stop();
+        }
+      } catch (e) {}
+      mediaRecorderRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      try {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      } catch (e) {}
+      mediaStreamRef.current = null;
+    }
+    setIsRecording(false);
+    setRecordingReplicaId(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      releaseMicrophone();
+      if (audioPlayerRef.current) {
+        try {
+          audioPlayerRef.current.pause();
+        } catch (e) {}
+        audioPlayerRef.current = null;
+      }
+    };
+  }, []);
+
   const startReplicaRecording = async (replicaId) => {
     try {
+      releaseMicrophone();
+
       chunksRef.current = [];
       setRecordingReplicaId(replicaId);
       setRecordingDuration(0);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported("audio/webm")
-          ? "audio/webm"
-          : "audio/mp4",
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
       });
+      mediaStreamRef.current = stream;
 
+      let mimeType = "audio/webm";
+      if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported) {
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/webm")) {
+          mimeType = "audio/webm";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/aac")) {
+          mimeType = "audio/aac";
+        }
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
       };
 
       mediaRecorder.onstop = () => {
-        stream.getTracks().forEach((track) => track.stop());
+        if (mediaStreamRef.current) {
+          try {
+            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+          } catch (e) {}
+          mediaStreamRef.current = null;
+        }
       };
 
-      mediaRecorder.start();
+      mediaRecorder.start(250);
       setIsRecording(true);
 
       timerRef.current = setInterval(() => {
@@ -379,21 +438,30 @@ function AudioMode() {
         });
       }, 1000);
     } catch (err) {
-      alert("Impossible d'accéder au microphone");
-      setRecordingReplicaId(null);
+      console.error("Erreur acces micro:", err);
+      alert("Impossible d'accéder au microphone. Vérifiez les autorisations de votre navigateur.");
+      releaseMicrophone();
     }
   };
 
   const stopReplicaRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) clearInterval(timerRef.current);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    setIsRecording(false);
   };
 
   const saveReplicaRecording = async (replicaId, characterName) => {
-    if (chunksRef.current.length === 0) return;
+    if (!chunksRef.current || chunksRef.current.length === 0) {
+      releaseMicrophone();
+      return;
+    }
     const blob = new Blob(chunksRef.current, { type: "audio/webm" });
     const reader = new FileReader();
 
@@ -405,15 +473,22 @@ function AudioMode() {
         duration: recordingDuration,
       };
 
-      const updated = {
-        ...replicaRecordings,
-        [replicaId]: newRecording,
-      };
+      const strId = String(replicaId);
+      setReplicaRecordings((prev) => {
+        const updated = {
+          ...prev,
+          [strId]: newRecording,
+          [replicaId]: newRecording,
+        };
+        try {
+          localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.warn("Quota LocalStorage dépassé sur mobile:", e);
+        }
+        return updated;
+      });
 
-      setReplicaRecordings(updated);
-      localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
-
-      setRecordingReplicaId(null);
+      releaseMicrophone();
       chunksRef.current = [];
     };
 
@@ -421,16 +496,47 @@ function AudioMode() {
   };
 
   const deleteReplicaRecording = (replicaId) => {
-    const updated = { ...replicaRecordings };
-    delete updated[replicaId];
-    setReplicaRecordings(updated);
-    localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+    if (audioPlayerRef.current) {
+      try {
+        audioPlayerRef.current.pause();
+        audioPlayerRef.current.currentTime = 0;
+      } catch (e) {}
+      audioPlayerRef.current = null;
+    }
+
+    releaseMicrophone();
+
+    const strId = String(replicaId);
+    const numId = Number(replicaId);
+
+    setReplicaRecordings((prev) => {
+      const updated = { ...prev };
+      delete updated[strId];
+      if (!isNaN(numId)) delete updated[numId];
+
+      try {
+        localStorage.setItem(`replicaRecordings_${id}`, JSON.stringify(updated));
+      } catch (e) {
+        console.warn("Erreur suppression LocalStorage:", e);
+      }
+      return updated;
+    });
+
+    setRecordingReplicaId(null);
   };
 
   const playReplicaRecording = (replicaId) => {
     return new Promise(async (resolve) => {
-      const recording = replicaRecordings[replicaId];
+      const recording = replicaRecordings[replicaId] || replicaRecordings[String(replicaId)];
       if (!recording?.data) return resolve();
+
+      if (audioPlayerRef.current) {
+        try {
+          audioPlayerRef.current.pause();
+          audioPlayerRef.current.currentTime = 0;
+        } catch (e) {}
+        audioPlayerRef.current = null;
+      }
 
       try {
         await ensureAudioUnlocked();
@@ -449,7 +555,13 @@ function AudioMode() {
         resolve();
       };
 
-      audio.play().catch(() => resolve());
+      try {
+        await audio.play();
+      } catch (e) {
+        console.warn("Erreur lecture enregistrement replica:", e);
+        audioPlayerRef.current = null;
+        resolve();
+      }
     });
   };
 
@@ -1295,6 +1407,7 @@ function AudioMode() {
               saveReplicaRecording={saveReplicaRecording}
               deleteReplicaRecording={deleteReplicaRecording}
               playReplicaRecording={playReplicaRecording}
+              releaseMicrophone={releaseMicrophone}
             />
             </div>
           );
@@ -1435,6 +1548,7 @@ const AudioBubble = forwardRef(
       saveReplicaRecording,
       deleteReplicaRecording,
       playReplicaRecording,
+      releaseMicrophone,
     },
     ref
   ) => {
@@ -1520,16 +1634,16 @@ const AudioBubble = forwardRef(
             </div>
 
             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-white/20">
-              {replicaRecordings[replica.id] ? (
+              {(replicaRecordings[replica.id] || replicaRecordings[String(replica.id)]) ? (
                 <>
                   <button
-                    onClick={() => playReplicaRecording(replica.id)}
+                    onClick={(e) => { e.stopPropagation(); playReplicaRecording(replica.id); }}
                     className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
                     ▶️ Prise
                   </button>
                   <button
-                    onClick={() => deleteReplicaRecording(replica.id)}
+                    onClick={(e) => { e.stopPropagation(); deleteReplicaRecording(replica.id); }}
                     className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                   >
                     🗑️ Supprimer
@@ -1555,7 +1669,7 @@ const AudioBubble = forwardRef(
                 </div>
               ) : (
                 <button
-                  onClick={() => startReplicaRecording(replica.id)}
+                  onClick={(e) => { e.stopPropagation(); startReplicaRecording(replica.id); }}
                   className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white rounded-lg text-xs font-semibold shadow-md transition active:scale-95"
                 >
                   🎤 Enregistrer ma voix
