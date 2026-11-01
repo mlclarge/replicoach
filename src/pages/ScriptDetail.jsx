@@ -81,6 +81,12 @@ function ScriptDetail() {
     deletePersonalNote,
     updateScript,
   } = useScriptStore();
+  const characters = useMemo(() => currentScript?.characters || [], [currentScript?.characters]);
+  const replicas = useMemo(() => currentScript?.replicas || [], [currentScript?.replicas]);
+  const stage_directions = currentScript?.stage_directions;
+  const full_text = currentScript?.full_text;
+  const original_filename = currentScript?.original_filename;
+  const title = currentScript?.title || "";
 
   const [viewMode, setViewMode] = useState("full");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
