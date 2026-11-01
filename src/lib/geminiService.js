@@ -1,6 +1,6 @@
 /**
  * Service pour l'API Google Gemini
- * Génère des suggestions de jeu basées sur le contexte du comédien
+ * Génère des suggestions de jeu et résumés de scène basés sur le contexte du comédien
  * Utilise une serverless function Vercel pour sécuriser la clé API
  */
 
@@ -30,23 +30,13 @@ Ton approche:
 
 Format tes réponses avec clarté et structure.`;
 
-// Estimation des coûts (en dollars par 1M tokens)
 const PRICING = {
-  inputTokens: 0.075, // $0.075 par 1M tokens input
-  outputTokens: 0.3, // $0.30 par 1M tokens output
+  inputTokens: 0.075,
+  outputTokens: 0.3,
 };
 
-// Taux de change USD/EUR
 const USD_TO_EUR = 0.92;
 
-/**
- * Génère des suggestions de jeu pour un comédien
- * @param {string} characterName - Nom du personnage
- * @param {string} scriptText - Texte complet du script avec répliques
- * @param {string} actorContext - Contexte/instructions du comédien
- * @param {boolean} isCharacterCoaching - Si true, suggestions ciblées pour ce personnage uniquement
- * @returns {Promise<{suggestions: string, inputTokens: number, outputTokens: number, totalTokens: number, estimatedCost: string}>}
- */
 export async function getGameSuggestions(
   characterName,
   scriptText,
@@ -112,8 +102,54 @@ export async function getGameSuggestions(
 }
 
 /**
- * Construit le prompt pour Gemini
+ * Synthèse / Résumé IA d'une scène pour le comédien (Profil Premium)
  */
+export async function getSceneSummary(sceneLabel, sceneText) {
+  if (!sceneText) {
+    throw new Error("Le texte de la scène est requis");
+  }
+
+  const prompt = `Tu es un dramaturge et coach de théâtre expert. Fournis une synthèse claire et concise pour la scène "${sceneLabel || 'Scène'}".
+
+TEXTE DE LA SCÈNE:
+${sceneText}
+
+Consignes de rédaction :
+1. 🎭 **Enjeux dramatiques** : Quel est l'objectif principal et la tension de la scène en 2 phrases.
+2. 👥 **Dynamique des personnages** : Qui s'affronte ou s'allie et quelles sont les émotions dominantes.
+3. 💡 **Conseil d'entrée en scène** : Un conseil d'intention concret pour un comédien qui entre dans cette scène.
+
+Rédige de façon structurée et motivante avec des émojis.`;
+
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt,
+        systemInstruction: SYSTEM_INSTRUCTION,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Erreur API Gemini: ${errorData.error || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return {
+      summary: data.content || "",
+    };
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes("fetch")) {
+      throw new Error("Erreur de connexion. Vérifiez votre connexion internet.");
+    }
+    throw error;
+  }
+}
+
 function buildPrompt(
   characterName,
   scriptText,
@@ -144,18 +180,12 @@ Format les suggestions comme une liste avec des émojis pour la clarté:
 ${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considère les interactions avec les autres personnages"}`;
 }
 
-/**
- * Calcule le coût estimé en fonction des tokens utilisés
- * Retourne les coûts en USD et EUR
- */
 function calculateCost(inputTokens, outputTokens) {
-  // Calcul : (tokens * prix par token) avec prix pour 1M tokens
   const inputCost = (inputTokens / 1_000_000) * PRICING.inputTokens;
   const outputCost = (outputTokens / 1_000_000) * PRICING.outputTokens;
   const totalCostUSD = inputCost + outputCost;
   const totalCostEUR = totalCostUSD * USD_TO_EUR;
 
-  // Retourne les deux formats avec une décimale pour l'affichage
   return {
     usd: `$${totalCostUSD.toFixed(4)}`,
     eur: `${totalCostEUR.toFixed(2)}€`,
@@ -163,10 +193,6 @@ function calculateCost(inputTokens, outputTokens) {
   };
 }
 
-/**
- * Vérifie si l'API est configurée
- * Retourne toujours true si on utilise la serverless function
- */
 export function isApiConfigured() {
   return true;
 }

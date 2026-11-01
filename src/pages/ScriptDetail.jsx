@@ -8,6 +8,15 @@ import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
+import VideoRecorderModal from "../components/VideoRecorderModal";
+import VideoBubble from "../components/VideoBubble";
+import SceneSummaryModal from "../components/SceneSummaryModal";
+import {
+  loadAllReplicaVideosDB,
+  saveReplicaVideoDB,
+  deleteReplicaVideoDB,
+} from "../lib/videoStorage";
+
 import {
   DndContext,
   closestCenter,
@@ -28,10 +37,8 @@ import DOMPurify from "dompurify";
 
 const VIEW_MODE_LABELS = {
   full: "📖 Complet",
-  gaps: "🔤 Trous",
   first3: "3️⃣ 3 mots",
   debut_fin: "🟢 Début/Fin",
-  last_word: "🟣 Derniers Mots",
   cue: "🎭 Répliques",
 };
 
@@ -129,6 +136,11 @@ function ScriptDetail() {
 
   // État pour le Paywall Premium Coach IA
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showStudioMenu, setShowStudioMenu] = useState(false);
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [replicaVideos, setReplicaVideos] = useState({});
+  const [summaryScene, setSummaryScene] = useState(null); // { label, text }
+
 
   // Extraction ordonnée des actes et scènes du script
   const { hasScenes, scenes } = useMemo(() => {
@@ -169,6 +181,55 @@ function ScriptDetail() {
     fetchScript(id);
     return () => clearCurrentScript();
   }, [id, fetchScript, clearCurrentScript]);
+
+  // Écouteur d'événement pour l'onglet Studio centralisé
+  useEffect(() => {
+    const handleStudioMenuEvent = () => {
+      setShowStudioMenu(true);
+    };
+    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
+    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
+  }, []);
+
+  // Chargement des vidéos enregistrées depuis IndexedDB
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    async function initVideos() {
+      const dbVideos = await loadAllReplicaVideosDB(id);
+      if (active && dbVideos) {
+        setReplicaVideos(dbVideos);
+      }
+    }
+    initVideos();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleSaveVideo = (targetReplicaId, videoData) => {
+    if (!targetReplicaId || !videoData) return;
+    setReplicaVideos((prev) => {
+      const updated = {
+        ...prev,
+        [targetReplicaId]: videoData,
+        [String(targetReplicaId)]: videoData,
+      };
+      return updated;
+    });
+    saveReplicaVideoDB(id, targetReplicaId, videoData);
+  };
+
+  const handleDeleteVideo = (replicaId) => {
+    setReplicaVideos((prev) => {
+      const updated = { ...prev };
+      delete updated[replicaId];
+      delete updated[String(replicaId)];
+      return updated;
+    });
+    deleteReplicaVideoDB(id, replicaId);
+  };
+
 
   useEffect(() => {
     if (currentScript?.id && user?.id) {
@@ -709,51 +770,6 @@ function ScriptDetail() {
               <span className="sm:hidden font-extrabold">Audio</span>
             </Link>
 
-            {/* Bouton + Ajouter avec Menu Déroulant */}
-            <div className="relative">
-              <button
-                onClick={() => setShowAddDropdown(!showAddDropdown)}
-                className="px-3 sm:px-4 py-2 sm:py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm rounded-xl shadow-lg border border-emerald-400 transition flex items-center gap-1.5 active:scale-95"
-                title="Ajouter du contenu"
-              >
-                <span>➕</span>
-                <span className="hidden sm:inline">Ajouter</span>
-                <span className="text-[10px]">{showAddDropdown ? "▲" : "▼"}</span>
-              </button>
-
-              {showAddDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1 animate-fade-in">
-                  <button
-                    onClick={() => {
-                      setShowAddReplica(true);
-                      setShowAddDropdown(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-xs text-green-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
-                  >
-                    💬 Ajouter réplique
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddCharacter(true);
-                      setShowAddDropdown(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-xs text-purple-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
-                  >
-                    👤 Ajouter personnage
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowAddNote({ afterReplicaId: null });
-                      setShowAddDropdown(false);
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-xs text-amber-400 hover:bg-gray-800 flex items-center gap-2 font-semibold"
-                  >
-                    📝 Ajouter note
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Menu des options secondaires */}
             <div className="relative">
               <button
@@ -1052,7 +1068,26 @@ function ScriptDetail() {
                             : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
                         }`}
                       >
-                        <span className="font-bold">{scene.fullLabel}</span>
+                                                <span className="font-bold">{scene.fullLabel}</span>
+                        <div className="flex justify-end mt-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsSceneDrawerOpen(false);
+                              const sceneReplicas = replicas.filter(
+                                (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
+                              );
+                              const text = sceneReplicas
+                                .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
+                                .join("\n");
+                              setSummaryScene({ label: scene.fullLabel, text });
+                            }}
+                            className="text-[10px] bg-purple-600/80 hover:bg-purple-500 text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow"
+                          >
+                            <span>✨</span> Résumé IA
+                          </button>
+                        </div>
+
                       </button>
                     );
                   })}
@@ -1241,10 +1276,26 @@ function ScriptDetail() {
                               </div>
                             )}
                             {isNewScene && (
-                              <div>
+                              <div className="flex items-center justify-center gap-2">
                                 <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900/90 inline-block px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md">
                                   🎭 {replica.scene_title}
                                 </h3>
+                                <button
+                                  onClick={() => {
+                                    const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
+                                    const sceneReplicas = replicas.filter(
+                                      (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
+                                    );
+                                    const text = sceneReplicas
+                                      .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
+                                      .join("\n");
+                                    setSummaryScene({ label: replica.scene_title, text });
+                                  }}
+                                  className="px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-full text-xs shadow-md transition active:scale-95 flex items-center gap-1"
+                                  title="Obtenir un résumé IA de cette scène"
+                                >
+                                  <span>✨</span> Résumé IA
+                                </button>
                               </div>
                             )}
                           </div>
@@ -1281,6 +1332,16 @@ function ScriptDetail() {
                         setShowAddNote({ afterReplicaId: replica.id })
                       }
                     />
+
+                    {/* Affichage de la vidéo ancrée si présente */}
+                    {(replicaVideos[replica.id] || replicaVideos[String(replica.id)]) && (
+                      <VideoBubble
+                        video={replicaVideos[replica.id] || replicaVideos[String(replica.id)]}
+                        character={character}
+                        onDelete={() => handleDeleteVideo(replica.id)}
+                      />
+                    )}
+
 
                     {notesAfterThisReplica.map((note) => (
                       <NoteBubble
@@ -1577,6 +1638,132 @@ function ScriptDetail() {
           coachingCharacterId={coachingCharacterId}
           allCharacters={characters}
           allReplicas={replicas}
+          onSaveAsNote={handleSaveAICoachingNote}
+        />
+      )}
+
+      
+      {/* 🎙️ STUDIO MENU DRAWER (Centralisé depuis la barre du bas) */}
+      {showStudioMenu && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div
+            className="fixed inset-0"
+            onClick={() => setShowStudioMenu(false)}
+          />
+          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🎙️</span>
+                <h3 className="text-base font-extrabold text-amber-400">
+                  Studio RépliCoach — Menu Créatif
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowStudioMenu(false)}
+                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 font-medium">
+              Choisissez une action à insérer directement dans votre pièce :
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddNote({ afterReplicaId: null });
+                }}
+                className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">📝</span>
+                <div>
+                  <div className="font-extrabold text-amber-300 text-xs">Ajouter une note</div>
+                  <div className="text-[10px] text-gray-400">Note d'intention ou mise en scène</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddReplica(true);
+                }}
+                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">💬</span>
+                <div>
+                  <div className="font-extrabold text-emerald-300 text-xs">Ajouter réplique</div>
+                  <div className="text-[10px] text-gray-400">Insérer un dialogue</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddCharacter(true);
+                }}
+                className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">👤</span>
+                <div>
+                  <div className="font-extrabold text-purple-300 text-xs">Ajouter personnage</div>
+                  <div className="text-[10px] text-gray-400">Créer un nouveau rôle</div>
+                </div>
+              </button>
+
+              <Link
+                to={`/script/${id}/audio`}
+                onClick={() => setShowStudioMenu(false)}
+                className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
+                  <div className="text-[10px] text-gray-400">Mode répétition audio</div>
+                </div>
+              </Link>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowVideoRecorder(true);
+                }}
+                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
+              >
+                <span className="text-2xl">🎥</span>
+                <div>
+                  <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
+                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo de travail et l'ancrer dans une scène</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎥 MODALE ENREGISTREUR VIDÉO */}
+      {showVideoRecorder && (
+        <VideoRecorderModal
+          isOpen={true}
+          onClose={() => setShowVideoRecorder(false)}
+          onSave={handleSaveVideo}
+          replicas={replicas}
+          characters={characters}
+          scenes={scenes}
+        />
+      )}
+
+      {/* ✨ MODALE SYNTHÈSE / RÉSUMÉ IA DE SCÈNE */}
+      {summaryScene && (
+        <SceneSummaryModal
+          isOpen={true}
+          onClose={() => setSummaryScene(null)}
+          sceneLabel={summaryScene.label}
+          sceneText={summaryScene.text}
+          isPremium={isPremium}
+          onOpenPremiumModal={() => setShowPremiumModal(true)}
           onSaveAsNote={handleSaveAICoachingNote}
         />
       )}

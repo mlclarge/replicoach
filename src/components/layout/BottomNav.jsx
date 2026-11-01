@@ -1,11 +1,20 @@
+import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isScriptView = location.pathname.includes("/script");
+
+  const handleStudioClick = (e) => {
+    if (isScriptView) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent("open-studio-menu"));
+    }
+  };
 
   const handleTutoConsignesClick = () => {
-    if (location.pathname.includes("/script")) {
+    if (isScriptView) {
       window.dispatchEvent(new CustomEvent("open-aicoaching"));
     } else {
       window.dispatchEvent(new CustomEvent("open-onboarding"));
@@ -17,7 +26,7 @@ export default function BottomNav() {
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-gray-950/95 border-t border-gray-800/90 backdrop-blur-md flex items-center justify-between px-2 sm:px-4 py-2 safe-area-pb z-50 shadow-2xl">
-      {/* Bouton RETOUR (Détaché visuellement à gauche) */}
+      {/* Bouton RETOUR */}
       <button
         onClick={() => navigate(-1)}
         className="px-3 py-1.5 bg-gray-800/90 hover:bg-gray-700 border border-gray-700 rounded-xl text-xs font-bold text-gray-200 transition active:scale-95 flex items-center gap-1 shadow-md mr-1 flex-shrink-0"
@@ -59,23 +68,24 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Importer</span>
         </NavLink>
 
-        {/* 3. Studio Enregistrement (Page /free-recordings) */}
+        {/* 3. Studio Centralisé (Menu d'action immersif) */}
         <NavLink
-          to="/free-recordings"
+          to={isScriptView ? "#studio" : "/free-recordings"}
+          onClick={handleStudioClick}
           className={({ isActive }) =>
             `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
-              isActive
+              isActive || isScriptView
                 ? "text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30"
                 : "text-white font-medium hover:text-amber-300"
             }`
           }
-          title="Studio d'enregistrement libre"
+          title="Studio unifié (Ajouter note, réplique, vidéo, audio, personnage)"
         >
           <span className="text-base sm:text-lg">🎙️</span>
           <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
         </NavLink>
 
-        {/* 4. Fusion Tuto / Consignes */}
+        {/* 4. Tuto / Consignes */}
         <NavLink
           to="/?tab=director"
           onClick={handleTutoConsignesClick}

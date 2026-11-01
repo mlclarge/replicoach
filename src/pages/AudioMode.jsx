@@ -15,6 +15,8 @@ import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
+import SceneSummaryModal from "../components/SceneSummaryModal";
+
 import {
   fetchTtsStatus,
   fetchScriptVoiceLocks,
@@ -151,6 +153,8 @@ function AudioMode() {
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [summaryScene, setSummaryScene] = useState(null);
+
   const [recordingDuration, setRecordingDuration] = useState(0);
 
   const handleCoachClick = (e, characterId) => {
@@ -1144,7 +1148,26 @@ function AudioMode() {
                             : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
                         }`}
                       >
-                        <span className="font-bold">{scene.fullLabel}</span>
+                                                <span className="font-bold">{scene.fullLabel}</span>
+                        <div className="flex justify-end mt-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsSceneDrawerOpen(false);
+                              const sceneReplicas = replicas.filter(
+                                (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
+                              );
+                              const text = sceneReplicas
+                                .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
+                                .join("\n");
+                              setSummaryScene({ label: scene.fullLabel, text });
+                            }}
+                            className="text-[10px] bg-purple-600/80 hover:bg-purple-500 text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow"
+                          >
+                            <span>✨</span> Résumé IA
+                          </button>
+                        </div>
+
                       </button>
                     );
                   })}
