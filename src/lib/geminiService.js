@@ -111,20 +111,20 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
       costInEuroAsNumber: costs.eurasNumber,
     };
   } catch (error) {
-    console.warn("Génération de suggestions locales suite à indisponibilité API Gemini:", error);
+    console.warn("Génération de suggestions de jeu locales suite à indisponibilité API Gemini:", error);
     return {
       suggestions: `🎭 **Conseils d'interprétation pour ${characterName}** :
 
-1. 🎯 **Intentions & Objectifs** : Définissez clairement ce que ${characterName} cherche à obtenir dans chaque réplique.
-2. 🗣️ **Diction & Projections** : Projetez votre voix en gardant une articulation fluide.
-3. 👂 **Écoute active** : Recevez la réplique du partenaire avant de répondre.
+1. 🎯 **Intention principale** : Définissez clairement l'objectif de votre personnage dans chaque réplique.
+2. 🗣️ **Intonation & Diction** : Variez le rythme et marquez les silences stratégiques pour installer la tension.
+3. 👁️ **Écoute active** : Restez connecté au regard et aux réactions de vos partenaires avant de répondre.
 4. ⚡ **Engagement physique** : Ancrez vos appuis et adaptez vos mouvements au sous-texte.
 5. 💭 **Sous-texte** : Identifiez l'émotion profonde derrière les mots.`,
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
       estimatedCost: "0.00€",
-      estimatedCostUSD: "-bash.0000",
+      estimatedCostUSD: "$0.0000",
       estimatedCostEUR: "0.00€",
       costInEuroAsNumber: 0,
     };
@@ -161,8 +161,7 @@ Rédige de façon structurée et motivante avec des émojis.`;
 }
 
 function generateLocalSceneSummary(sceneLabel, sceneText) {
-  const lines = (sceneText || "").split("
-").map((l) => l.trim()).filter(Boolean);
+  const lines = (sceneText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const chars = new Set();
   lines.forEach((l) => {
     if (l.includes(":")) {
@@ -181,10 +180,7 @@ function generateLocalSceneSummary(sceneLabel, sceneText) {
 }
 
 function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  const contextSection = actorContext ? `
-
-Contexte du comédien:
-${actorContext}` : "";
+  const contextSection = actorContext ? `\n\nContexte du comédien:\n${actorContext}` : "";
   const scopeSection = isCharacterCoaching
     ? `Ci-dessous sont SEULEMENT les répliques du personnage "${characterName}" dans la saynète.`
     : `Voici le script complet:`;
