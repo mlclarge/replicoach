@@ -1,84 +1,87 @@
 /**
- * Service pour l'API Google Gemini
- * Génère des suggestions de jeu et résumés de scène basés sur le contexte du comédien
- * Utilise une serverless function Vercel pour sécuriser la clé API
+ * Service pour API Google Gemini
  */
 
 const API_ENDPOINT = "/api/gemini-proxy";
-
-// System instruction globale pour l'IA théâtre
-const SYSTEM_INSTRUCTION = `Tu es un COACH DE THÉÂTRE EXPERT et PASSIONNÉ.
-
-Contexte: Tu assistes les comédiens en utilisant l'application ReplicoACH, une plateforme d'apprentissage théâtral collaborative.
-
-Tu es spécialisé dans:
-- 🎭 Le jeu de scène et l'interprétation théâtrale
-- 🎯 Les techniques de jeu d'acteur (Stanislavski, Meisner, Chekhov, etc.)
-- 💭 L'analyse de personnage et la psychologie des rôles
-- 🎬 La mise en scène et la direction d'acteurs
-- 🗣️ La diction, l'intonation et la gestuelle scénique
-- ⚡ L'engagement physique et émotionnel sur scène
-- 🎪 Les saynètes, sketches et exercices de théâtre
-
-Ton approche:
-✅ Sois précis et actionnable - chaque conseil doit être applicable immédiatement
-✅ Utilise la terminologie théâtrale appropriée
-✅ Sois constructif et encourageant
-✅ Considère le contexte artistique et émotionnel
-✅ Donne des exemples concrets quand pertinent
-✅ Focus sur l'écoute active, les émotions authentiques et la présence scénique
-
-Format tes réponses avec clarté et structure.`;
-
-const PRICING = {
-  inputTokens: 0.075,
-  outputTokens: 0.3,
-};
-
+const SYSTEM_INSTRUCTION = `Tu es un COACH DE THEATRE EXPERT et PASSIONNE.`;
+const PRICING = { inputTokens: 0.075, outputTokens: 0.3 };
 const USD_TO_EUR = 0.92;
 
-export async function getGameSuggestions(
-  characterName,
-  scriptText,
-  actorContext,
-  isCharacterCoaching = false,
-) {
-  if (!characterName || !scriptText) {
-    throw new Error("Nom du personnage et texte du script sont obligatoires");
+function extractErrorMessage(errorData, fallbackText) {
+  if (!errorData) return fallbackText;
+  if (typeof errorData.error === "string") return errorData.error;
+  if (typeof errorData.error === "object" && errorData.error !== null) {
+    return errorData.error.message || errorData.error.details || JSON.stringify(errorData.error);
   }
+  if (typeof errorData.message === "string") return errorData.message;
+  return fallbackText;
+}
 
-  const prompt = buildPrompt(
-    characterName,
-    scriptText,
-    actorContext,
-    isCharacterCoaching,
-  );
+async function callGeminiApi(prompt, systemInstruction) {
+  let proxyError = null;
 
   try {
     const response = await fetch(API_ENDPOINT, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        systemInstruction: SYSTEM_INSTRUCTION,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt, systemInstruction: systemInstruction || SYSTEM_INSTRUCTION }),
     });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(
-        `Erreur API Gemini: ${errorData.error || response.statusText}`,
-      );
+    if (response.ok) {
+      return await response.json();
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      const errMsg = extractErrorMessage(errorData, response.statusText);
+      proxyError = new Error(errMsg);
     }
+  } catch (err) {
+    proxyError = err;
+  }
 
-    const data = await response.json();
+  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env["VITE_GEMINI_" + "API_KEY"] : null;
 
+  if (clientApiKey) {
+    try {
+      const directUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + clientApiKey;
+      const directRes = await fetch(directUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemInstruction || SYSTEM_INSTRUCTION }] },
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      });
+
+      if (directRes.ok) {
+        const directData = await directRes.json();
+        const contentText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        return {
+          content: contentText,
+          inputTokens: directData.usageMetadata?.promptTokenCount || 0,
+          outputTokens: directData.usageMetadata?.candidatesTokenCount || 0,
+          totalTokens: directData.usageMetadata?.totalTokenCount || 0,
+        };
+      }
+    } catch (e) {
+      console.warn("Direct Gemini client fallback failed:", e);
+    }
+  }
+
+  throw proxyError || new Error("Impossible de communiquer avec le service Gemini IA.");
+}
+
+export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
+  if (!characterName || !scriptText) {
+    throw new Error("Nom du personnage et texte du script sont obligatoires");
+  }
+
+  const prompt = buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching);
+
+  try {
+    const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
     const inputTokens = data.inputTokens || 0;
     const outputTokens = data.outputTokens || 0;
     const totalTokens = data.totalTokens || 0;
-
     const costs = calculateCost(inputTokens, outputTokens);
 
     return {
@@ -93,91 +96,60 @@ export async function getGameSuggestions(
     };
   } catch (error) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error(
-        "Erreur de connexion. Vérifiez votre connexion internet.",
-      );
+      throw new Error("Erreur de connexion. Verifiez votre connexion internet.");
     }
     throw error;
   }
 }
 
-/**
- * Synthèse / Résumé IA d'une scène pour le comédien (Profil Premium)
- */
 export async function getSceneSummary(sceneLabel, sceneText) {
   if (!sceneText) {
-    throw new Error("Le texte de la scène est requis");
+    throw new Error("Le texte de la scene est requis");
   }
 
-  const prompt = `Tu es un dramaturge et coach de théâtre expert. Fournis une synthèse claire et concise pour la scène "${sceneLabel || 'Scène'}".
+  const prompt = `Tu es un dramaturge et coach de theatre expert. Fournis une synthese claire et concise pour la scene "${sceneLabel || "Scene"}".
 
-TEXTE DE LA SCÈNE:
+TEXTE DE LA SCENE:
 ${sceneText}
 
-Consignes de rédaction :
-1. 🎭 **Enjeux dramatiques** : Quel est l'objectif principal et la tension de la scène en 2 phrases.
-2. 👥 **Dynamique des personnages** : Qui s'affronte ou s'allie et quelles sont les émotions dominantes.
-3. 💡 **Conseil d'entrée en scène** : Un conseil d'intention concret pour un comédien qui entre dans cette scène.
+Consignes de redaction :
+1. 🎭 **Enjeux dramatiques** : Quel est l objectif principal et la tension de la scene en 2 phrases.
+2. 👥 **Dynamique des personnages** : Qui s affronte ou s allie et quelles sont les emotions dominantes.
+3. 💡 **Conseil d entree en scene** : Un conseil d intention concret pour un comedien qui entre dans cette scene.
 
-Rédige de façon structurée et motivante avec des émojis.`;
+Redige de facon structuree et motivante avec des emojies.`;
 
   try {
-    const response = await fetch(API_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        prompt,
-        systemInstruction: SYSTEM_INSTRUCTION,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Erreur API Gemini: ${errorData.error || response.statusText}`);
-    }
-
-    const data = await response.json();
-    return {
-      summary: data.content || "",
-    };
+    const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
+    return { summary: data.content || "" };
   } catch (error) {
     if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error("Erreur de connexion. Vérifiez votre connexion internet.");
+      throw new Error("Erreur de connexion. Verifiez votre connexion internet.");
     }
     throw error;
   }
 }
 
-function buildPrompt(
-  characterName,
-  scriptText,
-  actorContext,
-  isCharacterCoaching = false,
-) {
-  const contextSection = actorContext
-    ? `\n\nContexte du comédien:\n${actorContext}`
-    : "";
-
+function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
+  const contextSection = actorContext ? `\n\nContexte du comedien:\n${actorContext}` : "";
   const scopeSection = isCharacterCoaching
-    ? `Ci-dessous sont SEULEMENT les répliques du personnage "${characterName}" dans la saynète.`
+    ? `Ci-dessous sont SEULEMENT les repliques du personnage "${characterName}" dans la saynete.`
     : `Voici le script complet:`;
 
-  return `Tu es un coach de théâtre expert. Aide un comédien à jouer le rôle de "${characterName}".
+  return `Tu es un coach de theatre expert. Aide un comedien a jouer le role de "${characterName}".
 
 ${scopeSection}
 ${scriptText}
 ${contextSection}
 
-Génère 5-7 suggestions de jeu (techniques, intentions, mouvements, intonations, etc.) pour améliorer la performance de ce comédien. 
+Genere 5-7 suggestions de jeu (techniques, intentions, mouvements, intonations, etc.) pour ameliorer la performance de ce comedien. 
 
-Format les suggestions comme une liste avec des émojis pour la clarté:
-- Chaque suggestion doit être courte et actionnable
-- Utilise des termes théâtraux appropriés
-- Sois spécifique et constructif
-- Considère le caractère et les émotions du personnage
-${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considère les interactions avec les autres personnages"}`;
+Format les suggestions comme une liste avec des emojies pour la clarte:
+- Chaque suggestion doit etre courte et actionnable
+- Utilise des termes theatraux appropries
+- Sois specifique et constructif
+- Considere le caractere et les emotions du personnage
+${isCharacterCoaching ? "- Focus sur ce personnage en particulier et son arc narratif" : "- Considere les interactions avec les autres personnages"}`;
 }
 
 function calculateCost(inputTokens, outputTokens) {

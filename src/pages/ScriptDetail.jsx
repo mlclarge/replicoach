@@ -8,6 +8,11 @@ import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
+import SceneSummaryModal from "../components/SceneSummaryModal";
+import VideoRecorderModal from "../components/VideoRecorderModal";
+import VideoBubble from "../components/VideoBubble";
+import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
+
 import {
   DndContext,
   closestCenter,
