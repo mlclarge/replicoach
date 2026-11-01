@@ -122,6 +122,14 @@ function AudioMode() {
   const { user, isPremium } = useAuthStore();
   const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
 
+  const replicas = useMemo(() => {
+    return currentScript?.replicas || [];
+  }, [currentScript]);
+
+  const characters = useMemo(() => {
+    return currentScript?.characters || [];
+  }, [currentScript]);
+
   // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
   const [ttsUsage, setTtsUsage] = useState(null);
@@ -1011,13 +1019,7 @@ function AudioMode() {
     );
   };
 
-  const replicas = useMemo(() => {
-    return currentScript?.replicas || [];
-  }, [currentScript]);
-
-  const characters = useMemo(() => {
-    return currentScript?.characters || [];
-  }, [currentScript]);
+  // (replicas & characters moved to top)
 
   // 📍 Extraction des scènes (Hook exécuté TOUJOURS avant tout retour conditionnel)
   const { hasScenes, scenes } = useMemo(() => {

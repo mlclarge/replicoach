@@ -17,6 +17,7 @@ import {
   getAudioUrl,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import { getGameSuggestions, isApiConfigured } from "../lib/geminiService";
 import DocumentViewer from "../components/DocumentViewer";
 import PublicLibrary from "../components/PublicLibrary";
 import {
@@ -41,7 +42,209 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import FloatingActionButton from "../components/FloatingActionButton";
 import "../styles/mes-saynetes.css";
+
+
+function AICoachingDirectorHub({ scripts = [], isPremium = false }) {
+  const navigate = useNavigate();
+  const [characterName, setCharacterName] = useState("Cyrano");
+  const [actorContext, setActorContext] = useState("Je souhaite le jouer avec une grande vulnérabilité sous son insolence, très humain.");
+  const [sampleText, setSampleText] = useState("C'est un roc !... c'est un pic !... c'est un cap ! Que dis-je, c'est un cap ?... C'est une péninsule !");
+  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleTestGemini = async () => {
+    if (!characterName.trim() || !actorContext.trim()) {
+      setError("Veuillez remplir le nom du personnage et votre approche de jeu.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setSuggestions(null);
+
+    try {
+      const res = await getGameSuggestions(
+        characterName,
+        sampleText || "Extrait de répliques du personnage",
+        actorContext,
+        true
+      );
+      setSuggestions(res.suggestions);
+    } catch (err) {
+      console.error("Erreur Gemini IA:", err);
+      setError(err.message || "Impossible de contacter l'IA Gemini.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in mb-8">
+      {/* Banner Principal */}
+      <div className="p-6 bg-gradient-to-r from-purple-900 via-indigo-950 to-gray-950 text-white rounded-3xl border border-purple-500/30 shadow-2xl">
+        <div className="flex items-center gap-3 mb-3">
+          <span className="text-3xl p-2 bg-purple-500/20 rounded-2xl border border-purple-400/30">✨</span>
+          <div>
+            <h2 className="text-xl sm:text-2xl font-black text-amber-300">
+              Coaching IA Google Gemini & Espace Metteur en scène
+            </h2>
+            <p className="text-xs sm:text-sm text-purple-200 mt-0.5">
+              Votre assistant théâtral intelligent propulsé par l'IA Google Cloud.
+            </p>
+          </div>
+        </div>
+        <p className="text-xs sm:text-sm text-gray-300 leading-relaxed max-w-3xl">
+          Sélectionnez votre personnage dans n'importe quel texte pour recevoir 5 à 7 suggestions personnalisées d'interprétation (posture, intentions, intonation, psychologie).
+        </p>
+      </div>
+
+      {/* Cartes des scripts avec bouton Lancer Coaching IA */}
+      <div className="p-5 bg-gray-900/90 border border-gray-800 rounded-2xl shadow-xl">
+        <h3 className="text-base font-extrabold text-white mb-3 flex items-center gap-2">
+          <span>🎭</span> Vos textes - Accès direct au Coach IA
+        </h3>
+
+        {scripts.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">Aucun texte dans votre bibliothèque.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {scripts.map((script) => (
+              <div
+                key={script.id}
+                className="p-4 bg-gray-800/90 border border-gray-700/80 rounded-xl hover:border-purple-500/50 transition flex flex-col justify-between space-y-3 shadow-md"
+              >
+                <div>
+                  <h4 className="font-bold text-sm text-amber-300 truncate">{script.title}</h4>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {script.characters?.length || 0} personnage(s) • {script.replicas?.length || 0} répliques
+                  </p>
+                </div>
+
+                <div className="flex gap-2 pt-2 border-t border-gray-700/60">
+                  <Link
+                    to={`/script/${script.id}`}
+                    className="flex-1 py-1.5 px-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-xs font-bold text-center transition"
+                  >
+                    📖 Lire
+                  </Link>
+                  <Link
+                    to={`/script/${script.id}?openCoach=true`}
+                    className="flex-1 py-1.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-lg text-xs font-extrabold text-center shadow transition active:scale-95"
+                  >
+                    ✨ Coach IA
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Démo / Testeur interactif Gemini IA */}
+      <div className="p-5 bg-gray-900/90 border border-purple-500/30 rounded-2xl shadow-xl space-y-4">
+        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+          <h3 className="text-base font-extrabold text-amber-300 flex items-center gap-2">
+            <span>🧪</span> Démo / Testeur Interactif Coach IA (Google Gemini)
+          </h3>
+          <span className="text-[10px] font-bold px-2.5 py-1 bg-purple-500/20 text-purple-300 rounded-full border border-purple-500/30">
+            {isApiConfigured() ? "🟢 API Gemini Active" : "🔴 API Non configurée"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">
+                Nom du personnage :
+              </label>
+              <input
+                type="text"
+                value={characterName}
+                onChange={(e) => setCharacterName(e.target.value)}
+                className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-xl text-xs text-white font-semibold focus:outline-none focus:border-purple-500"
+                placeholder="Ex: Cyrano, Harpagon..."
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">
+                Votre approche / intention de jeu :
+              </label>
+              <textarea
+                value={actorContext}
+                onChange={(e) => setActorContext(e.target.value)}
+                rows={3}
+                className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                placeholder="Comment prévoyez-vous de jouer ce rôle ?"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-300 mb-1">
+                Extrait de texte / Répliques (Optionnel) :
+              </label>
+              <textarea
+                value={sampleText}
+                onChange={(e) => setSampleText(e.target.value)}
+                rows={2}
+                className="w-full p-2.5 bg-gray-800 border border-gray-700 rounded-xl text-xs text-white focus:outline-none focus:border-purple-500"
+                placeholder="Texte de la réplique..."
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-400 bg-red-950/50 p-2.5 rounded-lg border border-red-800 font-semibold">
+                ⚠️ {error}
+              </p>
+            )}
+
+            <button
+              onClick={handleTestGemini}
+              disabled={loading}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-purple-600 via-indigo-600 to-purple-700 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-xl text-xs shadow-lg transition active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <span className="animate-spin">⏳</span> Analyse Gemini IA en cours...
+                </>
+              ) : (
+                <>
+                  <span>✨</span> Générer les conseils de jeu Gemini IA
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="bg-gray-950 p-4 rounded-xl border border-gray-800 flex flex-col justify-between min-h-[220px]">
+            <span className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+              <span>💡</span> Suggestions de jeu générées :
+            </span>
+
+            {loading ? (
+              <div className="flex-1 flex flex-col items-center justify-center space-y-2 py-8 text-gray-400">
+                <span className="text-3xl animate-bounce">🎭</span>
+                <p className="text-xs font-semibold">L'IA Gemini analyse votre personnage...</p>
+              </div>
+            ) : suggestions ? (
+              <div className="flex-1 overflow-y-auto max-h-[280px] pr-2 text-xs text-gray-200 whitespace-pre-line leading-relaxed scrollbar-thin">
+                {suggestions}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-gray-500">
+                <span className="text-3xl mb-2 opacity-50">✨</span>
+                <p className="text-xs">
+                  Remplissez votre approche et cliquez sur "Générer" pour tester le conseil d'interprétation en direct.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function DirectorNotesSection({
   notes,
@@ -452,7 +655,11 @@ export default function Home() {
 
 
       {activeHomeTab === "director" ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <AICoachingDirectorHub
+            scripts={displayScripts}
+            isPremium={isPremium}
+          />
           <DirectorNotesSection
             notes={directorNotes || []}
             onUpload={handleUploadDirectorNote}
@@ -896,7 +1103,7 @@ export default function Home() {
         </div>
       )}
 
-      
+      <FloatingActionButton />
     </div>
   );
 }
@@ -1058,3 +1265,5 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
   );
 }
 
+
+======================================================================

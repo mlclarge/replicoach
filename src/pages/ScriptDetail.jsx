@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
@@ -59,6 +59,7 @@ function stripHtml(text) {
 function ScriptDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   // Récupération de user et isPremium pour la gestion du Coach IA
   const { user, isPremium } = useAuthStore();
   const {
@@ -157,6 +158,10 @@ function ScriptDetail() {
       }
     };
     window.addEventListener("open-aicoaching", handleAICoachEvent);
+
+    if (searchParams.get("openCoach") === "true") {
+      handleAICoachEvent();
+    }
     return () => window.removeEventListener("open-aicoaching", handleAICoachEvent);
   }, [myCharacterId, characters, isPremium]);
 
