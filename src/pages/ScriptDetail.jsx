@@ -622,14 +622,7 @@ function ScriptDetail() {
     );
   }
 
-  const {
-    title,
-    characters = [],
-    replicas = [],
-    stage_directions,
-    full_text,
-    original_filename,
-  } = currentScript;
+
 
   return (
     <div className="pb-32 min-h-screen bg-amber-50">
