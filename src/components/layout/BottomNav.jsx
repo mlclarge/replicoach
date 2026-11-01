@@ -82,9 +82,9 @@ export default function BottomNav() {
                 : "text-white font-medium hover:text-amber-300"
             }`
           }
-          title="Consignes et Tutoriel"
+          title="Coaching IA & Consignes"
         >
-          <span className="text-base sm:text-lg">📁</span>
+          <span className="text-base sm:text-lg">✨</span>
           <span className="text-[10px] sm:text-xs text-white font-medium">Tuto/Consignes</span>
         </NavLink>
 

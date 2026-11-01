@@ -115,6 +115,7 @@ function ScriptDetail() {
   const [studyingGroup, setStudyingGroup] = useState(null);
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
   const [myCharacterId, setMyCharacterId] = useState(null);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "role"
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
@@ -135,6 +136,27 @@ function ScriptDetail() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  
+  useEffect(() => {
+    const handleAICoachEvent = () => {
+      let charId = myCharacterId;
+      if (!charId && characters?.length > 0) {
+        charId = characters[0].id;
+        setMyCharacterId(charId);
+      }
+      if (charId) {
+        if (isPremium) {
+          setCoachingMode("character");
+          setCoachingCharacterId(charId);
+        } else {
+          setShowPremiumModal(true);
+        }
+      }
+    };
+    window.addEventListener("open-aicoaching", handleAICoachEvent);
+    return () => window.removeEventListener("open-aicoaching", handleAICoachEvent);
+  }, [myCharacterId, characters, isPremium]);
 
   useEffect(() => {
     fetchScript(id);
@@ -234,6 +256,10 @@ function ScriptDetail() {
       result = result.filter((r) => r.character_id === selectedCharacter);
     }
 
+    if (filterMode === "role" && myCharacterId) {
+      result = result.filter((r) => r.character_id === myCharacterId || r.is_context);
+    }
+
     if (selectedSceneKey) {
       result = result.filter((r) => {
         const key = `${r.act_title || ""}_${r.scene_title || ""}`;
@@ -274,6 +300,7 @@ function ScriptDetail() {
     currentScript?.replicas,
     currentScript?.characters,
     selectedCharacter,
+    filterMode,
     selectedSceneKey,
     studyingGroup,
     searchQuery,
@@ -760,100 +787,112 @@ function ScriptDetail() {
           </div>
         )}
 
-        {/* Filtres personnages et boutons d'action */}
-        <div className="mb-4">
-          {myCharacterId && (
-            <div className="mb-2">
+        {/* Refonte Sélection de Rôle & Filtrage (UI/UX) */}
+        <div className="mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🎭</span> Sélectionner mon personnage :
+            </span>
+            {myCharacterId && (
               <button
-                onClick={() => setHideMyReplicas(!hideMyReplicas)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold border transition border-2 shadow-md whitespace-nowrap ${
-                  hideMyReplicas
-                    ? "bg-red-600 text-white border-red-700 hover:bg-red-700"
-                    : "bg-white text-gray-700 border-gray-300 hover:border-red-400 hover:bg-red-50"
-                }`}
+                onClick={() => {
+                  setMyCharacterId(null);
+                  setFilterMode("all");
+                }}
+                className="text-xs text-rose-600 hover:text-rose-800 font-bold underline flex items-center gap-1"
               >
-                <span className="text-lg">{hideMyReplicas ? "🚫" : "👁️"}</span>
-                <span>{hideMyReplicas ? "Cachées" : "Visibles"}</span>
+                <span>✖</span> Réinitialiser
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
             <button
-              onClick={() => setSelectedCharacter(null)}
-              className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow ${
-                !selectedCharacter
-                  ? "bg-gold-500 text-dark"
+              onClick={() => {
+                setMyCharacterId(null);
+                setFilterMode("all");
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
+                !myCharacterId
+                  ? "bg-amber-500 text-gray-950 ring-2 ring-amber-400"
                   : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
               }`}
             >
               Tous ({replicas.length})
             </button>
 
-            {characters.map((char) => (
-              <div key={char.id} className="flex items-center gap-2">
+            {characters.map((char) => {
+              const isMyRole = myCharacterId === char.id;
+              return (
                 <button
+                  key={char.id}
                   onClick={() => {
-                    setSelectedCharacter(
-                      selectedCharacter === char.id ? null : char.id
-                    );
+                    setMyCharacterId(isMyRole ? null : char.id);
                   }}
-                  className="px-4 py-2 rounded-full text-sm whitespace-nowrap transition font-medium shadow"
-                  style={{
-                    backgroundColor:
-                      selectedCharacter === char.id ? char.color : "white",
-                    color: selectedCharacter === char.id ? "white" : "#4B5563",
-                    border:
-                      selectedCharacter === char.id
-                        ? `2px solid ${char.color}`
-                        : "1px solid #D1D5DB",
-                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
+                    isMyRole
+                      ? "ring-2 ring-amber-400 text-white shadow-md scale-105"
+                      : "bg-white text-gray-700 hover:border-gray-400 border border-gray-300"
+                  }`}
+                  style={isMyRole ? { backgroundColor: char.color } : {}}
                 >
+                  {isMyRole && <span>👑</span>}
                   {char.name} ({replicaCountByCharacter[char.id] || 0})
                 </button>
+              );
+            })}
+          </div>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMyCharacterId(
-                      myCharacterId === char.id ? null : char.id
-                    );
-                    if (hideMyReplicas && myCharacterId === char.id)
-                      setHideMyReplicas(false);
-                  }}
-                  title={
-                    myCharacterId === char.id
-                      ? "Retirer mon rôle"
-                      : "Marquer comme mon rôle"
-                  }
-                  className={`flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap shadow-md ${
-                    myCharacterId === char.id
-                      ? "bg-gold-400 text-white border-gold-500 hover:bg-gold-500"
-                      : "bg-white text-gray-600 border-gray-300 hover:border-gold-400 hover:bg-gold-50"
-                  }`}
-                >
-                  <span className="text-lg">👁️</span>
-                  <span className="hidden sm:inline text-sm">
-                    {myCharacterId === char.id ? "Mon rôle" : ""}
+          {/* Bandeau d'Action "Mon Rôle" & Commutateur de Mode */}
+          {myCharacterId && (
+            <div className="p-3.5 bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-gray-900 text-white rounded-2xl shadow-xl border border-purple-500/30 space-y-3 animate-fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-3.5 h-3.5 rounded-full ring-2 ring-white/50 flex-shrink-0"
+                    style={{ backgroundColor: characters?.find((c) => c.id === myCharacterId)?.color || "#A855F7" }}
+                  />
+                  <span className="font-extrabold text-sm sm:text-base text-amber-300">
+                    🎭 Mon rôle : {characters?.find((c) => c.id === myCharacterId)?.name}
                   </span>
-                </button>
+                </div>
 
-                {/* BOUTON COACH IA AVEC PROTECTION PREMIUM */}
+                {/* Unique Bouton Coach IA contextuel */}
                 <button
-                  onClick={(e) => handleCoachClick(e, char.id)}
-                  title={`Coaching IA pour ${char.name}`}
-                  className="flex items-center gap-2 px-4 py-2 rounded-full font-semibold transition border-2 whitespace-nowrap text-white border-violet-700 hover:shadow-lg active:scale-95 shadow-md"
-                  style={{
-                    background:
-                      "linear-gradient(135deg, #a855f7 0%, #9333ea 100%)",
-                  }}
+                  onClick={(e) => handleCoachClick(e, myCharacterId)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 font-extrabold rounded-xl text-xs shadow-lg transition active:scale-95"
+                  title={`Coaching IA pour ${characters?.find((c) => c.id === myCharacterId)?.name}`}
                 >
-                  <span className="text-lg">✨</span>
-                  <span className="hidden sm:inline text-sm">Coach</span>
+                  <span>✨</span>
+                  <span>Coach IA {characters?.find((c) => c.id === myCharacterId)?.name}</span>
                 </button>
               </div>
-            ))}
-          </div>
+
+              {/* Commutateur de Mode (Segmented Control) */}
+              <div className="flex bg-gray-950/60 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setFilterMode("all")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    filterMode === "all"
+                      ? "bg-amber-500 text-gray-950 shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <span>📜</span> Pièce entière (avec surbrillance)
+                </button>
+                <button
+                  onClick={() => setFilterMode("role")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    filterMode === "role"
+                      ? "bg-purple-600 text-white shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <span>🎯</span> Mes répliques uniquement
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sommaire des Passages */}

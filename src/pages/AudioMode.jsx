@@ -13,6 +13,8 @@ import {
 } from "../lib/audioStorage";
 import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
+import AICoachingModal from "../components/AICoachingModal";
+import PremiumGateModal from "../components/PremiumGateModal";
 import {
   fetchTtsStatus,
   fetchScriptVoiceLocks,
@@ -138,6 +140,8 @@ function AudioMode() {
   // Enregistrement réplique
   const [recordingReplicaId, setRecordingReplicaId] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [coachingCharacterId, setCoachingCharacterId] = useState(null);
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
 
   // Lecture
@@ -1313,7 +1317,27 @@ function AudioMode() {
 
       {/* Mode italienne */}
       <div className="p-3 bg-amber-100/90 border-b border-amber-200 w-full max-w-7xl mx-auto rounded-xl my-2">
-        <p className="text-xs text-amber-900 mb-2 font-bold flex items-center gap-1.5">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
+            <span>🎭</span> Mode italienne : cliquez sur un personnage pour masquer ses répliques
+          </p>
+          {characters?.length > 0 && (
+            <button
+              onClick={() => {
+                if (isPremium) {
+                  setCoachingCharacterId(characters[0].id);
+                } else {
+                  setShowPremiumModal(true);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-lg text-xs shadow transition active:scale-95 flex-shrink-0"
+              title="Accompagnement Coach IA"
+            >
+              <span>✨</span>
+              <span>Coach IA</span>
+            </button>
+          )}
+        </div>
           <span>🎭</span> Mode italienne : cliquez sur un personnage pour masquer ses répliques
         </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
