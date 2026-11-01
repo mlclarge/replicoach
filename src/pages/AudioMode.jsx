@@ -120,7 +120,7 @@ function cleanTextForSpeech(text) {
 function AudioMode() {
   const { id } = useParams();
   const { user, isPremium } = useAuthStore();
-  const { currentScript, loading, fetchScript } = useScriptStore();
+  const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
 
   // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
@@ -140,9 +140,49 @@ function AudioMode() {
   // Enregistrement réplique
   const [recordingReplicaId, setRecordingReplicaId] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
+
+  const handleCoachClick = (e, characterId) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const charId = characterId || coachingCharacterId || characters[0]?.id;
+    if (charId) {
+      if (isPremium) {
+        setCoachingMode("character");
+        setCoachingCharacterId(charId);
+      } else {
+        setShowPremiumModal(true);
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleAICoachEvent = () => {
+      let charId = coachingCharacterId || characters[0]?.id;
+      if (charId) {
+        if (isPremium) {
+          setCoachingMode("character");
+          setCoachingCharacterId(charId);
+        } else {
+          setShowPremiumModal(true);
+        }
+      }
+    };
+    window.addEventListener("open-aicoaching", handleAICoachEvent);
+    return () => window.removeEventListener("open-aicoaching", handleAICoachEvent);
+  }, [coachingCharacterId, characters, isPremium]);
+
+  const handleSaveAICoachingNote = async ({ text, type }) => {
+    if (!id || !user?.id) return;
+    try {
+      await addPersonalNote(id, user.id, text, type || "intention");
+    } catch (err) {
+      console.error("Error saving AI coaching note:", err);
+    }
+  };
+
 
   // Lecture
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1323,13 +1363,7 @@ function AudioMode() {
           </p>
           {characters?.length > 0 && (
             <button
-              onClick={() => {
-                if (isPremium) {
-                  setCoachingCharacterId(characters[0].id);
-                } else {
-                  setShowPremiumModal(true);
-                }
-              }}
+              onClick={(e) => handleCoachClick(e, characters[0]?.id)}
               className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-lg text-xs shadow transition active:scale-95 flex-shrink-0"
               title="Accompagnement Coach IA"
             >
@@ -1371,6 +1405,39 @@ function AudioMode() {
         <div className="bg-emerald-600 text-white p-3 text-center animate-pulse sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm max-w-7xl mx-auto rounded-xl">
           🎭 C'est votre tour ! Cliquez sur votre réplique pour continuer.
         </div>
+      )}
+
+      
+      {coachingMode && (
+        <AICoachingModal
+          isOpen={true}
+          onClose={() => {
+            setCoachingMode(null);
+            setCoachingCharacterId(null);
+          }}
+          characterName={
+            characters.find((c) => c.id === coachingCharacterId)?.name ||
+            "Personnage"
+          }
+          scriptText={displayReplicas
+            .map((r) => {
+              const charName = characters.find((c) => c.id === r.character_id)?.name || "";
+              return `${charName}: ${r.text}`;
+            })
+            .join("\n\n")}
+          coachingCharacterId={coachingCharacterId}
+          allCharacters={characters}
+          allReplicas={displayReplicas}
+          onSaveAsNote={handleSaveAICoachingNote}
+        />
+      )}
+
+      {showPremiumModal && (
+        <PremiumGateModal
+          featureKey="AI_COACHING"
+          isOpen={showPremiumModal}
+          onClose={() => setShowPremiumModal(false)}
+        />
       )}
 
       {/* Liste des répliques - Responsive Full Width */}

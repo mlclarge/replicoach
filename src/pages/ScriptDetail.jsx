@@ -146,11 +146,7 @@ function ScriptDetail() {
   
   useEffect(() => {
     const handleAICoachEvent = () => {
-      let charId = myCharacterId;
-      if (!charId && characters?.length > 0) {
-        charId = characters[0].id;
-        setMyCharacterId(charId);
-      }
+      let charId = myCharacterId || characters[0]?.id;
       if (charId) {
         if (isPremium) {
           setCoachingMode("character");
@@ -335,12 +331,15 @@ function ScriptDetail() {
 
   // Fonction d'interception du clic Coach (Sécurisée avec Paywall Premium)
   const handleCoachClick = (e, characterId) => {
-    e.stopPropagation();
-    if (isPremium) {
-      setCoachingMode("character");
-      setCoachingCharacterId(characterId);
-    } else {
-      setShowPremiumModal(true);
+    if (e && e.stopPropagation) e.stopPropagation();
+    const targetCharId = characterId || myCharacterId || characters[0]?.id;
+    if (targetCharId) {
+      if (isPremium) {
+        setCoachingMode("character");
+        setCoachingCharacterId(targetCharId);
+      } else {
+        setShowPremiumModal(true);
+      }
     }
   };
 

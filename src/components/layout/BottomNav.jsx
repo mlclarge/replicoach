@@ -5,7 +5,11 @@ export default function BottomNav() {
   const location = useLocation();
 
   const handleTutoConsignesClick = () => {
-    window.dispatchEvent(new CustomEvent("open-onboarding"));
+    if (location.pathname.includes("/script")) {
+      window.dispatchEvent(new CustomEvent("open-aicoaching"));
+    } else {
+      window.dispatchEvent(new CustomEvent("open-onboarding"));
+    }
   };
 
   const isDirectorActive = location.pathname === "/" && location.search.includes("tab=director");
