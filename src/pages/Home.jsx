@@ -391,7 +391,7 @@ function DirectorNotesSection({
 
 export default function Home() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, isPremium } = useAuthStore();
   const [searchParams] = useSearchParams();
   const activeHomeTab = searchParams.get("tab") || "scripts";
   const {
@@ -1266,3 +1266,4 @@ function SortableAudioCard({ audio, audioUrl, onDelete, orderLocked }) {
 }
 
 
+======================================================================
