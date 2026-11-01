@@ -6,6 +6,7 @@
 const DB_NAME = "ReplicoachVideoDB";
 const DB_VERSION = 1;
 const STORE_NAME = "replica_videos";
+const FREE_STORE_NAME = "free_videos";
 
 export function openVideoDB() {
   return new Promise((resolve, reject) => {
@@ -18,6 +19,9 @@ export function openVideoDB() {
       const db = e.target.result;
       if (!db.objectStoreNames.contains(STORE_NAME)) {
         db.createObjectStore(STORE_NAME);
+      }
+      if (!db.objectStoreNames.contains(FREE_STORE_NAME)) {
+        db.createObjectStore(FREE_STORE_NAME, { autoIncrement: true });
       }
     };
 
@@ -41,7 +45,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
         const cursor = e.target.result;
         if (cursor) {
           const key = String(cursor.key);
-          const prefix = `${scriptId}_`;
+          const prefix = ;
           if (key.startsWith(prefix)) {
             const replicaId = key.substring(prefix.length);
             videosMap[replicaId] = cursor.value;
@@ -63,7 +67,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
 
 export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
   if (!scriptId || !replicaId) return;
-  const key = `${scriptId}_${String(replicaId)}`;
+  const key = ;
 
   try {
     const db = await openVideoDB();
@@ -81,8 +85,8 @@ export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
 
 export async function deleteReplicaVideoDB(scriptId, replicaId) {
   if (!scriptId || !replicaId) return;
-  const keyStr = `${scriptId}_${String(replicaId)}`;
-  const keyNum = `${scriptId}_${Number(replicaId)}`;
+  const keyStr = ;
+  const keyNum = ;
 
   try {
     const db = await openVideoDB();
@@ -96,5 +100,20 @@ export async function deleteReplicaVideoDB(scriptId, replicaId) {
     });
   } catch (err) {
     console.warn("Erreur suppression vidéo IndexedDB:", err);
+  }
+}
+
+export async function saveFreeVideoDB(videoData) {
+  try {
+    const db = await openVideoDB();
+    const tx = db.transaction(FREE_STORE_NAME, "readwrite");
+    const store = tx.objectStore(FREE_STORE_NAME);
+    store.add(videoData);
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Erreur sauvegarde vidéo libre IndexedDB:", err);
   }
 }
