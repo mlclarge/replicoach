@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
-import { useScriptStore, extractScenes } from "../store/scriptStore";
-import VideoRecorderModal from "../components/VideoRecorderModal";
-import { saveReplicaVideoDB, saveFreeVideoDB } from "../lib/videoStorage";
+import { useScriptStore, extractScenes } from "../../store/scriptStore";
+import VideoRecorderModal from "../VideoRecorderModal";
+import { saveReplicaVideoDB, saveFreeVideoDB } from "../../lib/videoStorage";
 
 export default function BottomNav() {
   const navigate = useNavigate();
