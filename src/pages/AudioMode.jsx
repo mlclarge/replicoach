@@ -6,6 +6,11 @@ import {
   fetchCharacterRecordings,
   supabase,
 } from "../lib/supabase";
+import {
+  loadAllReplicaRecordingsDB,
+  saveReplicaRecordingDB,
+  deleteReplicaRecordingDB,
+} from "../lib/audioStorage";
 import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import {
@@ -217,14 +222,17 @@ function AudioMode() {
   }, [id, currentScript, fetchScript]);
 
   useEffect(() => {
-    const saved = localStorage.getItem(`replicaRecordings_${id}`);
-    if (saved) {
-      try {
-        setReplicaRecordings(JSON.parse(saved));
-      } catch (e) {
-        console.warn("Impossible de parser replicaRecordings", e);
+    let active = true;
+    async function initRecordings() {
+      const dbRecordings = await loadAllReplicaRecordingsDB(id);
+      if (active && dbRecordings && Object.keys(dbRecordings).length > 0) {
+        setReplicaRecordings(dbRecordings);
       }
     }
+    initRecordings();
+    return () => {
+      active = false;
+    };
   }, [id]);
 
   useEffect(() => {
@@ -488,6 +496,7 @@ function AudioMode() {
         return updated;
       });
 
+      saveReplicaRecordingDB(id, replicaId, newRecording);
       releaseMicrophone();
       chunksRef.current = [];
     };
@@ -519,6 +528,7 @@ function AudioMode() {
       } catch (e) {
         console.warn("Erreur suppression LocalStorage:", e);
       }
+      deleteReplicaRecordingDB(id, replicaId);
       return updated;
     });
 
