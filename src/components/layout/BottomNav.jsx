@@ -7,17 +7,22 @@ import { saveReplicaVideoDB, saveFreeVideoDB } from "../lib/videoStorage";
 export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isScriptView = location.pathname.includes("/script");
   const { currentScript } = useScriptStore();
 
   const [showStudioMenu, setShowStudioMenu] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
 
-  const isScriptView = location.pathname.includes("/script");
+  const replicas = useMemo(() => currentScript?.replicas || [], [currentScript]);
+  const characters = useMemo(() => currentScript?.characters || [], [currentScript]);
+  const { scenes } = useMemo(() => extractScenes(replicas), [replicas]);
 
   useEffect(() => {
-    const handleOpenStudio = () => setShowStudioMenu(true);
-    window.addEventListener("open-studio-menu", handleOpenStudio);
-    return () => window.removeEventListener("open-studio-menu", handleOpenStudio);
+    const handleStudioMenuEvent = () => {
+      setShowStudioMenu(true);
+    };
+    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
+    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
   }, []);
 
   const handleStudioClick = (e) => {
@@ -33,17 +38,16 @@ export default function BottomNav() {
     }
   };
 
-  const { scenes } = useMemo(() => {
-    return extractScenes(currentScript?.replicas || []);
-  }, [currentScript?.replicas]);
-
   const handleSaveVideo = (targetReplicaId, videoData) => {
     if (currentScript?.id && targetReplicaId) {
       saveReplicaVideoDB(currentScript.id, targetReplicaId, videoData);
-      window.dispatchEvent(new CustomEvent("replica-video-updated"));
+      window.dispatchEvent(
+        new CustomEvent("replica-video-updated", {
+          detail: { targetReplicaId, videoData },
+        })
+      );
     } else {
       saveFreeVideoDB(videoData);
-      window.dispatchEvent(new CustomEvent("free-video-updated"));
     }
   };
 
@@ -69,7 +73,11 @@ export default function BottomNav() {
           <NavLink
             to="/?tab=library#library"
             className={() =>
-              
+              `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+                isLibraryActive
+                  ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
+                  : "text-white font-medium hover:text-amber-300"
+              }`
             }
           >
             <span className="text-base sm:text-lg">📚</span>
@@ -80,7 +88,11 @@ export default function BottomNav() {
           <NavLink
             to="/upload"
             className={({ isActive }) =>
-              
+              `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+                isActive
+                  ? "text-blue-400 font-bold bg-blue-500/10 border border-blue-500/30"
+                  : "text-white font-medium hover:text-amber-300"
+              }`
             }
           >
             <span className="text-base sm:text-lg">➕</span>
@@ -88,21 +100,32 @@ export default function BottomNav() {
           </NavLink>
 
           {/* 3. Studio Centralisé */}
-          <button
+          <NavLink
+            to="#studio"
             onClick={handleStudioClick}
-            className={}
-            title="Studio unifié (Notes, Répliques, Personnage, Audio, Vidéo)"
+            className={() =>
+              `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+                showStudioMenu || showVideoRecorder || isScriptView
+                  ? "text-emerald-400 font-bold bg-emerald-500/10 border border-emerald-500/30"
+                  : "text-white font-medium hover:text-amber-300"
+              }`
+            }
+            title="Studio (Note, Réplique, Personnage, Audio libre, Vidéo)"
           >
             <span className="text-base sm:text-lg">🎙️</span>
             <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
-          </button>
+          </NavLink>
 
           {/* 4. Tuto / Consignes */}
           <NavLink
             to="/?tab=director"
             onClick={handleTutoConsignesClick}
             className={() =>
-              
+              `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+                isDirectorActive
+                  ? "text-amber-400 font-bold bg-amber-500/10 border border-amber-500/30"
+                  : "text-white font-medium hover:text-amber-300"
+              }`
             }
             title="Coaching IA & Consignes"
           >
@@ -114,7 +137,11 @@ export default function BottomNav() {
           <NavLink
             to="/shared"
             className={({ isActive }) =>
-              
+              `flex flex-col items-center py-1 px-2 rounded-xl transition text-center ${
+                isActive
+                  ? "text-purple-400 font-bold bg-purple-500/10 border border-purple-500/30"
+                  : "text-white font-medium hover:text-amber-300"
+              }`
             }
           >
             <span className="text-base sm:text-lg">👥</span>
@@ -123,14 +150,14 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      {/* 🎙️ STUDIO MENU DRAWER */}
+      {/* 🎙️ STUDIO MENU DRAWER (TIROIR CENTRALISÉ DU STUDIO) */}
       {showStudioMenu && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
           <div
             className="fixed inset-0"
             onClick={() => setShowStudioMenu(false)}
           />
-          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up mb-14">
+          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🎙️</span>
@@ -147,18 +174,14 @@ export default function BottomNav() {
             </div>
 
             <p className="text-xs text-gray-400 font-medium">
-              Choisissez une action à créer ou insérer :
+              Choisissez une action à insérer dans votre travail :
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  if (isScriptView) {
-                    window.dispatchEvent(new CustomEvent("open-add-note"));
-                  } else {
-                    alert("Ouvrez une pièce dans votre bibliothèque pour y ajouter une note.");
-                  }
+                  window.dispatchEvent(new CustomEvent("open-add-note"));
                 }}
                 className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -172,11 +195,7 @@ export default function BottomNav() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  if (isScriptView) {
-                    window.dispatchEvent(new CustomEvent("open-add-replica"));
-                  } else {
-                    alert("Ouvrez une pièce dans votre bibliothèque pour y ajouter une réplique.");
-                  }
+                  window.dispatchEvent(new CustomEvent("open-add-replica"));
                 }}
                 className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -190,11 +209,7 @@ export default function BottomNav() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  if (isScriptView) {
-                    window.dispatchEvent(new CustomEvent("open-add-character"));
-                  } else {
-                    alert("Ouvrez une pièce dans votre bibliothèque pour y ajouter un personnage.");
-                  }
+                  window.dispatchEvent(new CustomEvent("open-add-character"));
                 }}
                 className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -210,12 +225,12 @@ export default function BottomNav() {
                   setShowStudioMenu(false);
                   navigate("/free-recordings");
                 }}
-                className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+                className="p-3 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
                 <span className="text-2xl">🎙️</span>
                 <div>
-                  <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
-                  <div className="text-[10px] text-gray-400">Enregistrements audio libres</div>
+                  <div className="font-extrabold text-yellow-300 text-xs">S'enregistrer (Audio)</div>
+                  <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
                 </div>
               </button>
 
@@ -237,14 +252,14 @@ export default function BottomNav() {
         </div>
       )}
 
-      {/* 🎥 MODALE ENREGISTREUR VIDÉO */}
+      {/* 🎥 MODALE GLOBAL ENREGISTREUR VIDÉO (Invoquée depuis n'importe où via Studio) */}
       {showVideoRecorder && (
         <VideoRecorderModal
           isOpen={true}
           onClose={() => setShowVideoRecorder(false)}
           onSave={handleSaveVideo}
-          replicas={currentScript?.replicas || []}
-          characters={currentScript?.characters || []}
+          replicas={replicas}
+          characters={characters}
           scenes={scenes}
         />
       )}

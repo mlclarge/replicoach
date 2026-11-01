@@ -45,7 +45,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
         const cursor = e.target.result;
         if (cursor) {
           const key = String(cursor.key);
-          const prefix = ;
+          const prefix = `${scriptId}_`;
           if (key.startsWith(prefix)) {
             const replicaId = key.substring(prefix.length);
             videosMap[replicaId] = cursor.value;
@@ -67,7 +67,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
 
 export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
   if (!scriptId || !replicaId) return;
-  const key = ;
+  const key = `${scriptId}_${String(replicaId)}`;
 
   try {
     const db = await openVideoDB();
@@ -85,8 +85,8 @@ export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
 
 export async function deleteReplicaVideoDB(scriptId, replicaId) {
   if (!scriptId || !replicaId) return;
-  const keyStr = ;
-  const keyNum = ;
+  const keyStr = `${scriptId}_${String(replicaId)}`;
+  const keyNum = `${scriptId}_${Number(replicaId)}`;
 
   try {
     const db = await openVideoDB();

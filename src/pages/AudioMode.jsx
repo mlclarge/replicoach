@@ -163,17 +163,6 @@ function AudioMode() {
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replicaVideos, setReplicaVideos] = useState({});
 
-
-  // Écouteur de rafraîchissement vidéo déclenché par le Studio Global (BottomNav)
-  useEffect(() => {
-    async function refreshVideos() {
-      if (!id) return;
-      const dbVideos = await loadAllReplicaVideosDB(id);
-      if (dbVideos) setReplicaVideos(dbVideos);
-    }
-    window.addEventListener("replica-video-updated", refreshVideos);
-    return () => window.removeEventListener("replica-video-updated", refreshVideos);
-  }, [id]);
   useEffect(() => {
     if (!id) return;
     try {
@@ -192,6 +181,21 @@ function AudioMode() {
       return updated;
     });
   };
+
+  useEffect(() => {
+    const handleVideoUpdatedEvent = (e) => {
+      if (e.detail?.targetReplicaId && e.detail?.videoData) {
+        const { targetReplicaId, videoData } = e.detail;
+        setReplicaVideos((prev) => ({
+          ...prev,
+          [targetReplicaId]: videoData,
+          [String(targetReplicaId)]: videoData,
+        }));
+      }
+    };
+    window.addEventListener("replica-video-updated", handleVideoUpdatedEvent);
+    return () => window.removeEventListener("replica-video-updated", handleVideoUpdatedEvent);
+  }, []);
 
   useEffect(() => {
     if (!id) return;
