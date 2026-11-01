@@ -1338,8 +1338,6 @@ function AudioMode() {
             </button>
           )}
         </div>
-          <span>🎭</span> Mode italienne : cliquez sur un personnage pour masquer ses répliques
-        </p>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {characters.map((char) => {
             const isHidden = hiddenCharacters.has(char.id);
