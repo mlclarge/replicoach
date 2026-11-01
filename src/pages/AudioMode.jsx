@@ -1691,6 +1691,106 @@ function AudioMode() {
           </div>
         </div>
       </div>
+
+      {/* 🎙️ STUDIO MENU DRAWER (Centralisé depuis la barre du bas) */}
+      {showStudioMenu && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div
+            className="fixed inset-0"
+            onClick={() => setShowStudioMenu(false)}
+          />
+          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🎙️</span>
+                <h3 className="text-base font-extrabold text-amber-400">
+                  Studio RépliCoach — Menu Créatif
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowStudioMenu(false)}
+                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 font-medium">
+              Choisissez une action à exécuter :
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  window.history.back();
+                }}
+                className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">📝</span>
+                <div>
+                  <div className="font-extrabold text-amber-300 text-xs">Ajouter une note</div>
+                  <div className="text-[10px] text-gray-400">Sur le texte de la pièce</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  window.history.back();
+                }}
+                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">💬</span>
+                <div>
+                  <div className="font-extrabold text-emerald-300 text-xs">Ajouter réplique</div>
+                  <div className="text-[10px] text-gray-400">Insérer un dialogue</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  window.history.back();
+                }}
+                className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">👤</span>
+                <div>
+                  <div className="font-extrabold text-purple-300 text-xs">Ajouter personnage</div>
+                  <div className="text-[10px] text-gray-400">Créer un nouveau rôle</div>
+                </div>
+              </button>
+
+              <Link
+                to="/free-recordings"
+                onClick={() => setShowStudioMenu(false)}
+                className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
+                  <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
+                </div>
+              </Link>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowVideoRecorder(true);
+                }}
+                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
+              >
+                <span className="text-2xl">🎥</span>
+                <div>
+                  <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
+                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo de travail et l'ancrer dans une scène</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

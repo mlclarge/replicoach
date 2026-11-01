@@ -8,7 +8,7 @@ export default function SceneSummaryModal({
   isOpen,
   onClose,
   sceneLabel = "Scène",
-  sceneKey = null,
+  sceneKey = "",
   sceneText = "",
   onSaveAsNote,
   onSavePermanentSummary,
@@ -37,11 +37,9 @@ export default function SceneSummaryModal({
     setError(null);
     try {
       const result = await getSceneSummary(sceneLabel, sceneText);
-      if (result && result.summary) {
-        setSummary(result.summary);
-        if (onSavePermanentSummary && sceneKey) {
-          onSavePermanentSummary(sceneKey, result.summary);
-        }
+      setSummary(result.summary);
+      if (result.summary && onSavePermanentSummary && sceneKey) {
+        onSavePermanentSummary(sceneKey, result.summary);
       }
     } catch (err) {
       console.error("Erreur résumé IA scène:", err);
@@ -55,11 +53,10 @@ export default function SceneSummaryModal({
     if (!summary || !onSaveAsNote) return;
     setSavingNote(true);
     try {
-      if (onSavePermanentSummary && sceneKey) {
-        onSavePermanentSummary(sceneKey, summary);
-      }
       await onSaveAsNote({
-        text: `✨ Synthèse IA — ${sceneLabel}\n\n${summary}`,
+        text: `✨ Synthèse IA — ${sceneLabel}
+
+${summary}`,
         type: "intention",
       });
       onClose();

@@ -42,9 +42,7 @@ async function callGeminiApi(prompt, systemInstruction) {
 
     if (response.ok) {
       const data = await response.json();
-      if (data && (data.content || data.candidates)) {
-        return data;
-      }
+      if (data && data.content) return data;
     } else {
       const errorData = await response.json().catch(() => ({}));
       const errMsg = extractErrorMessage(errorData, response.statusText);
@@ -54,8 +52,7 @@ async function callGeminiApi(prompt, systemInstruction) {
     proxyError = err;
   }
 
-  // Tentative directe si la clé API client est disponible
-  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? (import.meta.env.VITE_GEMINI_API_KEY || import.meta.env["VITE_GEMINI_" + "API_KEY"]) : null;
+  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env["VITE_GEMINI_API_KEY"] : null;
 
   if (clientApiKey) {
     try {
@@ -86,8 +83,7 @@ async function callGeminiApi(prompt, systemInstruction) {
     }
   }
 
-  if (proxyError) throw proxyError;
-  throw new Error("Impossible de communiquer avec le service Gemini IA.");
+  throw proxyError || new Error("Service Gemini IA indisponible.");
 }
 
 export async function getGameSuggestions(characterName, scriptText, actorContext, isCharacterCoaching = false) {
@@ -115,16 +111,26 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
       costInEuroAsNumber: costs.eurasNumber,
     };
   } catch (error) {
-    if (error instanceof TypeError && error.message.includes("fetch")) {
-      throw new Error("Erreur de connexion. Vérifiez votre connexion internet.");
-    }
-    throw error;
+    console.warn("Génération de suggestions locales suite à indisponibilité API Gemini:", error);
+    return {
+      suggestions: `🎭 **Conseils d'interprétation pour ${characterName}** :
+
+1. 🎯 **Intentions & Objectifs** : Définissez clairement ce que ${characterName} cherche à obtenir dans chaque réplique.
+2. 🗣️ **Diction & Projections** : Projetez votre voix en gardant une articulation fluide.
+3. 👂 **Écoute active** : Recevez la réplique du partenaire avant de répondre.
+4. ⚡ **Engagement physique** : Ancrez vos appuis et adaptez vos mouvements au sous-texte.
+5. 💭 **Sous-texte** : Identifiez l'émotion profonde derrière les mots.`,
+      inputTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      estimatedCost: "0.00€",
+      estimatedCostUSD: "-bash.0000",
+      estimatedCostEUR: "0.00€",
+      costInEuroAsNumber: 0,
+    };
   }
 }
 
-/**
- * Synthèse / Résumé IA d'une scène pour le comédien (Profil Premium)
- */
 export async function getSceneSummary(sceneLabel, sceneText) {
   if (!sceneText) {
     throw new Error("Le texte de la scène est requis");
@@ -148,15 +154,15 @@ Rédige de façon structurée et motivante avec des émojis.`;
       return { summary: data.content };
     }
   } catch (error) {
-    console.warn("API Gemini non disponible, génération de la synthèse locale:", error);
+    console.warn("Génération de synthèse locale suite à indisponibilité API Gemini:", error);
   }
 
-  // Fallback de synthèse dramatique locale si l'API est indisponible
   return { summary: generateLocalSceneSummary(sceneLabel, sceneText) };
 }
 
 function generateLocalSceneSummary(sceneLabel, sceneText) {
-  const lines = (sceneText || "").split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = (sceneText || "").split("
+").map((l) => l.trim()).filter(Boolean);
   const chars = new Set();
   lines.forEach((l) => {
     if (l.includes(":")) {
@@ -167,15 +173,18 @@ function generateLocalSceneSummary(sceneLabel, sceneText) {
 
   const charList = chars.size > 0 ? Array.from(chars).join(", ") : "les personnages";
 
-  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique réunissant ${lines.length} répliques entre ${charList}.
+  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique ("${sceneLabel || 'Scène'}") réunissant ${lines.length} répliques entre ${charList}. L'objectif est de créer un véritable point de bascule dans l'action.
 
-👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute mutuelle.
+👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute réciproque. Les émotions évoluent rapidement entre confrontation et recherche de compromis.
 
-💡 **Conseil d'entrée en scène** : Soignez le tempo de vos relances, gardez une intention claire et restez connecté au regard de votre partenaire dès votre première ligne.`;
+💡 **Conseil d'entrée en scène** : Prenez un temps d'immobilité avant de parler. Soignez le tempo de vos relances et affirmez clairement votre intention physique dès la première réplique.`;
 }
 
 function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {
-  const contextSection = actorContext ? `\n\nContexte du comédien:\n${actorContext}` : "";
+  const contextSection = actorContext ? `
+
+Contexte du comédien:
+${actorContext}` : "";
   const scopeSection = isCharacterCoaching
     ? `Ci-dessous sont SEULEMENT les répliques du personnage "${characterName}" dans la saynète.`
     : `Voici le script complet:`;
