@@ -8,15 +8,6 @@ import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
-import VideoRecorderModal from "../components/VideoRecorderModal";
-import VideoBubble from "../components/VideoBubble";
-import SceneSummaryModal from "../components/SceneSummaryModal";
-import {
-  loadAllReplicaVideosDB,
-  saveReplicaVideoDB,
-  deleteReplicaVideoDB,
-} from "../lib/videoStorage";
-
 import {
   DndContext,
   closestCenter,
@@ -139,8 +130,74 @@ function ScriptDetail() {
   const [showStudioMenu, setShowStudioMenu] = useState(false);
   const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replicaVideos, setReplicaVideos] = useState({});
-  const [summaryScene, setSummaryScene] = useState(null); // { label, text }
+  const [summaryScene, setSummaryScene] = useState(null);
+  const [sceneSummaries, setSceneSummaries] = useState({});
 
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem("sceneSummaries_" + id);
+      if (saved) setSceneSummaries(JSON.parse(saved));
+    } catch (e) {}
+  }, [id]);
+
+  const handleSavePermanentSummary = (sceneKey, summaryText) => {
+    if (!sceneKey || !summaryText) return;
+    setSceneSummaries((prev) => {
+      const updated = { ...prev, [sceneKey]: summaryText };
+      try {
+        localStorage.setItem("sceneSummaries_" + id, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    const handleStudioMenuEvent = () => {
+      setShowStudioMenu(true);
+    };
+    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
+    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    async function initVideos() {
+      const dbVideos = await loadAllReplicaVideosDB(id);
+      if (active && dbVideos) {
+        setReplicaVideos(dbVideos);
+      }
+    }
+    initVideos();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleSaveVideo = (targetReplicaId, videoData) => {
+    if (!targetReplicaId || !videoData) return;
+    setReplicaVideos((prev) => {
+      const updated = {
+        ...prev,
+        [targetReplicaId]: videoData,
+        [String(targetReplicaId)]: videoData,
+      };
+      return updated;
+    });
+    saveReplicaVideoDB(id, targetReplicaId, videoData);
+  };
+
+  const handleDeleteVideo = (targetReplicaId) => {
+    if (!targetReplicaId) return;
+    setReplicaVideos((prev) => {
+      const updated = { ...prev };
+      delete updated[targetReplicaId];
+      delete updated[String(targetReplicaId)];
+      return updated;
+    });
+    deleteReplicaVideoDB(id, targetReplicaId);
+  };
 
   // Extraction ordonnée des actes et scènes du script
   const { hasScenes, scenes } = useMemo(() => {
@@ -181,55 +238,6 @@ function ScriptDetail() {
     fetchScript(id);
     return () => clearCurrentScript();
   }, [id, fetchScript, clearCurrentScript]);
-
-  // Écouteur d'événement pour l'onglet Studio centralisé
-  useEffect(() => {
-    const handleStudioMenuEvent = () => {
-      setShowStudioMenu(true);
-    };
-    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
-    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
-  }, []);
-
-  // Chargement des vidéos enregistrées depuis IndexedDB
-  useEffect(() => {
-    if (!id) return;
-    let active = true;
-    async function initVideos() {
-      const dbVideos = await loadAllReplicaVideosDB(id);
-      if (active && dbVideos) {
-        setReplicaVideos(dbVideos);
-      }
-    }
-    initVideos();
-    return () => {
-      active = false;
-    };
-  }, [id]);
-
-  const handleSaveVideo = (targetReplicaId, videoData) => {
-    if (!targetReplicaId || !videoData) return;
-    setReplicaVideos((prev) => {
-      const updated = {
-        ...prev,
-        [targetReplicaId]: videoData,
-        [String(targetReplicaId)]: videoData,
-      };
-      return updated;
-    });
-    saveReplicaVideoDB(id, targetReplicaId, videoData);
-  };
-
-  const handleDeleteVideo = (replicaId) => {
-    setReplicaVideos((prev) => {
-      const updated = { ...prev };
-      delete updated[replicaId];
-      delete updated[String(replicaId)];
-      return updated;
-    });
-    deleteReplicaVideoDB(id, replicaId);
-  };
-
 
   useEffect(() => {
     if (currentScript?.id && user?.id) {
@@ -1068,26 +1076,7 @@ function ScriptDetail() {
                             : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
                         }`}
                       >
-                                                <span className="font-bold">{scene.fullLabel}</span>
-                        <div className="flex justify-end mt-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsSceneDrawerOpen(false);
-                              const sceneReplicas = replicas.filter(
-                                (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
-                              );
-                              const text = sceneReplicas
-                                .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
-                                .join("\n");
-                              setSummaryScene({ label: scene.fullLabel, text });
-                            }}
-                            className="text-[10px] bg-purple-600/80 hover:bg-purple-500 text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow"
-                          >
-                            <span>✨</span> Résumé IA
-                          </button>
-                        </div>
-
+                        <span className="font-bold">{scene.fullLabel}</span>
                       </button>
                     );
                   })}
@@ -1184,6 +1173,13 @@ function ScriptDetail() {
         {/* Actions secondaires */}
         <div className="flex gap-2 mb-4">
           <button
+            onClick={() => setShowVideoRecorder(true)}
+            className="py-2 px-4 rounded-lg text-sm font-bold bg-gradient-to-r from-rose-500 to-pink-600 text-white shadow hover:from-rose-400 hover:to-pink-500 transition flex items-center gap-1.5 active:scale-95"
+            title="Se filmer pour une scène ou réplique"
+          >
+            <span>🎥</span> Se filmer
+          </button>
+          <button
             onClick={() => setEditMode(!editMode)}
             className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition ${
               editMode
@@ -1276,26 +1272,70 @@ function ScriptDetail() {
                               </div>
                             )}
                             {isNewScene && (
-                              <div className="flex items-center justify-center gap-2">
-                                <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900/90 inline-block px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md">
-                                  🎭 {replica.scene_title}
-                                </h3>
-                                <button
-                                  onClick={() => {
-                                    const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
-                                    const sceneReplicas = replicas.filter(
-                                      (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
-                                    );
-                                    const text = sceneReplicas
-                                      .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
-                                      .join("\n");
-                                    setSummaryScene({ label: replica.scene_title, text });
-                                  }}
-                                  className="px-3 py-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold rounded-full text-xs shadow-md transition active:scale-95 flex items-center gap-1"
-                                  title="Obtenir un résumé IA de cette scène"
-                                >
-                                  <span>✨</span> Résumé IA
-                                </button>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
+                                  <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900/90 inline-block px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md">
+                                    🎭 {replica.scene_title}
+                                  </h3>
+                                  {isPremium && (
+                                    <button
+                                      onClick={() => {
+                                        const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
+                                        const sceneReplicas = filteredReplicas.filter(
+                                          (r) => r.act_title === replica.act_title && r.scene_title === replica.scene_title
+                                        );
+                                        const sceneText = sceneReplicas.map((r) => `${r.character?.name || ""}: ${r.text}`).join("\n\n");
+                                        setSummaryScene({
+                                          sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
+                                          sceneKey: sceneKey,
+                                          sceneText: sceneText,
+                                        });
+                                      }}
+                                      className="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-gray-950 font-extrabold rounded-full text-xs shadow transition active:scale-95 inline-flex items-center gap-1.5"
+                                      title="Synthèse / Résumé IA de la scène"
+                                    >
+                                      <span>✨</span>
+                                      <span>Résumé IA</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Affichage permanent de la Synthèse IA si générée */}
+                                {isPremium && (() => {
+                                  const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
+                                  const savedSummary = sceneSummaries[sceneKey];
+                                  if (!savedSummary) return null;
+
+                                  return (
+                                    <div className="my-3 p-4 bg-gradient-to-r from-purple-950/90 via-gray-900 to-indigo-950/90 border-l-4 border-amber-400 rounded-r-2xl text-white shadow-xl max-w-4xl mx-auto animate-fade-in text-left">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs sm:text-sm">
+                                          <span>✨</span>
+                                          <span>Synthèse & Contexte IA — {replica.scene_title}</span>
+                                        </div>
+                                        <button
+                                          onClick={() => {
+                                            const sceneReplicas = filteredReplicas.filter(
+                                              (r) => r.act_title === replica.act_title && r.scene_title === replica.scene_title
+                                            );
+                                            const sceneText = sceneReplicas.map((r) => `${r.character?.name || ""}: ${r.text}`).join("\n\n");
+                                            setSummaryScene({
+                                              sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
+                                              sceneKey: sceneKey,
+                                              sceneText: sceneText,
+                                            });
+                                          }}
+                                          className="text-[10px] bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg border border-amber-500/30 font-bold transition"
+                                        >
+                                          🔄 Régénérer
+                                        </button>
+                                      </div>
+                                      <div className="text-xs sm:text-sm text-gray-200 whitespace-pre-wrap leading-relaxed font-sans">
+                                        {savedSummary}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             )}
                           </div>
@@ -1332,16 +1372,6 @@ function ScriptDetail() {
                         setShowAddNote({ afterReplicaId: replica.id })
                       }
                     />
-
-                    {/* Affichage de la vidéo ancrée si présente */}
-                    {(replicaVideos[replica.id] || replicaVideos[String(replica.id)]) && (
-                      <VideoBubble
-                        video={replicaVideos[replica.id] || replicaVideos[String(replica.id)]}
-                        character={character}
-                        onDelete={() => handleDeleteVideo(replica.id)}
-                      />
-                    )}
-
 
                     {notesAfterThisReplica.map((note) => (
                       <NoteBubble
@@ -1642,8 +1672,7 @@ function ScriptDetail() {
         />
       )}
 
-      
-      {/* 🎙️ STUDIO MENU DRAWER (Centralisé depuis la barre du bas) */}
+      {/* 🎙️ STUDIO MENU DRAWER */}
       {showStudioMenu && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
           <div
@@ -1713,17 +1742,19 @@ function ScriptDetail() {
                 </div>
               </button>
 
-              <Link
-                to={`/script/${id}/audio`}
-                onClick={() => setShowStudioMenu(false)}
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  navigate("/free-recordings");
+                }}
                 className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
                 <span className="text-2xl">🎙️</span>
                 <div>
                   <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
-                  <div className="text-[10px] text-gray-400">Mode répétition audio</div>
+                  <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
                 </div>
-              </Link>
+              </button>
 
               <button
                 onClick={() => {
@@ -1735,7 +1766,7 @@ function ScriptDetail() {
                 <span className="text-2xl">🎥</span>
                 <div>
                   <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
-                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo de travail et l'ancrer dans une scène</div>
+                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo caméra et l'ancrer dans le texte</div>
                 </div>
               </button>
             </div>
@@ -1760,10 +1791,12 @@ function ScriptDetail() {
         <SceneSummaryModal
           isOpen={true}
           onClose={() => setSummaryScene(null)}
-          sceneLabel={summaryScene.label}
-          sceneText={summaryScene.text}
+          sceneLabel={summaryScene.sceneLabel}
+          sceneKey={summaryScene.sceneKey}
+          sceneText={summaryScene.sceneText}
           isPremium={isPremium}
           onOpenPremiumModal={() => setShowPremiumModal(true)}
+          onSavePermanentSummary={handleSavePermanentSummary}
           onSaveAsNote={handleSaveAICoachingNote}
         />
       )}

@@ -14,9 +14,10 @@ import {
 import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
-import PremiumGateModal from "../components/PremiumGateModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
-
+import VideoRecorderModal from "../components/VideoRecorderModal";
+import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
+import PremiumGateModal from "../components/PremiumGateModal";
 import {
   fetchTtsStatus,
   fetchScriptVoiceLocks,
@@ -153,9 +154,55 @@ function AudioMode() {
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
   const [showPremiumModal, setShowPremiumModal] = useState(false);
-  const [summaryScene, setSummaryScene] = useState(null);
-
   const [recordingDuration, setRecordingDuration] = useState(0);
+  const [summaryScene, setSummaryScene] = useState(null);
+  const [sceneSummaries, setSceneSummaries] = useState({});
+  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+  const [replicaVideos, setReplicaVideos] = useState({});
+
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem("sceneSummaries_" + id);
+      if (saved) setSceneSummaries(JSON.parse(saved));
+    } catch (e) {}
+  }, [id]);
+
+  const handleSavePermanentSummary = (sceneKey, summaryText) => {
+    if (!sceneKey || !summaryText) return;
+    setSceneSummaries((prev) => {
+      const updated = { ...prev, [sceneKey]: summaryText };
+      try {
+        localStorage.setItem("sceneSummaries_" + id, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    async function initVideos() {
+      const dbVideos = await loadAllReplicaVideosDB(id);
+      if (active && dbVideos) {
+        setReplicaVideos(dbVideos);
+      }
+    }
+    initVideos();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleSaveVideo = (targetReplicaId, videoData) => {
+    if (!targetReplicaId || !videoData) return;
+    setReplicaVideos((prev) => ({
+      ...prev,
+      [targetReplicaId]: videoData,
+      [String(targetReplicaId)]: videoData,
+    }));
+    saveReplicaVideoDB(id, targetReplicaId, videoData);
+  };
 
   const handleCoachClick = (e, characterId) => {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -1148,26 +1195,7 @@ function AudioMode() {
                             : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
                         }`}
                       >
-                                                <span className="font-bold">{scene.fullLabel}</span>
-                        <div className="flex justify-end mt-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setIsSceneDrawerOpen(false);
-                              const sceneReplicas = replicas.filter(
-                                (r) => `${r.act_title || ""}_${r.scene_title || ""}` === sceneKey
-                              );
-                              const text = sceneReplicas
-                                .map((r) => `${r.character?.name || ""}: ${r.text || ""}`)
-                                .join("\n");
-                              setSummaryScene({ label: scene.fullLabel, text });
-                            }}
-                            className="text-[10px] bg-purple-600/80 hover:bg-purple-500 text-white font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow"
-                          >
-                            <span>✨</span> Résumé IA
-                          </button>
-                        </div>
-
+                        <span className="font-bold">{scene.fullLabel}</span>
                       </button>
                     );
                   })}
@@ -1198,19 +1226,28 @@ function AudioMode() {
             </div>
           </div>
 
-          {/* Bouton pour ouvrir/fermer le panneau de réglages des voix */}
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
-              showSettings
-                ? "bg-gold-500 text-black border-gold-400 font-extrabold"
-                : "bg-gray-900 text-gold-400 border-gold-500/40 hover:bg-gray-800"
-            }`}
-          >
-            <span className="text-sm">🎙️</span>
-            <span>Voix partenaire</span>
-            <span className="text-[10px]">{showSettings ? "▲" : "▼"}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowVideoRecorder(true)}
+              className="px-3 py-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-400 hover:to-pink-500 text-white font-bold rounded-xl text-xs transition flex items-center gap-1.5 shadow-md active:scale-95"
+              title="Se filmer pour une réplique/scène"
+            >
+              <span>🎥</span>
+              <span>Se filmer</span>
+            </button>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-md border ${
+                showSettings
+                  ? "bg-gold-500 text-black border-gold-400 font-extrabold"
+                  : "bg-gray-900 text-gold-400 border-gold-500/40 hover:bg-gray-800"
+              }`}
+            >
+              <span className="text-sm">🎙️</span>
+              <span>Voix partenaire</span>
+              <span className="text-[10px]">{showSettings ? "▲" : "▼"}</span>
+            </button>
+          </div>
         </div>
 
                 {/* Barre de progression */}

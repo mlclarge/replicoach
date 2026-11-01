@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 
 export default function BottomNav() {
@@ -68,7 +67,7 @@ export default function BottomNav() {
           <span className="text-[10px] sm:text-xs text-white font-medium">Importer</span>
         </NavLink>
 
-        {/* 3. Studio Centralisé (Menu d'action immersif) */}
+        {/* 3. Studio Centralisé */}
         <NavLink
           to={isScriptView ? "#studio" : "/free-recordings"}
           onClick={handleStudioClick}
@@ -79,7 +78,7 @@ export default function BottomNav() {
                 : "text-white font-medium hover:text-amber-300"
             }`
           }
-          title="Studio unifié (Ajouter note, réplique, vidéo, audio, personnage)"
+          title="Studio (Enregistrements libres, Notes, Répliques, Vidéo)"
         >
           <span className="text-base sm:text-lg">🎙️</span>
           <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
