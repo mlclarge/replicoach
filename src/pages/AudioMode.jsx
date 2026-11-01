@@ -16,9 +16,6 @@ import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
 import VideoRecorderModal from "../components/VideoRecorderModal";
-import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
-import SceneSummaryModal from "../components/SceneSummaryModal";
-import VideoRecorderModal from "../components/VideoRecorderModal";
 import VideoBubble from "../components/VideoBubble";
 import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
 
