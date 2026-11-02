@@ -196,4 +196,3 @@ async function readProgressStream(response, onProgress) {
   }
   return result;
 }
-
