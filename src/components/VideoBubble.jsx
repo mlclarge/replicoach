@@ -18,7 +18,7 @@ export default function VideoBubble({
         <div className="flex items-center gap-2.5 min-w-0">
           <div
             className="w-8 h-8 rounded-xl flex items-center justify-center text-base font-extrabold shadow-sm flex-shrink-0"
-            style={{ backgroundColor: , color: characterColor }}
+            style={{ backgroundColor: `${characterColor}33`, color: characterColor }}
           >
             🎥
           </div>
@@ -27,7 +27,7 @@ export default function VideoBubble({
               {video.title || "Vidéo de travail"}
             </h4>
             <p className="text-[10px] text-gray-400 font-semibold truncate">
-              {character?.name ?  : "Enregistrement vidéo"}
+              {character?.name ? `Rôle : ${character.name}` : "Enregistrement vidéo"}
             </p>
           </div>
         </div>

@@ -211,7 +211,7 @@ function FreeRecordings() {
     reader.onloadend = () => {
       const newRec = {
         id: Date.now().toString(),
-        name: recordingName.trim() || ,
+        name: recordingName.trim() || `Enregistrement ${new Date().toLocaleString('fr-FR')}`,
         data: reader.result,
         duration: audioTime,
         date: new Date().toISOString()
@@ -313,7 +313,7 @@ function FreeRecordings() {
     const reader = new FileReader();
     reader.onloadend = async () => {
       const videoData = {
-        title: videoTitle.trim() || ,
+        title: videoTitle.trim() || `Vidéo ${new Date().toLocaleString('fr-FR')}`,
         data: reader.result,
         duration: videoTime,
         date: new Date().toISOString(),

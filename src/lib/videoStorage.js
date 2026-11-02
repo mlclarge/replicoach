@@ -117,3 +117,47 @@ export async function saveFreeVideoDB(videoData) {
     console.warn("Erreur sauvegarde vidéo libre IndexedDB:", err);
   }
 }
+
+export async function loadAllFreeVideosDB() {
+  const videos = [];
+
+  try {
+    const db = await openVideoDB();
+    const tx = db.transaction(FREE_STORE_NAME, "readonly");
+    const store = tx.objectStore(FREE_STORE_NAME);
+
+    await new Promise((resolve) => {
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          videos.push({ ...cursor.value, id: cursor.key });
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = () => resolve();
+    });
+  } catch (err) {
+    console.warn("Erreur chargement vidéos libres IndexedDB:", err);
+  }
+
+  return videos.reverse();
+}
+
+export async function deleteFreeVideoDB(id) {
+  if (id === undefined || id === null) return;
+
+  try {
+    const db = await openVideoDB();
+    const tx = db.transaction(FREE_STORE_NAME, "readwrite");
+    tx.objectStore(FREE_STORE_NAME).delete(id);
+    await new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (err) {
+    console.warn("Erreur suppression vidéo libre IndexedDB:", err);
+  }
+}
