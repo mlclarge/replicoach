@@ -121,6 +121,35 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
+const REHEARSAL_DEFAULTS = {
+  myRole: null,
+  readMine: "none", // none | before | after | both
+  autoAdvance: false,
+  delay: "normal", // slow | normal | fast
+  reduceListen: false,
+  hideStageDirections: false,
+  showNumbers: true,
+};
+
+const DELAY_FACTORS = { slow: 1.8, normal: 1.2, fast: 0.7 };
+
+function countWords(text) {
+  return cleanTextForSpeech(text || "").split(/\s+/).filter(Boolean).length;
+}
+
+// Durée de lecture estimée (~150 mots/min à vitesse 1)
+function estimateSeconds(text, rate) {
+  return countWords(text) / (2.5 * (rate || 1));
+}
+
+function removeStageDirections(text) {
+  return (text || "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/\[[^\]]*\]/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 function AudioMode() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -296,6 +325,49 @@ function AudioMode() {
   // Mode italienne
   const [hiddenCharacters, setHiddenCharacters] = useState(new Set());
   const [waitingForClick, setWaitingForClick] = useState(false);
+
+  // Réglages de répétition (persistés par texte)
+  const rehearsalStorageKey = `rehearsal-${id}`;
+  const [rehearsal, setRehearsal] = useState(() => {
+    try {
+      return {
+        ...REHEARSAL_DEFAULTS,
+        ...JSON.parse(localStorage.getItem(`rehearsal-${id}`) || "{}"),
+      };
+    } catch (e) {
+      return { ...REHEARSAL_DEFAULTS };
+    }
+  });
+  const rehearsalRef = useRef(rehearsal);
+  rehearsalRef.current = rehearsal;
+  const rateRef = useRef(1);
+  rateRef.current = rate;
+
+  const updateRehearsal = (patch) => {
+    setRehearsal((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem(rehearsalStorageKey, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
+
+  // Restaure mon rôle (personnage masqué) une fois les personnages chargés
+  const roleRestoredRef = useRef(false);
+  useEffect(() => {
+    if (roleRestoredRef.current || !characters.length) return;
+    roleRestoredRef.current = true;
+    const saved = rehearsalRef.current.myRole;
+    if (saved && characters.some((c) => c.id === saved)) {
+      setHiddenCharacters(new Set([saved]));
+    }
+  }, [characters]);
+
+  const handleMyRoleChange = (charId) => {
+    updateRehearsal({ myRole: charId || null });
+    setHiddenCharacters(new Set(charId ? [charId] : []));
+  };
 
   // UI : Panneau de réglages fermé par défaut
   const [showSettings, setShowSettings] = useState(false);
@@ -946,17 +1018,61 @@ function AudioMode() {
       const replica = displayReplicas[i];
       const nextReplica = displayReplicas[i + 1] || null;
 
+      const opts = rehearsalRef.current;
+
       if (hiddenCharacters.has(replica.character_id)) {
+        const speakMine = async () => {
+          if (playingRef.current) {
+            await speak(replica.text, replica.character_id, replica.id, nextReplica);
+          }
+        };
+
+        if (opts.readMine === "before" || opts.readMine === "both") {
+          await speakMine();
+          if (!playingRef.current) break;
+        }
+
         setWaitingForClick(true);
         waitingRef.current = true;
 
+        const maxWaitMs = opts.autoAdvance
+          ? Math.max(2500, countWords(replica.text) * 400) * (DELAY_FACTORS[opts.delay] || 1.2)
+          : Infinity;
+        const startedAt = Date.now();
+        let timedOut = false;
+
         while (waitingRef.current && playingRef.current) {
+          if (Date.now() - startedAt >= maxWaitMs) {
+            timedOut = true;
+            break;
+          }
           await new Promise((r) => setTimeout(r, 100));
         }
 
+        waitingRef.current = false;
         setWaitingForClick(false);
         if (!playingRef.current) break;
+
+        // Un clic sur la réplique la lit déjà : on ne la relit que si le délai a expiré
+        if (timedOut && (opts.readMine === "after" || opts.readMine === "both")) {
+          await speakMine();
+          if (!playingRef.current) break;
+        }
         continue;
+      }
+
+      // Écoute réduite : on saute les répliques des autres trop éloignées de ma prochaine réplique
+      if (opts.reduceListen && hiddenCharacters.size > 0) {
+        let secondsBeforeMine = 0;
+        let foundMine = false;
+        for (let j = i; j < displayReplicas.length; j++) {
+          if (hiddenCharacters.has(displayReplicas[j].character_id)) {
+            foundMine = true;
+            break;
+          }
+          secondsBeforeMine += estimateSeconds(displayReplicas[j].text, rateRef.current);
+        }
+        if (foundMine && secondsBeforeMine > 6) continue;
       }
 
       await speak(replica.text, replica.character_id, replica.id, nextReplica);
@@ -1496,6 +1612,139 @@ function AudioMode() {
             );
           })}
         </div>
+
+        <details className="mt-3 bg-white/70 rounded-xl border border-amber-300">
+          <summary className="cursor-pointer px-3 py-2 text-xs font-extrabold text-amber-900">
+            ⚙️ Réglages de répétition
+          </summary>
+          <div className="px-3 pb-3 pt-1 space-y-3 text-gray-800">
+            <label className="block">
+              <span className="text-xs font-bold block mb-1">Mon rôle</span>
+              <select
+                value={rehearsal.myRole || ""}
+                onChange={(e) => handleMyRoleChange(e.target.value)}
+                className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-white font-semibold"
+              >
+                <option value="">Aucun (tout écouter)</option>
+                {characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div>
+              <span className="text-xs font-bold block mb-1">
+                Lire mes répliques (avant / après les avoir dites)
+              </span>
+              <div className="flex gap-1">
+                {[
+                  ["none", "Non"],
+                  ["before", "Avant"],
+                  ["after", "Après"],
+                  ["both", "Les deux"],
+                ].map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateRehearsal({ readMine: value })}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold border ${
+                      rehearsal.readMine === value
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {rehearsal.readMine === "after" || rehearsal.readMine === "both" ? (
+                <p className="text-[10px] text-gray-500 mt-1">
+                  « Après » nécessite l'enchaînement automatique.
+                </p>
+              ) : null}
+            </div>
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rehearsal.autoAdvance}
+                onChange={(e) => updateRehearsal({ autoAdvance: e.target.checked })}
+                className="mt-0.5 accent-emerald-600"
+              />
+              <span className="text-xs">
+                <b>Enchaîner automatiquement</b>
+                <br />
+                <span className="text-gray-500">
+                  Une fois le délai écoulé pour réciter votre réplique, passer à la suivante.
+                </span>
+              </span>
+            </label>
+
+            {rehearsal.autoAdvance && (
+              <div>
+                <span className="text-xs font-bold block mb-1">Délai pour réciter ma réplique</span>
+                <div className="flex gap-1">
+                  {[
+                    ["slow", "Lent"],
+                    ["normal", "Normal"],
+                    ["fast", "Rapide"],
+                  ].map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => updateRehearsal({ delay: value })}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-bold border ${
+                        rehearsal.delay === value
+                          ? "bg-emerald-600 text-white border-emerald-600"
+                          : "bg-white text-gray-700 border-gray-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rehearsal.reduceListen}
+                onChange={(e) => updateRehearsal({ reduceListen: e.target.checked })}
+                className="mt-0.5 accent-emerald-600"
+              />
+              <span className="text-xs">
+                <b>Réduire l'écoute entre mes répliques</b>
+                <br />
+                <span className="text-gray-500">
+                  Saute les passages qui ne concernent pas votre rôle : seules les ~6 secondes avant vos répliques sont écoutées.
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rehearsal.hideStageDirections}
+                onChange={(e) => updateRehearsal({ hideStageDirections: e.target.checked })}
+                className="accent-emerald-600"
+              />
+              <span className="text-xs font-bold">Cacher les didascalies</span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rehearsal.showNumbers}
+                onChange={(e) => updateRehearsal({ showNumbers: e.target.checked })}
+                className="accent-emerald-600"
+              />
+              <span className="text-xs font-bold">Afficher les numéros de répliques</span>
+            </label>
+          </div>
+        </details>
       </div>
 
       {/* Indicateur d'attente */}
@@ -1587,7 +1836,8 @@ function AudioMode() {
               character={character}
               isRight={isRight}
               number={index + 1}
-              isCurrent={isCurrent}
+              showNumber={rehearsal.showNumbers}
+              hideStageDirections={rehearsal.hideStageDirections}
               isPlaying={
                 (isPlaying && isCurrent && !isHidden) || isBubblePlaying
               }
@@ -1829,6 +2079,8 @@ const AudioBubble = forwardRef(
       character,
       isRight,
       number,
+      showNumber = true,
+      hideStageDirections = false,
       isCurrent,
       isPlaying,
       isHidden,
@@ -1872,9 +2124,11 @@ const AudioBubble = forwardRef(
           <span className="text-xs sm:text-sm font-bold text-white/90">
             {character?.name || "Personnage"}
           </span>
-          <span className="text-[10px] text-white/70 font-mono">
-            #{number}
-          </span>
+          {showNumber && (
+            <span className="text-[10px] text-white/70 font-mono">
+              #{number}
+            </span>
+          )}
         </div>
 
         {isHidden && !isTemporarilyRevealed ? (
@@ -1905,7 +2159,7 @@ const AudioBubble = forwardRef(
         ) : (
           <>
             <p className="text-white text-sm sm:text-base leading-relaxed whitespace-pre-wrap">
-              {stripHtml(replica.text)}
+              {hideStageDirections ? removeStageDirections(stripHtml(replica.text)) : stripHtml(replica.text)}
             </p>
 
             <div className="flex justify-end mt-3 pt-3 border-t border-white/20">

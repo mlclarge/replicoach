@@ -19,6 +19,7 @@ import {
 import Loader from "../components/ui/Loader";
 import DocumentViewer from "../components/DocumentViewer";
 import PublicLibrary from "../components/PublicLibrary";
+import CoachingHub from "../components/CoachingHub";
 import {
   ScriptTagsModal,
   ScriptTagBadges,
@@ -454,6 +455,7 @@ export default function Home() {
 
       {activeHomeTab === "director" ? (
         <div className="space-y-6">
+          <CoachingHub />
           <DirectorNotesSection
             notes={directorNotes || []}
             onUpload={handleUploadDirectorNote}

@@ -10,6 +10,7 @@ export default function SceneSummaryModal({
   sceneLabel = "Scène",
   sceneKey = null,
   sceneText = "",
+  sceneContext = null,
   initialSummary = "",
   onSaveAsNote,
   onSavePermanentSummary,
@@ -42,7 +43,7 @@ export default function SceneSummaryModal({
     setLoading(true);
     setError(null);
     try {
-      const result = await getSceneSummary(sceneLabel, sceneText);
+      const result = await getSceneSummary(sceneLabel, sceneText, sceneContext);
       if (result && result.summary) {
         setSummary(result.summary);
         if (onSavePermanentSummary && sceneKey) {

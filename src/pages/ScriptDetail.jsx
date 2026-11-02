@@ -8,6 +8,7 @@ import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
+import { buildSceneSummaryContext } from "../lib/geminiService";
 import SceneSummaryModal from "../components/SceneSummaryModal";
 import VideoBubble from "../components/VideoBubble";
 import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
@@ -589,6 +590,22 @@ function ScriptDetail() {
       console.error("Error adding note:", err);
       alert("Erreur lors de l'ajout de la note");
     }
+  };
+
+  const openSceneSummary = (replica) => {
+    const context = buildSceneSummaryContext(
+      replicas,
+      characters,
+      replica.act_title,
+      replica.scene_title,
+      title
+    );
+    setSummaryScene({
+      sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
+      sceneKey: `${replica.act_title || ""}_${replica.scene_title || ""}`,
+      sceneText: context.sceneText,
+      sceneContext: context,
+    });
   };
 
   const handleSaveAICoachingNote = async ({ text, type }) => {
@@ -1298,18 +1315,7 @@ function ScriptDetail() {
                                   </h3>
                                   {isPremium && (
                                     <button
-                                      onClick={() => {
-                                        const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
-                                        const sceneReplicas = filteredReplicas.filter(
-                                          (r) => r.act_title === replica.act_title && r.scene_title === replica.scene_title
-                                        );
-                                        const sceneText = sceneReplicas.map((r) => `${r.character?.name || ""}: ${r.text}`).join("\n\n");
-                                        setSummaryScene({
-                                          sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
-                                          sceneKey: sceneKey,
-                                          sceneText: sceneText,
-                                        });
-                                      }}
+                                      onClick={() => openSceneSummary(replica)}
                                       className="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-gray-950 font-extrabold rounded-full text-xs shadow transition active:scale-95 inline-flex items-center gap-1.5"
                                       title="Synthèse / Résumé IA de la scène"
                                     >
@@ -1333,17 +1339,7 @@ function ScriptDetail() {
                                           <span>Résumé de la scène</span>
                                         </div>
                                         <button
-                                          onClick={() => {
-                                            const sceneReplicas = filteredReplicas.filter(
-                                              (r) => r.act_title === replica.act_title && r.scene_title === replica.scene_title
-                                            );
-                                            const sceneText = sceneReplicas.map((r) => `${r.character?.name || ""}: ${r.text}`).join("\n\n");
-                                            setSummaryScene({
-                                              sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
-                                              sceneKey: sceneKey,
-                                              sceneText: sceneText,
-                                            });
-                                          }}
+                                          onClick={() => openSceneSummary(replica)}
                                           className="text-[10px] bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg border border-amber-500/30 font-bold transition"
                                         >
                                           🔄 Régénérer
@@ -1798,6 +1794,7 @@ function ScriptDetail() {
           sceneLabel={summaryScene.sceneLabel}
           sceneKey={summaryScene.sceneKey}
           sceneText={summaryScene.sceneText}
+          sceneContext={summaryScene.sceneContext}
           initialSummary={sceneSummaries[summaryScene.sceneKey] || ""}
           isPremium={isPremium}
           onOpenPremiumModal={() => setShowPremiumModal(true)}

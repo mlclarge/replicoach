@@ -100,12 +100,66 @@ export async function getGameSuggestions(characterName, scriptText, actorContext
   }
 }
 
-export async function getSceneSummary(sceneLabel, sceneText) {
+export function buildSceneSummaryContext(replicas, characters, actTitle, sceneTitle, playTitle) {
+  const nameOf = (r) => characters.find((c) => c.id === r.character_id)?.name || r.character?.name || "";
+  const sceneKeyOf = (r) => `${r.act_title || ""}_${r.scene_title || ""}`;
+  const targetKey = `${actTitle || ""}_${sceneTitle || ""}`;
+
+  const scenes = [];
+  replicas.forEach((r) => {
+    const key = sceneKeyOf(r);
+    let scene = scenes[scenes.length - 1];
+    if (!scene || scene.key !== key) {
+      scene = { key, label: [r.act_title, r.scene_title].filter(Boolean).join(" — ") || "Scène", names: new Set(), start: "" };
+      scenes.push(scene);
+    }
+    const n = nameOf(r);
+    if (n) scene.names.add(n);
+    if (!scene.start && r.text) scene.start = r.text.replace(/\s+/g, " ").slice(0, 110);
+  });
+
+  const index = scenes.findIndex((s) => s.key === targetKey);
+  const from = Math.max(0, Math.min(index - 20, scenes.length - 40));
+  const windowed = scenes.slice(from, from + 40);
+  const outline = windowed
+    .map((s, i) => {
+      const n = from + i + 1;
+      const mark = from + i === index ? "  ← SCÈNE À RÉSUMER" : "";
+      return `${n}. ${s.label} [${[...s.names].slice(0, 6).join(", ")}] — « ${s.start} »${mark}`;
+    })
+    .join("\n");
+
+  const sceneReplicas = replicas.filter((r) => sceneKeyOf(r) === targetKey);
+  const inScene = {};
+  sceneReplicas.forEach((r) => {
+    const n = nameOf(r);
+    if (n) inScene[n] = (inScene[n] || 0) + 1;
+  });
+  const total = {};
+  replicas.forEach((r) => {
+    const n = nameOf(r);
+    if (n) total[n] = (total[n] || 0) + 1;
+  });
+  const cast = Object.entries(inScene)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name, lines]) => `${name} (${lines} répliques dans la scène, ${total[name]} dans la pièce)`)
+    .join("\n");
+
+  return {
+    playTitle: playTitle || "",
+    position: index >= 0 ? `scène ${index + 1} sur ${scenes.length}` : "",
+    outline,
+    cast,
+    sceneText: sceneReplicas.map((r) => `${nameOf(r)}: ${r.text}`).join("\n\n"),
+  };
+}
+
+export async function getSceneSummary(sceneLabel, sceneText, context = null) {
   if (!sceneText) {
     throw new Error("Le texte de la scène est requis");
   }
 
-  const MAX_CHARS = 6000;
+  const MAX_CHARS = 8000;
   let text = sceneText;
   if (text.length > MAX_CHARS) {
     const part = MAX_CHARS / 3;
@@ -114,15 +168,35 @@ export async function getSceneSummary(sceneLabel, sceneText) {
   }
   const label = (sceneLabel || "Scène").slice(0, 80);
 
-  const prompt = `Résume en français la scène de théâtre "${label}" pour un comédien. Reformule avec tes propres mots, ne recopie jamais le texte.
+  const playSection = context?.outline
+    ? `PIÈCE : "${context.playTitle}"${context.position ? ` (${context.position})` : ""}
+PLAN DE LA PIÈCE (scènes, personnages présents, début de la scène) :
+${context.outline}
 
-TEXTE DE LA SCÈNE:
+PERSONNAGES DE LA SCÈNE (volume de texte) :
+${context.cast}
+`
+    : "";
+
+  const prompt = `Tu aides un comédien à comprendre une scène de théâtre qu'il doit jouer. Réponds en français, reformule avec tes propres mots, ne recopie jamais le texte.
+
+CONSIGNES :
+- Appuie-toi UNIQUEMENT sur le texte fourni et le plan de la pièce. N'invente aucun fait, ne cite pas d'œuvre connue de mémoire : si une information manque, ne la mentionne pas.
+- Situe la scène dans l'histoire globale : ce qui précède et amène la scène, ce qu'elle change, ce qu'elle prépare ensuite.
+- Pour chaque personnage présent, décris son rôle dans la scène, ce qu'il veut, son attitude et son émotion.
+- Style court, concret, utile à un comédien. Pas d'introduction ni de conclusion.
+
+${playSection}
+SCÈNE À RÉSUMER : "${label}"
 ${text}
 
-Format strict, 3 lignes courtes (1 à 2 phrases chacune), sans introduction :
-🎭 **Enjeu** : ce qui se joue dans la scène.
-👥 **Personnages** : qui veut quoi, et les relations.
-🎨 **Ton** : l'ambiance et l'émotion dominante.`;
+FORMAT STRICT :
+🎭 **Enjeu** : ce qui se joue dans la scène (1 à 2 phrases).
+📖 **Dans l'histoire** : sa place dans la pièce — avant / après (2 phrases maximum).
+🎨 **Ton** : ambiance et émotion dominante (1 phrase).
+👥 **Les personnages** :
+- **NOM** : rôle dans la scène · objectif · attitude / émotion (1 ligne par personnage, du plus présent au moins présent).
+🔑 **À retenir pour jouer** : 1 conseil concret.`;
 
   const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
   if (!data || !data.content) {
