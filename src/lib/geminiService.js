@@ -172,7 +172,7 @@ function generateLocalSceneSummary(sceneLabel, sceneText) {
 
   const charList = chars.size > 0 ? Array.from(chars).join(", ") : "les personnages";
 
-  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique ("${sceneLabel || 'Scène'}") réunissant ${lines.length} répliques entre ${charList}. L'objectif est de créer un véritable point de bascule dans l'action.
+  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique ("${sceneLabel || "Scène"}") réunissant ${lines.length} répliques entre ${charList}. L'objectif est de créer un véritable point de bascule dans l'action.
 
 👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute réciproque. Les émotions évoluent rapidement entre confrontation et recherche de compromis.
 

@@ -185,7 +185,7 @@ function FreeRecordings() {
 
     } catch (err) {
       console.error('Erreur accès micro:', err);
-      alert('Impossible d'accéder au microphone');
+      alert("Impossible d'accéder au microphone");
     }
   };
 
@@ -211,7 +211,7 @@ function FreeRecordings() {
     reader.onloadend = () => {
       const newRec = {
         id: Date.now().toString(),
-        name: recordingName.trim() || ,
+        name: recordingName.trim() || "Enregistrement vocal",
         data: reader.result,
         duration: audioTime,
         date: new Date().toISOString()
@@ -238,7 +238,7 @@ function FreeRecordings() {
       }
     } catch (err) {
       console.error('Erreur accès caméra:', err);
-      alert('Impossible d'accéder à la caméra ou au microphone');
+      alert("Impossible d'accéder à la caméra ou au microphone");
     }
   };
 
@@ -296,7 +296,7 @@ function FreeRecordings() {
       }, 1000);
     } catch (err) {
       console.error('Erreur démarrage vidéo:', err);
-      alert('Impossible de démarrer l'enregistrement vidéo');
+      alert("Impossible de démarrer l'enregistrement vidéo");
     }
   };
 
@@ -313,7 +313,7 @@ function FreeRecordings() {
     const reader = new FileReader();
     reader.onloadend = async () => {
       const videoData = {
-        title: videoTitle.trim() || ,
+        title: videoTitle.trim() || "Vidéo libre",
         data: reader.result,
         duration: videoTime,
         date: new Date().toISOString(),
@@ -426,7 +426,7 @@ function FreeRecordings() {
               className={}
             >
               <span>{isRecordingAudio ? '⏹️' : '🔵'}</span>
-              <span>{isRecordingAudio ? 'Arrêter l'enregistrement' : 'Commencer l'audio'}</span>
+              <span>{isRecordingAudio ? "Arrêter l'enregistrement" : "Commencer l'audio"}</span>
             </button>
           </div>
         )}
