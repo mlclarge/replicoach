@@ -11,6 +11,21 @@ const ACT_REGEX = /^(?:#\s*)?(?:ACTE|Acte)\s+([IVXLCDM\d]+|\bUN\b|\bDEUX\b|\bTRO
 const SCENE_REGEX = /^(?:#\s*)?(?:SCÈNE|SCENE|Scène|Scene)\s*([\dIVXLCDM]+)?\s*[:\-\.]?\s*(.*)/i;
 const ACT_SCENE_INLINE_REGEX = /(?:ACTE|Acte)\s*([\dIVXLCDM]+)?\s*(?:SCÈNE|SCENE|Scène|Scene)\s*([\dIVXLCDM]+)?\s*[:\-\.]?\s*(.*)/i;
 
+function normalizeName(name) {
+  return (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+}
+
+// Titre de scène court : s'arrête au premier ":" suivant et ne dépasse pas 60 caractères
+function shortTitle(text) {
+  const t = text.trim().split(/\s:\s|:\s/)[0].trim();
+  return t.length > 60 ? t.slice(0, 57).trim() + '…' : t;
+}
+
 /**
  * Nettoie et normalise une ligne de texte
  */
@@ -61,7 +76,7 @@ function isStandaloneCharacterLine(line) {
  * @param {string} fileName - Nom du fichier
  * @returns {Object} { title, characters, replicas, stats }
  */
-export function parseScriptText(fullText, fileName = '') {
+export function parseScriptText(fullText, fileName = '', manualCharacters = null) {
   if (!fullText || typeof fullText !== 'string') {
     return {
       title: fileName.replace(/\.[^/.]+$|\$/, '') || 'Sans titre',
@@ -70,6 +85,32 @@ export function parseScriptText(fullText, fileName = '') {
       stats: { charactersCount: 0, replicasCount: 0 }
     };
   }
+
+  const knownNames = new Map();
+  if (Array.isArray(manualCharacters)) {
+    manualCharacters.forEach((n) => {
+      const key = normalizeName(n);
+      if (key) knownNames.set(key, n.trim().toUpperCase());
+    });
+  }
+  const hasKnownNames = knownNames.size > 0;
+
+  // Avec une liste de personnages, on force un saut de ligne avant chaque "NOM :" même si le texte est sur une seule ligne
+  if (hasKnownNames) {
+    const alternatives = Array.from(knownNames.values())
+      .sort((a, b) => b.length - a.length)
+      .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    fullText = fullText.replace(
+      new RegExp(`(^|[\\s.!?»)])(${alternatives})\\s*:`, 'gm'),
+      '$1\n$2 :'
+    );
+  }
+
+  const resolveKnown = (name) => {
+    if (!hasKnownNames) return name;
+    return knownNames.get(normalizeName(name)) || null;
+  };
 
   const rawLines = fullText.split(/\r?\n/);
   const replicas = [];
@@ -103,7 +144,7 @@ export function parseScriptText(fullText, fileName = '') {
       currentActNumber = actSceneMatch[1] ? actSceneMatch[1] : (currentActNumber + 1);
       currentSceneNumber = actSceneMatch[2] ? actSceneMatch[2] : (currentSceneNumber + 1);
       currentActTitle = `Acte ${currentActNumber}`;
-      const subtitle = actSceneMatch[3] ? ` : ${actSceneMatch[3].trim()}` : '';
+      const subtitle = actSceneMatch[3] ? ` : ${shortTitle(actSceneMatch[3])}` : '';
       currentSceneTitle = `Scène ${currentSceneNumber}${subtitle}`;
       return;
     }
@@ -129,29 +170,30 @@ export function parseScriptText(fullText, fileName = '') {
       }
       currentSceneNumber++;
       const sceneNum = sceneMatch[1] || currentSceneNumber;
-      const sceneSub = sceneMatch[2] ? ` : ${sceneMatch[2].trim()}` : '';
+      const sceneSub = sceneMatch[2] ? ` : ${shortTitle(sceneMatch[2])}` : '';
       currentSceneTitle = `Scène ${sceneNum}${sceneSub}`;
       return;
     }
 
     // 4. Détection Personnage avec deux-points ("SAM : Bonjour")
     const colonChar = parseColonCharacterLine(line);
-    if (colonChar) {
+    const resolvedColon = colonChar ? resolveKnown(colonChar.character) : null;
+    if (colonChar && resolvedColon) {
       if (currentReplicaText && currentCharacter) {
         pushReplica();
       }
-      currentCharacter = colonChar.character;
+      currentCharacter = resolvedColon;
       characterSet.add(currentCharacter);
       currentReplicaText = colonChar.text;
       return;
     }
 
     // 5. Détection Personnage seul en majuscules ("IVANA" ou "LINA + AYA")
-    if (isStandaloneCharacterLine(line)) {
+    if (isStandaloneCharacterLine(line) && resolveKnown(line)) {
       if (currentReplicaText && currentCharacter) {
         pushReplica();
       }
-      currentCharacter = line;
+      currentCharacter = resolveKnown(line);
       characterSet.add(currentCharacter);
       currentReplicaText = '';
       return;

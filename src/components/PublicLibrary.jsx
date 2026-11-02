@@ -20,6 +20,10 @@ import {
 import { extractTextFromPDF } from "../lib/pdfProcessor";
 import { parseScript } from "../lib/scriptParser";
 import Loader from "./ui/Loader";
+import { isFreeTextLimitReached } from "../lib/freeQuota";
+
+const FREE_LIMIT_MESSAGE =
+  "Compte gratuit : 1 texte maximum. Supprimez votre texte actuel ou passez Premium pour en ajouter d'autres.";
 
 function PublicLibrary({ onAddPersonalAudio }) {
   const { user } = useAuthStore();
@@ -490,6 +494,7 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
 
   // Accès au store pour créer personnages, répliques et rafraîchir la liste
   const { addCharacter, addReplicas, fetchScripts } = useScriptStore();
+  const isPremium = useAuthStore((s) => s.isPremium);
 
   const isAudio = doc.category === "audio" || doc.file_type === "audio";
 
@@ -538,6 +543,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     setSavingToTexts(true);
     setSaveError(null);
     try {
+      if (await isFreeTextLimitReached(userId, isPremium)) {
+        throw new Error(FREE_LIMIT_MESSAGE);
+      }
       // Create the script from the public audio
       const created = await savePublicAudioAsScript(doc, userId);
       // Ensure relations exist to avoid render issues
@@ -568,6 +576,9 @@ function PublicDocItem({ doc, userId, onView, onDelete, getFileIcon }) {
     setSaving(true);
     setSaveError(null);
     try {
+      if (await isFreeTextLimitReached(userId, isPremium)) {
+        throw new Error(FREE_LIMIT_MESSAGE);
+      }
       // 1. Appel API serveur pour copier le fichier
       const res = await fetch("/api/copy-public-to-private", {
         method: "POST",

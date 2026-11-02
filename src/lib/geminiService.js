@@ -52,37 +52,6 @@ async function callGeminiApi(prompt, systemInstruction) {
     proxyError = err;
   }
 
-  const clientApiKey = typeof import.meta !== "undefined" && import.meta.env ? import.meta.env["VITE_GEMINI_API_KEY"] : null;
-
-  if (clientApiKey) {
-    try {
-      const directUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + clientApiKey;
-      const directRes = await fetch(directUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction || SYSTEM_INSTRUCTION }] },
-          contents: [{ parts: [{ text: prompt }] }],
-        }),
-      });
-
-      if (directRes.ok) {
-        const directData = await directRes.json();
-        const contentText = directData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (contentText) {
-          return {
-            content: contentText,
-            inputTokens: directData.usageMetadata?.promptTokenCount || 0,
-            outputTokens: directData.usageMetadata?.candidatesTokenCount || 0,
-            totalTokens: directData.usageMetadata?.totalTokenCount || 0,
-          };
-        }
-      }
-    } catch (e) {
-      console.warn("Direct Gemini client fallback failed:", e);
-    }
-  }
-
   throw proxyError || new Error("Service Gemini IA indisponible.");
 }
 
@@ -136,47 +105,30 @@ export async function getSceneSummary(sceneLabel, sceneText) {
     throw new Error("Le texte de la scène est requis");
   }
 
-  const prompt = `Tu es un dramaturge et coach de théâtre expert. Fournis une synthèse claire et concise pour la scène "${sceneLabel || "Scène"}".
+  const MAX_CHARS = 6000;
+  let text = sceneText;
+  if (text.length > MAX_CHARS) {
+    const part = MAX_CHARS / 3;
+    const mid = Math.floor(text.length / 2 - part / 2);
+    text = `${text.slice(0, part)}\n[...]\n${text.slice(mid, mid + part)}\n[...]\n${text.slice(-part)}`;
+  }
+  const label = (sceneLabel || "Scène").slice(0, 80);
+
+  const prompt = `Résume en français la scène de théâtre "${label}" pour un comédien. Reformule avec tes propres mots, ne recopie jamais le texte.
 
 TEXTE DE LA SCÈNE:
-${sceneText}
+${text}
 
-Consignes de rédaction :
-1. 🎭 **Enjeux dramatiques** : Quel est l'objectif principal et la tension de la scène en 2 phrases.
-2. 👥 **Dynamique des personnages** : Qui s'affronte ou s'allie et quelles sont les émotions dominantes.
-3. 💡 **Conseil d'entrée en scène** : Un conseil d'intention concret pour un comédien qui entre dans cette scène.
+Format strict, 3 lignes courtes (1 à 2 phrases chacune), sans introduction :
+🎭 **Enjeu** : ce qui se joue dans la scène.
+👥 **Personnages** : qui veut quoi, et les relations.
+🎨 **Ton** : l'ambiance et l'émotion dominante.`;
 
-Rédige de façon structurée et motivante avec des émojis.`;
-
-  try {
-    const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
-    if (data && data.content) {
-      return { summary: data.content };
-    }
-  } catch (error) {
-    console.warn("Génération de synthèse locale suite à indisponibilité API Gemini:", error);
+  const data = await callGeminiApi(prompt, SYSTEM_INSTRUCTION);
+  if (!data || !data.content) {
+    throw new Error("Résumé IA indisponible. Réessayez dans un instant.");
   }
-
-  return { summary: generateLocalSceneSummary(sceneLabel, sceneText) };
-}
-
-function generateLocalSceneSummary(sceneLabel, sceneText) {
-  const lines = (sceneText || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  const chars = new Set();
-  lines.forEach((l) => {
-    if (l.includes(":")) {
-      const c = l.split(":")[0].trim();
-      if (c && c.length < 30) chars.add(c);
-    }
-  });
-
-  const charList = chars.size > 0 ? Array.from(chars).join(", ") : "les personnages";
-
-  return `🎭 **Enjeux dramatiques** : Scène à forte tension dramatique ("${sceneLabel || "Scène"}") réunissant ${lines.length} répliques entre ${charList}. L'objectif est de créer un véritable point de bascule dans l'action.
-
-👥 **Dynamique des personnages** : Échange direct et soutenu axé sur le rythme et l'écoute réciproque. Les émotions évoluent rapidement entre confrontation et recherche de compromis.
-
-💡 **Conseil d'entrée en scène** : Prenez un temps d'immobilité avant de parler. Soignez le tempo de vos relances et affirmez clairement votre intention physique dès la première réplique.`;
+  return { summary: data.content.trim() };
 }
 
 function buildPrompt(characterName, scriptText, actorContext, isCharacterCoaching = false) {

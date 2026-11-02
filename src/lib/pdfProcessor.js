@@ -69,11 +69,58 @@ async function extractNativeText(arrayBuffer) {
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items.map((item) => item.str).join(" ");
-    fullText += pageText + "\n\n";
+    fullText += itemsToLines(textContent.items) + "\n\n";
   }
 
   return { text: fullText.trim() };
+}
+
+// Reconstruit les lignes à partir des positions : un changement de hauteur Y = nouvelle ligne
+function itemsToLines(items) {
+  const lines = [];
+  let current = "";
+  let lastY = null;
+
+  for (const item of items) {
+    if (typeof item.str !== "string") continue;
+    const y = item.transform ? item.transform[5] : null;
+    const newLine =
+      lastY !== null && y !== null && Math.abs(y - lastY) > 2;
+
+    if (newLine) {
+      lines.push(current.trim());
+      current = "";
+    }
+    current += item.str;
+    if (item.hasEOL) {
+      lines.push(current.trim());
+      current = "";
+      lastY = null;
+      continue;
+    }
+    if (y !== null) lastY = y;
+  }
+  if (current.trim()) lines.push(current.trim());
+
+  return lines.filter(Boolean).join("\n");
+}
+
+/**
+ * Extraction OCR d'une photo ou image scannée (Tesseract.js)
+ */
+export async function extractTextFromImage(file, onProgress = () => {}) {
+  const Tesseract = await import("tesseract.js");
+  const worker = await Tesseract.createWorker("fra", 1, {
+    logger: (m) => {
+      if (m.status === "recognizing text") onProgress(m.progress);
+    },
+  });
+  try {
+    const { data } = await worker.recognize(file);
+    return data.text || "";
+  } finally {
+    await worker.terminate();
+  }
 }
 
 /**

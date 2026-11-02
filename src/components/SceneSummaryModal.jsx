@@ -10,21 +10,27 @@ export default function SceneSummaryModal({
   sceneLabel = "Scène",
   sceneKey = null,
   sceneText = "",
+  initialSummary = "",
   onSaveAsNote,
   onSavePermanentSummary,
   isPremium = false,
   onOpenPremiumModal,
 }) {
-  const [summary, setSummary] = useState(null);
+  const [summary, setSummary] = useState(initialSummary || null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [savingNote, setSavingNote] = useState(false);
 
   useEffect(() => {
-    if (isOpen && sceneText) {
+    if (isOpen && sceneText && !initialSummary) {
       fetchSummary();
     }
   }, [isOpen, sceneText]);
+
+  const handleRegenerate = () => {
+    if (summary && !window.confirm("Remplacer le résumé enregistré par un nouveau ?")) return;
+    fetchSummary();
+  };
 
   const fetchSummary = async () => {
     if (!isPremium) {
@@ -127,7 +133,7 @@ export default function SceneSummaryModal({
         {/* Footer */}
         <div className="pt-3 border-t border-gray-800 flex items-center justify-between gap-2 mt-3">
           <button
-            onClick={fetchSummary}
+            onClick={handleRegenerate}
             disabled={loading}
             className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold rounded-xl text-xs flex items-center gap-1"
           >

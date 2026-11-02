@@ -59,7 +59,7 @@ function FloatingActionButton() {
           className="flex items-center gap-3 bg-gray-900 border border-gray-700 hover:border-emerald-500 text-white px-4 py-2.5 rounded-2xl shadow-xl transition-all group hover:scale-105"
         >
           <span className="text-xs font-semibold text-gray-200 group-hover:text-emerald-400">
-            🎙️ Studio Enregistrement
+            🎙️ S'enregistrer (audio/vidéo)
           </span>
           <span className="text-lg bg-emerald-500/20 p-1.5 rounded-xl text-emerald-400">
             🎤

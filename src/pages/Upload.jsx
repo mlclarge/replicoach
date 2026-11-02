@@ -3,7 +3,8 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { uploadFile, supabase } from "../lib/supabase";
-import { extractTextFromPDF } from "../lib/pdfProcessor";
+import { extractTextFromPDF, extractTextFromImage, hasNativeText } from "../lib/pdfProcessor";
+import { isFreeTextLimitReached } from "../lib/freeQuota";
 import {
   extractTextFromWord,
   extractTextFromTxt,
@@ -21,8 +22,9 @@ export default function Upload() {
   const { user, isPremium } = useAuthStore();
   const { addScript, addCharacter, addReplicas, fetchScripts, fetchScript } = useScriptStore();
 
-  // Mode d'importation : "scan_standard" (1er) | "file" (2e) | "scan_premium" (3e)
-  const [importMode, setImportMode] = useState("scan_standard");
+  // Mode d'importation : "import" (texte numérique ou scan, détection auto) | "scan_premium"
+  const [importMode, setImportMode] = useState("import");
+  const [premiumFeatureKey, setPremiumFeatureKey] = useState("OCR_AUTO");
 
   // Champs de saisie
   const [title, setTitle] = useState("");
@@ -98,6 +100,7 @@ export default function Upload() {
   const handleModeChange = (mode) => {
     setError(null);
     if (mode === "scan_premium" && !isPremium) {
+      setPremiumFeatureKey("OCR_AUTO");
       setShowPremiumModal(true);
       return;
     }
@@ -105,9 +108,24 @@ export default function Upload() {
   };
 
   // Fonction d'extraction de texte selon le type de fichier
+  const needsOcr = async (file) => {
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (file.type.startsWith("image/")) return true;
+    if (ext === "pdf") {
+      try {
+        return !(await hasNativeText(file));
+      } catch {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const extractTextFromFile = async (file, onProgress, refCharacters = null) => {
     const ext = file.name.toLowerCase().split(".").pop();
-    if (ext === "pdf") {
+    if (file.type.startsWith("image/")) {
+      return await extractTextFromImage(file, onProgress);
+    } else if (ext === "pdf") {
       const result = await extractTextFromPDF(file, onProgress, refCharacters);
       return result.text || "";
     } else if (ext === "docx" || ext === "doc") {
@@ -167,11 +185,29 @@ export default function Upload() {
 
     // 3. Création des répliques
     if (Array.isArray(parsedReplicas) && parsedReplicas.length > 0) {
+      const norm = (s) =>
+        (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+      const normMap = {};
+      Object.entries(characterMap).forEach(([n, id]) => { normMap[norm(n)] = id; });
+
+      // character_id est obligatoire : on crée le personnage manquant plutôt que d'insérer null
+      for (const rep of parsedReplicas) {
+        const raw = (rep.character || rep.character_name || "").trim() || "NARRATEUR";
+        const key = norm(raw);
+        if (!normMap[key]) {
+          const created = await addCharacter(scriptId, {
+            name: raw.toUpperCase(),
+            color: CHARACTER_COLORS[Object.keys(normMap).length % CHARACTER_COLORS.length],
+          });
+          normMap[key] = created.id;
+        }
+      }
+
       const replicasToInsert = parsedReplicas.map((rep, idx) => {
-        const charName = (rep.character || rep.character_name || "").toUpperCase();
+        const key = norm((rep.character || rep.character_name || "").trim() || "NARRATEUR");
         return {
           script_id: scriptId,
-          character_id: characterMap[charName] || null,
+          character_id: normMap[key],
           order_index: (idx + 1) * 1000,
           text: rep.text || "",
           text_gaps: rep.textGaps || rep.text_gaps || "",
@@ -207,29 +243,33 @@ export default function Upload() {
     e?.preventDefault();
     setError(null);
 
-    // MODE 1 : SCAN CLASSIQUE (Photo / PDF scanné avec liste personnages)
-    if (importMode === "scan_standard") {
+    // MODE 1 : IMPORT STANDARD (texte numérique ou scan/photo, détecté automatiquement)
+    let useOcr = false;
+    if (importMode === "import") {
       if (!selectedFile) {
-        setError("Veuillez sélectionner un document PDF ou une photo scannée.");
+        setError("Veuillez sélectionner un document PDF, Word, TXT ou une photo.");
         return;
       }
 
-      if (!customCharacters.trim()) {
-        setShowCharModal(true);
+      if (await isFreeTextLimitReached(user?.id, isPremium)) {
+        setPremiumFeatureKey("TEXT_LIMIT");
+        setShowPremiumModal(true);
         return;
       }
 
-      await executeScanStandard();
-      return;
+      useOcr = await needsOcr(selectedFile);
+      if (useOcr) {
+        if (!customCharacters.trim()) {
+          setShowCharModal(true);
+          return;
+        }
+        await executeScanStandard();
+        return;
+      }
     }
 
     // MODE 2 : FICHIER NATIF NUMÉRIQUE (PDF, Word, TXT)
-    if (importMode === "file") {
-      if (!selectedFile) {
-        setError("Veuillez choisir un fichier PDF, Word ou TXT à importer.");
-        return;
-      }
-
+    if (importMode === "import" && !useOcr) {
       setIsUploading(true);
       setUploadProgress("Extraction du texte du document...");
 
@@ -402,39 +442,14 @@ export default function Upload() {
           1. Choisissez la méthode d'importation
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           
-          {/* OPTION 1 (TÊTE DE LISTE) : SCAN CLASSIQUE (OCR) */}
+          {/* OPTION 1 : IMPORT STANDARD (texte numérique ou scan/photo, détection automatique) */}
           <button
             type="button"
-            onClick={() => handleModeChange("scan_standard")}
+            onClick={() => handleModeChange("import")}
             className={`p-5 rounded-2xl border-2 text-left transition-all duration-200 flex flex-col justify-between shadow-lg ${
-              importMode === "scan_standard"
-                ? "bg-gray-800 border-blue-500 shadow-blue-500/10 ring-2 ring-blue-500/30"
-                : "bg-gray-800/60 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80"
-            }`}
-          >
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-3xl">📸</span>
-                <span className="text-[10px] font-bold px-2.5 py-0.5 bg-gray-700 text-gray-300 rounded-full border border-gray-600 uppercase">
-                  Standard
-                </span>
-              </div>
-              <h3 className="font-extrabold text-white text-base">Scan classique (OCR)</h3>
-              <p className="text-gray-300 text-xs mt-2 leading-relaxed">
-                Votre PDF est issu d'un scan, ou photocopie. Ici, vous précisez le nom de chaque personnage, laissez-vous guider !
-              </p>
-            </div>
-            <span className="text-xs text-blue-400 font-bold mt-4">Inclus / Gratuit</span>
-          </button>
-
-          {/* OPTION 2 : FICHIER NATIF NUMÉRIQUE */}
-          <button
-            type="button"
-            onClick={() => handleModeChange("file")}
-            className={`p-5 rounded-2xl border-2 text-left transition-all duration-200 flex flex-col justify-between shadow-lg ${
-              importMode === "file"
+              importMode === "import"
                 ? "bg-gray-800 border-blue-500 shadow-blue-500/10 ring-2 ring-blue-500/30"
                 : "bg-gray-800/60 border-gray-700 hover:border-gray-600 hover:bg-gray-800/80"
             }`}
@@ -446,12 +461,15 @@ export default function Upload() {
                   Standard
                 </span>
               </div>
-              <h3 className="font-extrabold text-white text-base">Fichier natif numérique</h3>
+              <h3 className="font-extrabold text-white text-base">Importer un texte</h3>
               <p className="text-gray-300 text-xs mt-2 leading-relaxed">
-                Votre document a été conçu entièrement sur PC ou mobile (PDF informatique, Word `.docx`, texte `.txt`).
+                PDF, Word, TXT ou photo/scan. Le type de document est détecté automatiquement : lecture directe d'un fichier numérique, ou reconnaissance optique (OCR) d'un scan.
               </p>
+                              <p className="text-gray-400 text-xs mt-2 leading-relaxed">
+                                💡 Complétez votre texte importé avec « l'information de la pièce de théâtre » ci-dessous. Une fois importé, vous pouvez aussi l'ajuster en ajoutant une réplique ou un personnage manquant.
+                              </p>
             </div>
-            <span className="text-xs text-blue-400 font-bold mt-4">Inclus / Gratuit</span>
+            <span className="text-xs text-blue-400 font-bold mt-4">Gratuit : 1 texte</span>
           </button>
 
           {/* OPTION 3 : SCAN PREMIUM IA (GEMINI VISION) */}
@@ -491,10 +509,10 @@ export default function Upload() {
         <div className="bg-gray-900/90 border border-gray-800 rounded-2xl p-5 sm:p-6 space-y-5 shadow-xl">
           
           {/* AFFICHAGE DU PAVÉ 2 UNIQUEMENT SI SCAN CLASSIQUE (OCR) */}
-          {importMode === "scan_standard" && (
+          {importMode === "import" && (
             <div className="space-y-4 pb-4 border-b border-gray-800">
               <h2 className="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-                <span>📕</span> 2. Informations de la pièce de théâtre (Scan Classique)
+                <span>📕</span> Informations de la pièce de théâtre
               </h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -527,7 +545,7 @@ export default function Upload() {
 
               <div>
                 <label className="block text-xs font-bold text-gray-300 uppercase mb-1">
-                  Personnages de la pièce (Séparés par des virgules) *
+                  Personnages de la pièce (séparés par des virgules)
                 </label>
                 <input
                   type="text"
@@ -537,7 +555,7 @@ export default function Upload() {
                   className="w-full bg-gray-800 border border-gray-700 focus:border-blue-500 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none transition"
                 />
                 <p className="text-gray-400 text-xs mt-1">
-                  Indiquez les noms des personnages pour permettre au Scan Classique de repérer correctement les répliques.
+                  Facultatif pour un fichier numérique. Obligatoire pour un scan ou une photo : cela permet de repérer correctement les répliques.
                 </p>
               </div>
             </div>
@@ -742,7 +760,7 @@ export default function Upload() {
       {/* MODALE BASCULE PREMIUM */}
       {showPremiumModal && (
         <PremiumGateModal
-          featureKey="OCR_AUTO"
+          featureKey={premiumFeatureKey}
           onClose={() => setShowPremiumModal(false)}
         />
       )}

@@ -9,9 +9,8 @@ import FloatingRecorder from "../components/FloatingRecorder";
 import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
-import VideoRecorderModal from "../components/VideoRecorderModal";
 import VideoBubble from "../components/VideoBubble";
-import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
+import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
 
 import {
   DndContext,
@@ -133,7 +132,6 @@ function ScriptDetail() {
   // État pour le Paywall Premium Coach IA
   const [showPremiumModal, setShowPremiumModal] = useState(false);
   const [showStudioMenu, setShowStudioMenu] = useState(false);
-  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replicaVideos, setReplicaVideos] = useState({});
   const [summaryScene, setSummaryScene] = useState(null);
   const [sceneSummaries, setSceneSummaries] = useState({});
@@ -142,7 +140,17 @@ function ScriptDetail() {
     if (!id) return;
     try {
       const saved = localStorage.getItem("sceneSummaries_" + id);
-      if (saved) setSceneSummaries(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Purge des faux résumés générés localement par l'ancienne version
+        const clean = Object.fromEntries(
+          Object.entries(parsed).filter(([, v]) => typeof v === "string" && !v.includes("Scène à forte tension dramatique")),
+        );
+        if (Object.keys(clean).length !== Object.keys(parsed).length) {
+          localStorage.setItem("sceneSummaries_" + id, JSON.stringify(clean));
+        }
+        setSceneSummaries(clean);
+      }
     } catch (e) {}
   }, [id]);
 
@@ -193,19 +201,6 @@ function ScriptDetail() {
     };
   }, [id]);
 
-  const handleSaveVideo = (targetReplicaId, videoData) => {
-    if (!targetReplicaId || !videoData) return;
-    setReplicaVideos((prev) => {
-      const updated = {
-        ...prev,
-        [targetReplicaId]: videoData,
-        [String(targetReplicaId)]: videoData,
-      };
-      return updated;
-    });
-    saveReplicaVideoDB(id, targetReplicaId, videoData);
-  };
-
   const handleDeleteVideo = (targetReplicaId) => {
     if (!targetReplicaId) return;
     setReplicaVideos((prev) => {
@@ -215,6 +210,18 @@ function ScriptDetail() {
       return updated;
     });
     deleteReplicaVideoDB(id, targetReplicaId);
+  };
+
+  const renderScopeVideo = (key) => {
+    const video = replicaVideos[key];
+    if (!video) return null;
+    return (
+      <VideoBubble
+        video={video}
+        character={characters.find((c) => c.id === video.characterId)}
+        onDelete={() => handleDeleteVideo(key)}
+      />
+    );
   };
 
   // Extraction ordonnée des actes et scènes du script
@@ -1256,6 +1263,7 @@ function ScriptDetail() {
             strategy={verticalListSortingStrategy}
           >
             <div className="space-y-3">
+              {renderScopeVideo(SCRIPT_VIDEO_KEY)}
               {filteredReplicas.map((replica, index) => {
                 const character = characters.find(
                   (c) => c.id === replica.character_id
@@ -1322,7 +1330,7 @@ function ScriptDetail() {
                                       <div className="flex items-center justify-between mb-2">
                                         <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs sm:text-sm">
                                           <span>✨</span>
-                                          <span>Synthèse & Contexte IA — {replica.scene_title}</span>
+                                          <span>Résumé de la scène</span>
                                         </div>
                                         <button
                                           onClick={() => {
@@ -1349,6 +1357,8 @@ function ScriptDetail() {
                                 })()}
                               </div>
                             )}
+                            {isNewAct && renderScopeVideo(actVideoKey(replica.act_title))}
+                            {replica.scene_title && renderScopeVideo(sceneVideoKey(replica.act_title, replica.scene_title))}
                           </div>
                         );
                       }
@@ -1699,7 +1709,7 @@ function ScriptDetail() {
             className="fixed inset-0"
             onClick={() => setShowStudioMenu(false)}
           />
-          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
+          <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto mb-20 bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🎙️</span>
@@ -1720,6 +1730,20 @@ function ScriptDetail() {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  navigate(`/free-recordings?script=${id}`);
+                }}
+                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
+              >
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="font-extrabold text-rose-300 text-xs">S'enregistrer (audio/vidéo)</div>
+                  <div className="text-[10px] text-gray-400">Audio ou vidéo, à insérer dans le texte (pièce, acte, scène, réplique)</div>
+                </div>
+              </button>
+
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
@@ -1761,49 +1785,9 @@ function ScriptDetail() {
                   <div className="text-[10px] text-gray-400">Créer un nouveau rôle</div>
                 </div>
               </button>
-
-              <button
-                onClick={() => {
-                  setShowStudioMenu(false);
-                  navigate("/free-recordings");
-                }}
-                className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
-              >
-                <span className="text-2xl">🎙️</span>
-                <div>
-                  <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
-                  <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowStudioMenu(false);
-                  setShowVideoRecorder(true);
-                }}
-                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
-              >
-                <span className="text-2xl">🎥</span>
-                <div>
-                  <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
-                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo caméra et l'ancrer dans le texte</div>
-                </div>
-              </button>
             </div>
           </div>
         </div>
-      )}
-
-      {/* 🎥 MODALE ENREGISTREUR VIDÉO */}
-      {showVideoRecorder && (
-        <VideoRecorderModal
-          isOpen={true}
-          onClose={() => setShowVideoRecorder(false)}
-          onSave={handleSaveVideo}
-          replicas={replicas}
-          characters={characters}
-          scenes={scenes}
-        />
       )}
 
       {/* ✨ MODALE SYNTHÈSE / RÉSUMÉ IA DE SCÈNE */}
@@ -1814,6 +1798,7 @@ function ScriptDetail() {
           sceneLabel={summaryScene.sceneLabel}
           sceneKey={summaryScene.sceneKey}
           sceneText={summaryScene.sceneText}
+          initialSummary={sceneSummaries[summaryScene.sceneKey] || ""}
           isPremium={isPremium}
           onOpenPremiumModal={() => setShowPremiumModal(true)}
           onSavePermanentSummary={handleSavePermanentSummary}

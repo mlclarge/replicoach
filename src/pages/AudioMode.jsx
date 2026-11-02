@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
 import {
@@ -15,9 +15,8 @@ import Loader from "../components/ui/Loader";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
-import VideoRecorderModal from "../components/VideoRecorderModal";
 import VideoBubble from "../components/VideoBubble";
-import { loadAllReplicaVideosDB, saveReplicaVideoDB, deleteReplicaVideoDB } from "../lib/videoStorage";
+import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
 
 import PremiumGateModal from "../components/PremiumGateModal";
 import {
@@ -124,6 +123,7 @@ function cleanTextForSpeech(text) {
 
 function AudioMode() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, isPremium } = useAuthStore();
   const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
 
@@ -160,7 +160,6 @@ function AudioMode() {
   const [summaryScene, setSummaryScene] = useState(null);
   const [sceneSummaries, setSceneSummaries] = useState({});
   const [showStudioMenu, setShowStudioMenu] = useState(false);
-  const [showVideoRecorder, setShowVideoRecorder] = useState(false);
   const [replicaVideos, setReplicaVideos] = useState({});
 
 
@@ -178,7 +177,16 @@ function AudioMode() {
     if (!id) return;
     try {
       const saved = localStorage.getItem("sceneSummaries_" + id);
-      if (saved) setSceneSummaries(JSON.parse(saved));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const clean = Object.fromEntries(
+          Object.entries(parsed).filter(([, v]) => typeof v === "string" && !v.includes("Scène à forte tension dramatique")),
+        );
+        if (Object.keys(clean).length !== Object.keys(parsed).length) {
+          localStorage.setItem("sceneSummaries_" + id, JSON.stringify(clean));
+        }
+        setSceneSummaries(clean);
+      }
     } catch (e) {}
   }, [id]);
 
@@ -208,14 +216,27 @@ function AudioMode() {
     };
   }, [id]);
 
-  const handleSaveVideo = (targetReplicaId, videoData) => {
-    if (!targetReplicaId || !videoData) return;
-    setReplicaVideos((prev) => ({
-      ...prev,
-      [targetReplicaId]: videoData,
-      [String(targetReplicaId)]: videoData,
-    }));
-    saveReplicaVideoDB(id, targetReplicaId, videoData);
+  const handleDeleteVideo = (targetKey) => {
+    if (!targetKey) return;
+    setReplicaVideos((prev) => {
+      const updated = { ...prev };
+      delete updated[targetKey];
+      delete updated[String(targetKey)];
+      return updated;
+    });
+    deleteReplicaVideoDB(id, targetKey);
+  };
+
+  const renderScopeVideo = (key) => {
+    const video = replicaVideos[key];
+    if (!video) return null;
+    return (
+      <VideoBubble
+        video={video}
+        character={characters.find((c) => c.id === video.characterId)}
+        onDelete={() => handleDeleteVideo(key)}
+      />
+    );
   };
 
   const handleCoachClick = (e, characterId) => {
@@ -1519,6 +1540,7 @@ function AudioMode() {
 
       {/* Liste des répliques - Responsive Full Width */}
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
+        {renderScopeVideo(SCRIPT_VIDEO_KEY)}
         {displayReplicas.map((replica, index) => {
           const character = characters.find(
             (c) => c.id === replica.character_id
@@ -1553,6 +1575,8 @@ function AudioMode() {
                       </h3>
                     </div>
                   )}
+                  {isNewAct && renderScopeVideo(actVideoKey(replica.act_title))}
+                  {replica.scene_title && renderScopeVideo(sceneVideoKey(replica.act_title, replica.scene_title))}
                 </div>
               )}
               <AudioBubble
@@ -1712,7 +1736,7 @@ function AudioMode() {
             className="fixed inset-0"
             onClick={() => setShowStudioMenu(false)}
           />
-          <div className="relative w-full max-w-lg bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
+          <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto mb-20 bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">🎙️</span>
@@ -1736,7 +1760,21 @@ function AudioMode() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  navigate();
+                  navigate(`/free-recordings?script=${id}`);
+                }}
+                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
+              >
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="font-extrabold text-rose-300 text-xs">S'enregistrer (audio/vidéo)</div>
+                  <div className="text-[10px] text-gray-400">Audio ou vidéo, à insérer dans le texte (pièce, acte, scène, réplique)</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  navigate(`/script/${id}`);
                 }}
                 className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -1750,7 +1788,7 @@ function AudioMode() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  navigate();
+                  navigate(`/script/${id}`);
                 }}
                 className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -1764,7 +1802,7 @@ function AudioMode() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  navigate();
+                  navigate(`/script/${id}`);
                 }}
                 className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -1772,34 +1810,6 @@ function AudioMode() {
                 <div>
                   <div className="font-extrabold text-purple-300 text-xs">Ajouter personnage</div>
                   <div className="text-[10px] text-gray-400">Créer un nouveau rôle</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowStudioMenu(false);
-                  navigate("/free-recordings");
-                }}
-                className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
-              >
-                <span className="text-2xl">🎙️</span>
-                <div>
-                  <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
-                  <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
-                </div>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowStudioMenu(false);
-                  setShowVideoRecorder(true);
-                }}
-                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
-              >
-                <span className="text-2xl">🎥</span>
-                <div>
-                  <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
-                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo caméra et l'ancrer dans le texte</div>
                 </div>
               </button>
             </div>

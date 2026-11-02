@@ -1,15 +1,33 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
+import { useScriptStore, extractScenes } from '../store/scriptStore';
 import { fetchUserTroupes, uploadSharedRecording, fetchSharedRecordings } from '../lib/supabase';
-import { loadAllFreeVideosDB, saveFreeVideoDB, deleteFreeVideoDB } from '../lib/videoStorage';
+import { loadAllFreeVideosDB, saveFreeVideoDB, deleteFreeVideoDB, saveReplicaVideoDB } from '../lib/videoStorage';
+import VideoAnchorPicker from '../components/VideoAnchorPicker';
 
 /**
- * Enregistrements libres (Audio & Vidéo) - Local + Partage troupe
+ * Enregistrements libres (Audio & Vidéo) - Local + Partage troupe.
+ * Avec ?script=<id> : la vidéo est insérée dans le script (pièce, acte, scène ou réplique)
+ * au lieu d'être stockée dans la liste locale.
  */
 function FreeRecordings() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const scriptId = searchParams.get('script');
   const { user } = useAuthStore();
+  const { currentScript, fetchScript, clearCurrentScript } = useScriptStore();
+  const [videoTargetKey, setVideoTargetKey] = useState(null);
+
+  const scriptReplicas = useMemo(() => currentScript?.replicas || [], [currentScript?.replicas]);
+  const scriptCharacters = useMemo(() => currentScript?.characters || [], [currentScript?.characters]);
+  const { scenes: scriptScenes } = useMemo(() => extractScenes(scriptReplicas), [scriptReplicas]);
+
+  useEffect(() => {
+    if (!scriptId) return;
+    fetchScript(scriptId);
+    return () => clearCurrentScript();
+  }, [scriptId, fetchScript, clearCurrentScript]);
   
   const [recordings, setRecordings] = useState([]);
   const [freeVideos, setFreeVideos] = useState([]);
@@ -310,6 +328,7 @@ function FreeRecordings() {
 
   const handleSaveVideo = () => {
     if (!recordedVideoBlob) return;
+    if (scriptId && !videoTargetKey) return;
     const reader = new FileReader();
     reader.onloadend = async () => {
       const videoData = {
@@ -318,13 +337,19 @@ function FreeRecordings() {
         duration: videoTime,
         date: new Date().toISOString(),
       };
-      await saveFreeVideoDB(videoData);
-      loadFreeVideos();
+      if (scriptId) {
+        await saveReplicaVideoDB(scriptId, videoTargetKey, videoData);
+        window.dispatchEvent(new CustomEvent('replica-video-updated'));
+      } else {
+        await saveFreeVideoDB(videoData);
+        loadFreeVideos();
+        window.dispatchEvent(new CustomEvent('free-video-updated'));
+      }
       setRecordedVideoBlob(null);
       setVideoPreviewUrl(null);
       setVideoTitle('');
       cleanupVideo();
-      window.dispatchEvent(new CustomEvent('free-video-updated'));
+      if (scriptId) navigate(-1);
     };
     reader.readAsDataURL(recordedVideoBlob);
   };
@@ -364,7 +389,7 @@ function FreeRecordings() {
   const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return ;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -475,6 +500,14 @@ function FreeRecordings() {
                   onChange={(e) => setVideoTitle(e.target.value)}
                   className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white font-medium text-xs text-center"
                 />
+                {scriptId && (
+                  <VideoAnchorPicker
+                    replicas={scriptReplicas}
+                    characters={scriptCharacters}
+                    scenes={scriptScenes}
+                    onChange={setVideoTargetKey}
+                  />
+                )}
                 <div className="flex justify-center gap-3">
                   <button
                     onClick={() => { setVideoPreviewUrl(null); setRecordedVideoBlob(null); startCamera(); }}
@@ -484,9 +517,10 @@ function FreeRecordings() {
                   </button>
                   <button
                     onClick={handleSaveVideo}
-                    className="px-6 py-2 bg-rose-500 hover:bg-rose-400 text-white font-extrabold rounded-xl text-xs shadow-lg"
+                    disabled={scriptId && !videoTargetKey}
+                    className="px-6 py-2 bg-rose-500 hover:bg-rose-400 text-white font-extrabold rounded-xl text-xs shadow-lg disabled:opacity-40"
                   >
-                    💾 Enregistrer la vidéo
+                    {scriptId ? '💾 Insérer dans le script' : '💾 Enregistrer la vidéo'}
                   </button>
                 </div>
               </div>

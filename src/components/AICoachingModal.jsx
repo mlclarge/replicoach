@@ -166,7 +166,7 @@ export default function AICoachingModal({
               </p>
               <div className="bg-gray-800 rounded p-3 mb-4 text-left text-xs text-gray-300">
                 <p className="font-mono mb-2">
-                  VITE_GEMINI_API_KEY=votre_clé_api
+                  GEMINI_API_KEY=votre_clé_api
                 </p>
                 <p className="text-gray-500">
                   Obtenez une clé sur{" "}

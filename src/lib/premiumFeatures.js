@@ -14,6 +14,12 @@ export const PREMIUM_FEATURES = {
     description:
       "Le Coaching IA personnalisé pour chaque personnage est réservé aux abonnés Premium. Passez au niveau supérieur pour améliorer votre jeu d'acteur !",
   },
+  TEXT_LIMIT: {
+    key: "TEXT_LIMIT",
+    title: "Textes illimités",
+    description:
+      "Le compte gratuit permet de conserver 1 texte. Supprimez-le pour en importer un autre, ou passez Premium pour des textes illimités.",
+  },
   OCR_AUTO: {
     key: "OCR_AUTO",
     title: "Scan Express (OCR automatique)",

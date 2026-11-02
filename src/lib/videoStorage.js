@@ -8,6 +8,13 @@ const DB_VERSION = 1;
 const STORE_NAME = "replica_videos";
 const FREE_STORE_NAME = "free_videos";
 
+// Clés d'ancrage : une vidéo par emplacement (pièce, acte, scène ou réplique).
+// Les répliques gardent leur clé historique (simple id) pour rester compatibles.
+export const SCRIPT_VIDEO_KEY = "script::all";
+export const actVideoKey = (actTitle) => `act::${actTitle || ""}`;
+export const sceneVideoKey = (actTitle, sceneTitle) =>
+  `scene::${actTitle || ""}_${sceneTitle || ""}`;
+
 export function openVideoDB() {
   return new Promise((resolve, reject) => {
     if (typeof window === "undefined" || !window.indexedDB) {
@@ -86,14 +93,14 @@ export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
 export async function deleteReplicaVideoDB(scriptId, replicaId) {
   if (!scriptId || !replicaId) return;
   const keyStr = `${scriptId}_${String(replicaId)}`;
-  const keyNum = `${scriptId}_${Number(replicaId)}`;
+  const numId = Number(replicaId);
 
   try {
     const db = await openVideoDB();
     const tx = db.transaction(STORE_NAME, "readwrite");
     const store = tx.objectStore(STORE_NAME);
     store.delete(keyStr);
-    store.delete(keyNum);
+    if (!Number.isNaN(numId)) store.delete(`${scriptId}_${numId}`);
     await new Promise((resolve) => {
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();

@@ -78,10 +78,10 @@ export default function BottomNav() {
                 : "text-white font-medium hover:text-amber-300"
             }`
           }
-          title="Studio (Enregistrements libres, Notes, Répliques, Vidéo)"
+          title="S'enregistrer (audio/vidéo), notes, répliques"
         >
           <span className="text-base sm:text-lg">🎙️</span>
-          <span className="text-[10px] sm:text-xs text-white font-medium">Studio</span>
+          <span className="text-[10px] sm:text-xs text-white font-medium">S'enregistrer</span>
         </NavLink>
 
         {/* 4. Tuto / Consignes */}
