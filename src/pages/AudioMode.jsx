@@ -1704,6 +1704,8 @@ function AudioMode() {
       </div>
 
       {/* 🎙️ STUDIO MENU DRAWER (Centralisé depuis la barre du bas) */}
+      
+      {/* 🎙️ STUDIO / MENU CRÉATIF */}
       {showStudioMenu && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
           <div
@@ -1734,21 +1736,21 @@ function AudioMode() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  window.history.back();
+                  navigate();
                 }}
                 className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
                 <span className="text-2xl">📝</span>
                 <div>
                   <div className="font-extrabold text-amber-300 text-xs">Ajouter une note</div>
-                  <div className="text-[10px] text-gray-400">Sur le texte de la pièce</div>
+                  <div className="text-[10px] text-gray-400">Note d'intention ou mise en scène</div>
                 </div>
               </button>
 
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  window.history.back();
+                  navigate();
                 }}
                 className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -1762,7 +1764,7 @@ function AudioMode() {
               <button
                 onClick={() => {
                   setShowStudioMenu(false);
-                  window.history.back();
+                  navigate();
                 }}
                 className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
@@ -1773,9 +1775,11 @@ function AudioMode() {
                 </div>
               </button>
 
-              <Link
-                to="/free-recordings"
-                onClick={() => setShowStudioMenu(false)}
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  navigate("/free-recordings");
+                }}
                 className="p-3 bg-gold-500/10 hover:bg-gold-500/20 border border-gold-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
               >
                 <span className="text-2xl">🎙️</span>
@@ -1783,7 +1787,7 @@ function AudioMode() {
                   <div className="font-extrabold text-gold-300 text-xs">S'enregistrer (Audio)</div>
                   <div className="text-[10px] text-gray-400">Mes enregistrements libres</div>
                 </div>
-              </Link>
+              </button>
 
               <button
                 onClick={() => {
@@ -1795,13 +1799,14 @@ function AudioMode() {
                 <span className="text-2xl">🎥</span>
                 <div>
                   <div className="font-extrabold text-rose-300 text-xs">Se filmer (Vidéo)</div>
-                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo de travail et l'ancrer dans une scène</div>
+                  <div className="text-[10px] text-gray-400">Enregistrer une vidéo caméra et l'ancrer dans le texte</div>
                 </div>
               </button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }

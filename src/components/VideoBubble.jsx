@@ -1,5 +1,6 @@
 /**
  * Composant Lecteur Vidéo Immersif ancré dans le fil du texte ou d'une scène
+ * Design réactif optimisé sur Mobile et PC
  */
 export default function VideoBubble({
   video,
@@ -9,37 +10,46 @@ export default function VideoBubble({
   const characterColor = character?.color || "#8B5CF6";
 
   return (
-    <div className="my-3 p-3.5 bg-gradient-to-r from-gray-900 via-gray-950 to-gray-900 border-2 rounded-2xl shadow-xl animate-fade-in max-w-[95%] sm:max-w-[85%] mx-auto"
+    <div
+      className="my-4 p-3.5 sm:p-4 bg-gradient-to-r from-gray-900 via-gray-950 to-gray-900 border-2 rounded-2xl shadow-2xl animate-fade-in w-full max-w-lg mx-auto clear-both"
       style={{ borderColor: characterColor }}
     >
-      <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">🎥</span>
-          <div>
-            <h4 className="font-extrabold text-amber-300 text-xs sm:text-sm">
+      <div className="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="w-8 h-8 rounded-xl flex items-center justify-center text-base font-extrabold shadow-sm flex-shrink-0"
+            style={{ backgroundColor: , color: characterColor }}
+          >
+            🎥
+          </div>
+          <div className="min-w-0">
+            <h4 className="font-extrabold text-amber-300 text-xs sm:text-sm truncate">
               {video.title || "Vidéo de travail"}
             </h4>
-            <p className="text-[10px] text-gray-400 font-semibold">
-              {character?.name ? `Pour ${character.name}` : "Enregistrement vidéo"}
+            <p className="text-[10px] text-gray-400 font-semibold truncate">
+              {character?.name ?  : "Enregistrement vidéo"}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={onDelete}
-          className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition"
-          title="Supprimer la vidéo"
-        >
-          🗑️
-        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            className="p-1.5 text-gray-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-xl transition flex-shrink-0"
+            title="Supprimer la vidéo"
+          >
+            🗑️
+          </button>
+        )}
       </div>
 
-      <div className="relative bg-black rounded-xl overflow-hidden aspect-video shadow-inner border border-white/10">
+      {/* Container vidéo adapté Mobile & PC */}
+      <div className="relative bg-black rounded-xl overflow-hidden shadow-inner border border-white/10 flex items-center justify-center max-h-[380px]">
         <video
           src={video.data}
           controls
           playsInline
-          className="w-full h-full object-cover"
+          className="w-full max-h-[360px] object-contain mx-auto rounded-lg"
         />
       </div>
 
