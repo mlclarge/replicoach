@@ -211,7 +211,7 @@ function FreeRecordings() {
     reader.onloadend = () => {
       const newRec = {
         id: Date.now().toString(),
-        name: recordingName.trim() || "Enregistrement vocal",
+        name: recordingName.trim() || ,
         data: reader.result,
         duration: audioTime,
         date: new Date().toISOString()
@@ -313,7 +313,7 @@ function FreeRecordings() {
     const reader = new FileReader();
     reader.onloadend = async () => {
       const videoData = {
-        title: videoTitle.trim() || "Vidéo libre",
+        title: videoTitle.trim() || ,
         data: reader.result,
         duration: videoTime,
         date: new Date().toISOString(),
@@ -393,13 +393,13 @@ function FreeRecordings() {
         <div className="flex justify-center gap-3 mb-6">
           <button
             onClick={() => { setMode('audio'); cleanupVideo(); }}
-            className={}
+            className={`py-2.5 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition ${mode === 'audio' ? 'bg-amber-500 text-gray-950 border-2 border-amber-400 scale-105 shadow-md' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-white'}`}
           >
             <span>🎙️</span> Enregistrement Audio
           </button>
           <button
             onClick={() => { setMode('video'); startCamera(); }}
-            className={}
+            className={`py-2.5 px-4 rounded-xl font-bold text-xs flex items-center gap-2 transition ${mode === 'video' ? 'bg-rose-500 text-white border-2 border-rose-400 scale-105 shadow-md' : 'bg-gray-800 text-gray-400 border border-gray-700 hover:text-white'}`}
           >
             <span>🎥</span> Enregistrement Vidéo
           </button>
@@ -423,7 +423,7 @@ function FreeRecordings() {
 
             <button
               onClick={isRecordingAudio ? stopAudioRecording : startAudioRecording}
-              className={}
+              className={`px-8 py-4 rounded-2xl font-extrabold text-sm transition shadow-xl flex items-center gap-2 mx-auto ${isRecordingAudio ? 'bg-red-600 hover:bg-red-500 text-white border-2 border-red-400 animate-pulse' : 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-gray-950 border-2 border-amber-300'}`}
             >
               <span>{isRecordingAudio ? '⏹️' : '🔵'}</span>
               <span>{isRecordingAudio ? "Arrêter l'enregistrement" : "Commencer l'audio"}</span>
@@ -498,13 +498,13 @@ function FreeRecordings() {
         <div className="flex border-b border-gray-800 mb-6">
           <button
             onClick={() => setActiveTab('local')}
-            className={}
+            className={`flex-1 py-2 rounded-xl font-bold text-xs transition border-b-2 ${activeTab === 'local' ? 'border-amber-400 text-amber-400 font-extrabold' : 'border-transparent text-gray-400 hover:text-white'}`}
           >
             📱 Local ({recordings.length + freeVideos.length})
           </button>
           <button
             onClick={() => setActiveTab('shared')}
-            className={}
+            className={`flex-1 py-2 rounded-xl font-bold text-xs transition border-b-2 ${activeTab === 'shared' ? 'border-amber-400 text-amber-400 font-extrabold' : 'border-transparent text-gray-400 hover:text-white'}`}
           >
             👥 Partagés ({sharedRecordings.length})
           </button>
@@ -668,7 +668,7 @@ function RecordingItem({ recording, isPlaying, onPlay, onDelete, onRename, onSha
       <div className="flex items-center gap-3">
         <button
           onClick={onPlay}
-          className={}
+          className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg transition shadow-md ${isPlaying ? 'bg-red-600 text-white animate-pulse' : 'bg-amber-500 text-gray-950 hover:bg-amber-400'}`}
         >
           {isPlaying ? '⏸️' : '▶️'}
         </button>
@@ -686,7 +686,7 @@ function RecordingItem({ recording, isPlaying, onPlay, onDelete, onRename, onSha
             />
           ) : (
             <p 
-              className={}
+              className={`text-white font-bold text-sm truncate ${!isShared ? 'cursor-pointer hover:text-amber-300 transition' : ''}`}
               onClick={() => !isShared && setIsEditing(true)}
             >
               {recording.name}
