@@ -45,7 +45,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
         const cursor = e.target.result;
         if (cursor) {
           const key = String(cursor.key);
-          const prefix = `${scriptId}_`;
+          const prefix = ;
           if (key.startsWith(prefix)) {
             const replicaId = key.substring(prefix.length);
             videosMap[replicaId] = cursor.value;
@@ -67,7 +67,7 @@ export async function loadAllReplicaVideosDB(scriptId) {
 
 export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
   if (!scriptId || !replicaId) return;
-  const key = `${scriptId}_${String(replicaId)}`;
+  const key = ;
 
   try {
     const db = await openVideoDB();
@@ -85,8 +85,8 @@ export async function saveReplicaVideoDB(scriptId, replicaId, videoData) {
 
 export async function deleteReplicaVideoDB(scriptId, replicaId) {
   if (!scriptId || !replicaId) return;
-  const keyStr = `${scriptId}_${String(replicaId)}`;
-  const keyNum = `${scriptId}_${Number(replicaId)}`;
+  const keyStr = ;
+  const keyNum = ;
 
   try {
     const db = await openVideoDB();
@@ -115,5 +115,48 @@ export async function saveFreeVideoDB(videoData) {
     });
   } catch (err) {
     console.warn("Erreur sauvegarde vidéo libre IndexedDB:", err);
+  }
+}
+
+export async function loadAllFreeVideosDB() {
+  const videosList = [];
+  try {
+    const db = await openVideoDB();
+    const tx = db.transaction(FREE_STORE_NAME, "readonly");
+    const store = tx.objectStore(FREE_STORE_NAME);
+
+    await new Promise((resolve) => {
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if (cursor) {
+          videosList.push({ id: cursor.key, ...cursor.value, isVideo: true });
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = () => resolve();
+    });
+  } catch (err) {
+    console.warn("Erreur chargement vidéos libres IndexedDB:", err);
+  }
+
+  return videosList;
+}
+
+export async function deleteFreeVideoDB(id) {
+  if (!id) return;
+  try {
+    const db = await openVideoDB();
+    const tx = db.transaction(FREE_STORE_NAME, "readwrite");
+    const store = tx.objectStore(FREE_STORE_NAME);
+    store.delete(id);
+    await new Promise((resolve) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (err) {
+    console.warn("Erreur suppression vidéo libre IndexedDB:", err);
   }
 }
