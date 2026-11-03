@@ -118,7 +118,11 @@ export default function ListeningWorkflow({
                 aria-pressed={selected}
                 onClick={() => onMyRoleChange(char.id)}
                 className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap text-white transition ${
-                  selected ? "ring-2 ring-offset-1 ring-gray-800" : "opacity-70 hover:opacity-100"
+                  selected
+                    ? "ring-2 ring-offset-1 ring-gray-800"
+                    : hasRole && rehearsal.dimOthers
+                    ? "opacity-40 blur-[1.5px] hover:opacity-90 hover:blur-0 active:blur-0 active:opacity-90"
+                    : "opacity-70 hover:opacity-100"
                 }`}
                 style={{ backgroundColor: char.color }}
               >
