@@ -128,9 +128,14 @@ export default function ListeningWorkflow({
           })}
         </div>
         {hasRole && (
-          <Toggle checked={rehearsal.hideMyRole} onChange={(v) => onUpdate({ hideMyRole: v })}>
-            🙈 Masquer mon texte à la lecture
-          </Toggle>
+          <>
+            <Toggle checked={rehearsal.hideMyRole} onChange={(v) => onUpdate({ hideMyRole: v })}>
+              🙈 Masquer mon texte à la lecture
+            </Toggle>
+            <Toggle checked={rehearsal.dimOthers} onChange={(v) => onUpdate({ dimOthers: v })}>
+              🌫️ Estomper les autres rôles
+            </Toggle>
+          </>
         )}
       </Step>
 

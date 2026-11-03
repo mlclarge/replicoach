@@ -126,6 +126,7 @@ function cleanTextForSpeech(text) {
 const REHEARSAL_DEFAULTS = {
   myRole: null,
   hideMyRole: true,
+  dimOthers: true, // estompe les bulles des autres rôles
   readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
   listenMode: "all", // all | aroundMine | mineOnly
   beforeCount: 1, // répliques entendues avant la mienne (0 à 3)
@@ -1093,6 +1094,16 @@ function AudioMode() {
       const replica = displayReplicas[i];
       const nextReplica = displayReplicas[i + 1] || null;
 
+      // La lecture avance : les répliques révélées plus anciennes se remasquent
+      const keepIds = [displayReplicas[i - 1]?.id, replica.id];
+      setTempRevealedReplicas((prev) => {
+        const keys = Object.keys(prev);
+        if (keys.every((k) => keepIds.some((id) => String(id) === k))) return prev;
+        return Object.fromEntries(
+          keys.filter((k) => keepIds.some((id) => String(id) === k)).map((k) => [k, true])
+        );
+      });
+
       const opts = rehearsalRef.current;
 
       // Filtrage de l'écoute : on saute les répliques hors de la fenêtre choisie
@@ -1168,6 +1179,33 @@ function AudioMode() {
     stop();
   };
 
+  const [showJump, setShowJump] = useState(false);
+  const [jumpValue, setJumpValue] = useState("");
+  const [jumpError, setJumpError] = useState("");
+
+  const handleJump = (e) => {
+    e?.preventDefault();
+    const n = Number(jumpValue);
+    const total = displayReplicas.length;
+    if (!Number.isInteger(n) || n < 1 || n > total) {
+      setJumpError(`Saisissez un numéro entre 1 et ${total}.`);
+      return;
+    }
+    const target = displayReplicas[n - 1];
+    const wasPlaying = isPlaying;
+    stop();
+    setCurrentIndex(n - 1);
+    setShowJump(false);
+    setTimeout(() => {
+      const el = document.getElementById(`audio-replica-${target.id}`);
+      if (el) {
+        const top = el.getBoundingClientRect().top + window.scrollY - 130;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }
+    }, 50);
+    if (wasPlaying) playAll(n - 1);
+  };
+
   const onBubbleClick = (index) => {
     const replica = displayReplicas[index];
     if (!replica) return;
@@ -1175,31 +1213,14 @@ function AudioMode() {
     const isHidden = hiddenCharacters.has(replica.character_id);
 
     if (isHidden) {
+      // Révèle le texte sans lancer la voix : la bulle reste ouverte jusqu'à ce que la lecture avance
       setTempRevealedReplicas((prev) => ({ ...prev, [replica.id]: true }));
+      setCurrentIndex(index);
 
       if (waitingForClick) {
         setWaitingForClick(false);
         waitingRef.current = false;
       }
-
-      setPlayingSingleBubble(index);
-      setCurrentIndex(index);
-
-      (async () => {
-        try {
-          await speak(replica.text || "", replica.character_id, replica.id);
-        } catch (e) {
-          console.warn("Erreur lecture réplique masquée:", e);
-        }
-
-        setPlayingSingleBubble(null);
-        setTempRevealedReplicas((prev) => {
-          const copy = { ...prev };
-          delete copy[replica.id];
-          return copy;
-        });
-      })();
-
       return;
     }
 
@@ -1704,6 +1725,55 @@ function AudioMode() {
         />
       )}
 
+      {showJump && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setShowJump(false)}
+        >
+          <form
+            onSubmit={handleJump}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl p-5 w-full max-w-xs space-y-3 shadow-2xl"
+          >
+            <h3 className="text-sm font-extrabold text-gray-900">Aller à la réplique</h3>
+            <input
+              type="number"
+              inputMode="numeric"
+              min="1"
+              max={displayReplicas.length}
+              autoFocus
+              value={jumpValue}
+              onChange={(e) => {
+                setJumpValue(e.target.value);
+                setJumpError("");
+              }}
+              aria-invalid={!!jumpError}
+              className="w-full p-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-900"
+            />
+            <p className="text-[11px] text-gray-500">
+              Numéro de 1 à {displayReplicas.length}
+              {selectedSceneKey ? " (dans la scène choisie)" : ""}
+            </p>
+            {jumpError && <p className="text-[11px] text-red-600">{jumpError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowJump(false)}
+                className="flex-1 py-2 rounded-lg text-xs font-bold bg-gray-100 text-gray-700"
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2 rounded-lg text-xs font-bold bg-emerald-600 text-white"
+              >
+                Aller
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Liste des répliques - Responsive Full Width */}
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {renderScopeVideo(SCRIPT_VIDEO_KEY)}
@@ -1760,6 +1830,20 @@ function AudioMode() {
               }
               isHidden={isHidden}
               isTemporarilyRevealed={!!tempRevealedReplicas[replica.id]}
+              dimmed={
+                !!rehearsal.myRole &&
+                rehearsal.dimOthers &&
+                replica.character_id !== rehearsal.myRole &&
+                !(isPlaying && isCurrent) &&
+                !isBubblePlaying
+              }
+              onHideAgain={() =>
+                setTempRevealedReplicas((prev) => {
+                  const copy = { ...prev };
+                  delete copy[replica.id];
+                  return copy;
+                })
+              }
               isWaiting={isWaitingOnThis}
               isBubblePlaying={isBubblePlaying}
               hasRecording={hasRecording && currentMode === "recorded"}
@@ -1812,7 +1896,7 @@ function AudioMode() {
               />
               <p className="text-gray-900 font-extrabold text-xs sm:text-sm truncate">
                 {characters.find(
-                  (c) => c.id === replicas[currentIndex]?.character_id
+                  (c) => c.id === displayReplicas[currentIndex]?.character_id
                 )?.name || "-"}
               </p>
               <span className="text-gray-400 text-xs">•</span>
@@ -1825,9 +1909,18 @@ function AudioMode() {
                     ) + "..."}
               </p>
             </div>
-            <span className="text-gold-600 font-mono font-bold text-xs flex-shrink-0 bg-gold-50 px-2 py-0.5 rounded-md border border-gold-200">
-              {currentIndex + 1} / {displayReplicas.length}
-            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setJumpValue(String(currentIndex + 1));
+                setJumpError("");
+                setShowJump(true);
+              }}
+              className="text-gold-600 font-mono font-bold text-xs flex-shrink-0 bg-gold-50 px-2 py-0.5 rounded-md border border-gold-200 hover:bg-gold-100 active:scale-95"
+              title="Aller à une réplique"
+            >
+              {currentIndex + 1} / {displayReplicas.length} ▾
+            </button>
           </div>
 
           {/* Ligne 2 : Les 5 boutons de contrôle audio */}
@@ -2002,6 +2095,8 @@ const AudioBubble = forwardRef(
       isPlaying,
       isHidden,
       isTemporarilyRevealed,
+      dimmed = false,
+      onHideAgain,
       isWaiting,
       isBubblePlaying,
       hasRecording,
@@ -2032,7 +2127,7 @@ const AudioBubble = forwardRef(
           isCurrent
             ? "ring-4 ring-gold-500 shadow-xl scale-[1.01]"
             : "opacity-90 hover:opacity-100"
-        }`}
+        } ${dimmed ? "opacity-40 blur-[1.5px] hover:opacity-90 hover:blur-0 active:blur-0 active:opacity-90" : ""}`}
         style={{
           backgroundColor: bubbleColor,
         }}
@@ -2079,7 +2174,18 @@ const AudioBubble = forwardRef(
               {hideStageDirections ? removeStageDirections(stripHtml(replica.text)) : stripHtml(replica.text)}
             </p>
 
-            <div className="flex justify-end mt-3 pt-3 border-t border-white/20">
+            <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-white/20">
+              {isHidden && isTemporarilyRevealed && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onHideAgain?.();
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-black/25 hover:bg-black/35 text-white rounded-full text-xs sm:text-sm font-bold transition active:scale-95"
+                >
+                  🙈 Masquer à nouveau
+                </button>
+              )}
               {isBubblePlaying ? (
                 <button
                   onClick={(e) => {
