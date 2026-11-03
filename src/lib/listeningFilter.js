@@ -13,11 +13,12 @@ export const LISTEN_MODES = {
   aroundMine: "aroundMine", // mon rôle + N secondes avant / après
 };
 
-// Durée saisie par le comédien (en secondes) : nombre >= 0, sinon null
-export function parseWindowSeconds(value) {
-  if (value === "" || value === null || value === undefined) return null;
-  const n = Number(String(value).replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? n : null;
+export const MAX_AROUND = 3;
+
+export function clampCount(value, fallback = 1) {
+  const n = Number(value);
+  if (!Number.isInteger(n)) return fallback;
+  return Math.min(MAX_AROUND, Math.max(0, n));
 }
 
 /**
@@ -25,51 +26,27 @@ export function parseWindowSeconds(value) {
  * - replicas : répliques de la portée courante (pièce entière ou scène)
  * - mineIds : ids des personnages du comédien (Set)
  * - mode : all | mineOnly | aroundMine
- * - windowSec : durée avant / après la réplique du rôle
- * - durationOf : (replica) => durée estimée en secondes
+ * - before / after : nombre de répliques gardées avant / après chacune des miennes
  * Les répliques du rôle sont toujours conservées.
  */
-export function computeListenIndices({ replicas, mineIds, mode, windowSec, durationOf }) {
+export function computeListenIndices({ replicas, mineIds, mode, before = 1, after = 1 }) {
   const all = new Set(replicas.map((_, i) => i));
   if (mode === LISTEN_MODES.all || !mineIds || mineIds.size === 0) return all;
 
-  const isMine = (r) => mineIds.has(r.character_id);
-  const hasMine = replicas.some(isMine);
-  if (!hasMine) return all;
+  const mine = [];
+  replicas.forEach((r, i) => {
+    if (mineIds.has(r.character_id)) mine.push(i);
+  });
+  if (mine.length === 0) return all;
 
-  if (mode === LISTEN_MODES.mineOnly) {
-    return new Set(replicas.map((r, i) => (isMine(r) ? i : -1)).filter((i) => i >= 0));
-  }
+  const b = mode === LISTEN_MODES.aroundMine ? clampCount(before) : 0;
+  const a = mode === LISTEN_MODES.aroundMine ? clampCount(after) : 0;
 
-  const win = windowSec ?? 0;
   const result = new Set();
-  const n = replicas.length;
-
-  // Distance (en secondes) avant la prochaine réplique du rôle
-  const before = new Array(n).fill(Infinity);
-  let acc = Infinity;
-  for (let i = n - 1; i >= 0; i--) {
-    if (isMine(replicas[i])) {
-      acc = 0;
-      before[i] = 0;
-    } else if (acc !== Infinity) {
-      acc += durationOf(replicas[i]);
-      before[i] = acc;
-    }
-  }
-
-  // Distance (en secondes) depuis la précédente réplique du rôle
-  acc = Infinity;
-  for (let i = 0; i < n; i++) {
-    if (isMine(replicas[i])) {
-      acc = 0;
-      result.add(i);
-    } else if (acc !== Infinity) {
-      acc += durationOf(replicas[i]);
-      if (acc <= win || before[i] <= win) result.add(i);
-    } else if (before[i] <= win) {
-      result.add(i);
-    }
+  for (const i of mine) {
+    const from = Math.max(0, i - b);
+    const to = Math.min(replicas.length - 1, i + a);
+    for (let k = from; k <= to; k++) result.add(k);
   }
   return result;
 }

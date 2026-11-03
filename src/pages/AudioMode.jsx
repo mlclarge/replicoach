@@ -16,7 +16,7 @@ import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
 import ListeningWorkflow from "../components/ListeningWorkflow";
-import { computeListenIndices, parseWindowSeconds } from "../lib/listeningFilter";
+import { computeListenIndices } from "../lib/listeningFilter";
 import VideoBubble from "../components/VideoBubble";
 import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
 
@@ -126,9 +126,10 @@ function cleanTextForSpeech(text) {
 const REHEARSAL_DEFAULTS = {
   myRole: null,
   hideMyRole: true,
-  readMine: "none", // none | before | after | both
+  readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
   listenMode: "all", // all | aroundMine | mineOnly
-  windowSec: "", // durée avant / après mon rôle (saisie libre, en secondes)
+  beforeCount: 1, // répliques entendues avant la mienne (0 à 3)
+  afterCount: 1, // répliques entendues après la mienne (0 à 3)
   speed: 1, // 0.8 | 1 | 1.25
   playback: "auto", // auto (continu) | manual (réplique par réplique)
   delay: "normal", // slow | normal | fast
@@ -335,10 +336,12 @@ function AudioMode() {
   const rehearsalStorageKey = `rehearsal-${id}`;
   const [rehearsal, setRehearsal] = useState(() => {
     try {
-      return {
-        ...REHEARSAL_DEFAULTS,
-        ...JSON.parse(localStorage.getItem(`rehearsal-${id}`) || "{}"),
-      };
+      const saved = JSON.parse(localStorage.getItem(`rehearsal-${id}`) || "{}");
+      // Conversion des anciens réglages (none | before | after | both)
+      if (["none", "before", "after", "both"].includes(saved.readMine)) {
+        saved.readMine = saved.readMine === "none" ? "memory" : "read";
+      }
+      return { ...REHEARSAL_DEFAULTS, ...saved };
     } catch (e) {
       return { ...REHEARSAL_DEFAULTS };
     }
@@ -416,6 +419,7 @@ function AudioMode() {
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
   const playTokenRef = useRef(0);
+  const runRef = useRef(0);
   const cancelPremiumRef = useRef(null);
   const audioContextRef = useRef(null);
 
@@ -1057,7 +1061,10 @@ function AudioMode() {
     if (!(startIndex >= 0 && startIndex < displayReplicas.length)) startIndex = 0;
 
     stop();
-    await new Promise((r) => setTimeout(r, 50));
+    const run = ++runRef.current;
+    const isActive = () => playingRef.current && run === runRef.current;
+    // Débloque l'audio dans le geste utilisateur, avant tout await
+    ensureAudioUnlocked();
 
     setIsPlaying(true);
     setPlayingSingleBubble(null);
@@ -1065,8 +1072,22 @@ function AudioMode() {
     waitingRef.current = false;
     singleBubbleRef.current = false;
 
+    // Préchargement des prochaines répliques premium qui seront réellement lues
+    const preloadAhead = (from) => {
+      let count = 0;
+      for (let k = from; k < displayReplicas.length && count < 2; k++) {
+        if (listenIndices && !listenIndices.has(k)) continue;
+        const r = displayReplicas[k];
+        if (premiumLocks[r.character_id] && !hiddenCharacters.has(r.character_id)) {
+          preloadNextTts(r);
+        }
+        count++;
+      }
+    };
+    preloadAhead(startIndex);
+
     for (let i = startIndex; i < displayReplicas.length; i++) {
-      if (!playingRef.current) break;
+      if (!isActive()) break;
 
       setCurrentIndex(i);
       const replica = displayReplicas[i];
@@ -1076,17 +1097,12 @@ function AudioMode() {
 
       // Filtrage de l'écoute : on saute les répliques hors de la fenêtre choisie
       if (listenIndices && !listenIndices.has(i)) continue;
+      preloadAhead(i + 1);
 
       if (hiddenCharacters.has(replica.character_id)) {
-        const speakMine = async () => {
-          if (playingRef.current) {
-            await speak(replica.text, replica.character_id, replica.id, nextReplica);
-          }
-        };
-
-        if (opts.readMine === "before" || opts.readMine === "both") {
-          await speakMine();
-          if (!playingRef.current) break;
+        if (opts.readMine === "read") {
+          await speak(replica.text, replica.character_id, replica.id, nextReplica);
+          if (!isActive()) break;
         }
 
         setWaitingForClick(true);
@@ -1096,25 +1112,18 @@ function AudioMode() {
           ? Math.max(2500, countWords(replica.text) * 400) * (DELAY_FACTORS[opts.delay] || 1.2)
           : Infinity;
         const startedAt = Date.now();
-        let timedOut = false;
 
-        while (waitingRef.current && playingRef.current) {
-          if (Date.now() - startedAt >= maxWaitMs) {
-            timedOut = true;
-            break;
-          }
+        while (waitingRef.current && isActive()) {
+          if (Date.now() - startedAt >= maxWaitMs) break;
           await new Promise((r) => setTimeout(r, 100));
         }
 
-        waitingRef.current = false;
-        setWaitingForClick(false);
-        if (!playingRef.current) break;
-
-        // Un clic sur la réplique la lit déjà : on ne la relit que si le délai a expiré
-        if (timedOut && (opts.readMine === "after" || opts.readMine === "both")) {
-          await speakMine();
-          if (!playingRef.current) break;
+        if (run === runRef.current) {
+          waitingRef.current = false;
+          setWaitingForClick(false);
         }
+        if (!isActive()) break;
+
         if (opts.playback === "manual") {
           setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
           break;
@@ -1125,21 +1134,23 @@ function AudioMode() {
       await speak(replica.text, replica.character_id, replica.id, nextReplica);
 
       if (opts.playback === "manual") {
-        if (playingRef.current) setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
+        if (isActive()) setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
         break;
       }
     }
 
-    setIsPlaying(false);
-    playingRef.current = false;
-    setWaitingForClick(false);
+    if (run === runRef.current) {
+      setIsPlaying(false);
+      playingRef.current = false;
+      setWaitingForClick(false);
+    }
   };
 
   const playSingleBubble = async (index) => {
     if (!displayReplicas || displayReplicas.length === 0) return;
 
     stop();
-    await new Promise((r) => setTimeout(r, 50));
+    ensureAudioUnlocked();
 
     const replica = displayReplicas[index];
 
@@ -1200,7 +1211,7 @@ function AudioMode() {
     setCurrentIndex(newIndex);
     if (isPlaying) {
       stop();
-      setTimeout(() => playAll(newIndex), 100);
+      playAll(newIndex);
     }
   };
 
@@ -1213,7 +1224,7 @@ function AudioMode() {
     setCurrentIndex(newIndex);
     if (isPlaying) {
       stop();
-      setTimeout(() => playAll(newIndex), 100);
+      playAll(newIndex);
     }
   };
 
@@ -1298,18 +1309,16 @@ function AudioMode() {
   }, [replicas, selectedSceneKey]);
 
   // Filtre d'écoute (pièce entière ou scène) selon mon rôle
-  const windowSeconds = parseWindowSeconds(rehearsal.windowSec);
-  const windowInvalid = rehearsal.listenMode === "aroundMine" && windowSeconds === null;
   const listenIndices = useMemo(() => {
-    if (!rehearsal.myRole || rehearsal.listenMode === "all" || windowInvalid) return null;
+    if (!rehearsal.myRole || rehearsal.listenMode === "all") return null;
     return computeListenIndices({
       replicas: displayReplicas,
       mineIds: new Set([rehearsal.myRole]),
       mode: rehearsal.listenMode,
-      windowSec: windowSeconds,
-      durationOf: (r) => estimateSeconds(r.text, rate),
+      before: rehearsal.beforeCount,
+      after: rehearsal.afterCount,
     });
-  }, [displayReplicas, rehearsal.myRole, rehearsal.listenMode, windowSeconds, windowInvalid, rate]);
+  }, [displayReplicas, rehearsal.myRole, rehearsal.listenMode, rehearsal.beforeCount, rehearsal.afterCount]);
 
   const listenSummary =
     listenIndices && displayReplicas.length > 0
@@ -1653,7 +1662,6 @@ function AudioMode() {
         speed={rate}
         onSpeedChange={handleSpeedChange}
         listenSummary={listenSummary}
-        windowInvalid={windowInvalid}
       />
 
       {/* Indicateur d'attente */}
@@ -1829,7 +1837,7 @@ function AudioMode() {
               onClick={() => {
                 stop();
                 setCurrentIndex(0);
-                setTimeout(() => playAll(0), 100);
+                playAll(0);
               }}
               className="flex flex-col items-center gap-0.5 p-1.5 text-gray-700 hover:text-gold-600 transition active:scale-95"
               title="Recommencer depuis le début"

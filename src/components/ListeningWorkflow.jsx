@@ -64,7 +64,6 @@ export default function ListeningWorkflow({
   speed,
   onSpeedChange,
   listenSummary,
-  windowInvalid,
 }) {
   const hasRole = !!rehearsal.myRole;
 
@@ -150,44 +149,55 @@ export default function ListeningWorkflow({
           <p className="text-[11px] text-gray-500">Choisissez un rôle (étape 1) pour filtrer l'écoute.</p>
         )}
         {hasRole && rehearsal.listenMode === LISTEN_MODES.aroundMine && (
-          <label className="block">
-            <span className="text-xs font-bold text-gray-800 block mb-1">
-              Durée écoutée avant et après chacune de mes répliques (en secondes)
-            </span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={rehearsal.windowSec}
-              onChange={(e) => onUpdate({ windowSec: e.target.value })}
-              placeholder="ex. 10"
-              aria-invalid={windowInvalid}
-              className={`w-28 p-2 border rounded-lg text-xs bg-white font-semibold ${
-                windowInvalid ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {windowInvalid && (
-              <span className="text-[11px] text-red-600 block mt-1">
-                Saisissez un nombre de secondes pour activer ce filtre.
+          <div className="space-y-2">
+            <div>
+              <span className="text-xs font-bold text-gray-800 block mb-1">
+                Répliques entendues avant la mienne
               </span>
-            )}
-          </label>
+              <Segmented
+                label="Répliques avant"
+                value={rehearsal.beforeCount}
+                onChange={(v) => onUpdate({ beforeCount: v })}
+                options={[0, 1, 2, 3].map((n) => ({ value: n, label: String(n) }))}
+              />
+            </div>
+            <div>
+              <span className="text-xs font-bold text-gray-800 block mb-1">
+                Répliques entendues après la mienne
+              </span>
+              <Segmented
+                label="Répliques après"
+                value={rehearsal.afterCount}
+                onChange={(v) => onUpdate({ afterCount: v })}
+                options={[0, 1, 2, 3].map((n) => ({ value: n, label: String(n) }))}
+              />
+            </div>
+          </div>
+        )}
+        {hasRole && rehearsal.listenMode === LISTEN_MODES.mineOnly && (
+          <p className="text-[11px] text-gray-600">
+            N'écoute que les répliques de votre rôle, sur la pièce entière ou la scène choisie.
+          </p>
         )}
         {listenSummary && <p className="text-[11px] text-emerald-800 font-semibold">{listenSummary}</p>}
 
         {hasRole && rehearsal.hideMyRole && (
           <div>
-            <span className="text-xs font-bold text-gray-800 block mb-1">Lire mes répliques à voix haute</span>
+            <span className="text-xs font-bold text-gray-800 block mb-1">Quand arrive ma réplique</span>
             <Segmented
-              label="Lecture de mes répliques"
+              label="Quand arrive ma réplique"
               value={rehearsal.readMine}
               onChange={(v) => onUpdate({ readMine: v })}
               options={[
-                { value: "none", label: "Non" },
-                { value: "before", label: "Avant" },
-                { value: "after", label: "Après" },
-                { value: "both", label: "Les deux" },
+                { value: "memory", label: "🤫 Je la dis de mémoire" },
+                { value: "read", label: "🔊 L'application me la lit" },
               ]}
             />
+            <p className="text-[11px] text-gray-500 mt-1">
+              {rehearsal.readMine === "read"
+                ? "Votre réplique est lue à voix haute, puis la lecture vous laisse la répéter."
+                : "L'application se tait et attend. Cliquez sur votre réplique pour la révéler si besoin."}
+            </p>
           </div>
         )}
       </Step>
