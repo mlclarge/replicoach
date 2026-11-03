@@ -390,6 +390,8 @@ function AudioMode() {
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
   const audioPlayerRef = useRef(null);
+  const playTokenRef = useRef(0);
+  const cancelPremiumRef = useRef(null);
   const audioContextRef = useRef(null);
 
   // 🚀 CACHE & PRÉCHARGEMENT AUDIO PREMIUM (Optimisation latence entre répliques)
@@ -899,17 +901,19 @@ function AudioMode() {
   };
 
   // Google Cloud TTS (Premium & Cache Troupe) avec Préchargement
-  const speakPremium = async (replicaId) => {
+  // Retourne "ok" | "cancelled" | "failed"
+  const speakPremium = async (replicaId, token) => {
     let cached = ttsCacheRef.current[replicaId];
 
     if (!cached) {
       // Pour les membres de la troupe (Accès Standard), tente d'abord la récupération en cache
       const res = await fetchTroupeTtsAudioUrl(id, replicaId);
+      if (token !== playTokenRef.current) return "cancelled";
       if (!res.ok) {
         setPremiumNotice(
           "Veuillez vérifier vos voix Premium verrouillées pour ce script."
         );
-        return false;
+        return "failed";
       }
       const audio = new Audio();
       audio.preload = "auto";
@@ -925,25 +929,37 @@ function AudioMode() {
       await ensureAudioUnlocked();
     } catch (e) {}
 
+    if (token !== playTokenRef.current) return "cancelled";
+
     return await new Promise((resolve) => {
       const audio = cached.audio || new Audio(cached.res.url);
       audioPlayerRef.current = audio;
       audio.playbackRate = rate;
 
-      audio.onended = () => {
-        audioPlayerRef.current = null;
-        resolve(true);
+      const finish = (result) => {
+        audio.onended = null;
+        audio.onerror = null;
+        if (cancelPremiumRef.current === cancel) cancelPremiumRef.current = null;
+        if (audioPlayerRef.current === audio) audioPlayerRef.current = null;
+        resolve(result);
       };
-      audio.onerror = () => {
-        audioPlayerRef.current = null;
-        resolve(false);
+      const cancel = () => {
+        try {
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (e) {}
+        finish("cancelled");
       };
+      cancelPremiumRef.current = cancel;
 
-      audio.play().catch(() => resolve(false));
+      audio.onended = () => finish("ok");
+      audio.onerror = () => finish("failed");
+      audio.play().catch(() => finish("failed"));
     });
   };
 
   const speak = async (text, characterId, replicaId = null, nextReplica = null) => {
+    const token = playTokenRef.current;
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -972,14 +988,27 @@ function AudioMode() {
       if (nextReplica && premiumLocks[nextReplica.character_id]) {
         preloadNextTts(nextReplica);
       }
-      const played = await speakPremium(replicaId);
-      if (played) return;
+      const result = await speakPremium(replicaId, token);
+      if (result !== "failed") return;
     }
 
+    // Premium : jamais de voix de synthèse (réservée au mode gratuit)
+    if (isPremium) {
+      if (token === playTokenRef.current && !premiumLocks[characterId]) {
+        setPremiumNotice(
+          "Verrouillez une voix Premium pour ce personnage afin de l'entendre."
+        );
+      }
+      return;
+    }
+
+    if (token !== playTokenRef.current) return;
     return await speakSynth(cleanedForDecision, characterId);
   };
 
   const stop = () => {
+    playTokenRef.current += 1;
+    if (cancelPremiumRef.current) cancelPremiumRef.current();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -987,7 +1016,6 @@ function AudioMode() {
       try {
         audioPlayerRef.current.pause();
         audioPlayerRef.current.currentTime = 0;
-        audioPlayerRef.current.src = "";
       } catch (e) {}
       audioPlayerRef.current = null;
     }
@@ -1001,6 +1029,7 @@ function AudioMode() {
 
   const playAll = async (startIndex = currentIndex) => {
     if (!displayReplicas || displayReplicas.length === 0) return;
+    if (!(startIndex >= 0 && startIndex < displayReplicas.length)) startIndex = 0;
 
     stop();
     await new Promise((r) => setTimeout(r, 50));
@@ -1328,12 +1357,7 @@ function AudioMode() {
                         onClick={() => {
                           setSelectedSceneKey(sceneKey);
                           setIsSceneDrawerOpen(false);
-                          const targetIdx = currentScript?.replicas?.findIndex(
-                            (r) => r.id === scene.firstReplicaId
-                          );
-                          if (targetIdx !== undefined && targetIdx >= 0) {
-                            setCurrentIndex(targetIdx);
-                          }
+                          setCurrentIndex(0);
                           stop();
                           setTimeout(() => {
                             const el = document.getElementById(`scene-header-${scene.firstReplicaId}`) ||
@@ -1956,7 +1980,7 @@ function AudioMode() {
             {/* 4. Suivant */}
             <button
               onClick={goToNext}
-              disabled={currentIndex === replicas.length - 1}
+              disabled={currentIndex >= displayReplicas.length - 1}
               className="flex flex-col items-center gap-0.5 p-1.5 text-gray-700 hover:text-gold-600 disabled:opacity-30 transition active:scale-95"
               title="Réplique suivante"
             >
