@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { SPEED_OPTIONS, LISTEN_MODES } from "../lib/listeningFilter";
 
 function Step({ number, title, children }) {
@@ -66,12 +67,33 @@ export default function ListeningWorkflow({
   listenSummary,
 }) {
   const hasRole = !!rehearsal.myRole;
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="p-3 bg-amber-100/90 border-b border-amber-200 w-full max-w-7xl mx-auto rounded-xl my-2 space-y-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-2 text-left"
+      >
+        <span className="text-xs sm:text-sm text-amber-900 font-bold flex items-center gap-1.5 flex-wrap">
+          <span>🎭</span>
+          <span>Réglages d'écoute</span>
+          <span className="font-normal text-amber-800">
+            · rôle, répliques, vitesse, annexes — {scopeLabel}
+          </span>
+        </span>
+        <span className="text-xs text-amber-900 flex-shrink-0">{open ? "▲" : "▼"}</span>
+      </button>
+      {!open && listenSummary && (
+        <p className="text-[11px] text-amber-800 -mt-1">{listenSummary}</p>
+      )}
+      {open && (
+      <>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-xs text-amber-900 font-bold flex items-center gap-1.5">
-          <span>🎭</span> Réglages d'écoute
+          <span>📍</span> Périmètre d'écoute
         </p>
         <div className="flex items-center gap-2">
           <button
@@ -245,6 +267,8 @@ export default function ListeningWorkflow({
           )}
         </div>
       </Step>
+      </>
+      )}
     </div>
   );
 }

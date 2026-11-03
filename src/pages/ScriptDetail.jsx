@@ -94,6 +94,7 @@ function ScriptDetail() {
 
   const [viewMode, setViewMode] = useState("full");
   const [showMoreActions, setShowMoreActions] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [selectedSceneKey, setSelectedSceneKey] = useState(null);
@@ -1130,6 +1131,30 @@ function ScriptDetail() {
         </>
       )}
 
+        {/* Accordéon d'outils : recherche, exercices, plus d'actions (replié par défaut) */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowTools((v) => !v)}
+            className="w-full px-4 py-3 bg-white rounded-2xl border border-gold-500/40 shadow-sm flex items-center justify-between gap-2 text-sm font-bold text-primary-900 hover:bg-gold-50 transition"
+          >
+            <span className="flex items-center gap-2 text-left">
+              <span>🎯</span>
+              <span>Exercez-vous · Recherchez · Plus d'actions</span>
+              {searchQuery && (
+                <span className="text-xs bg-gold-100 text-gold-900 border border-gold-300 px-2 py-0.5 rounded-full">
+                  🔍 {filteredReplicas.length}
+                </span>
+              )}
+              {editMode && (
+                <span className="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-2 py-0.5 rounded-full">
+                  ✏️ édition
+                </span>
+              )}
+            </span>
+            <span className="text-xs text-gold-700 flex-shrink-0">{showTools ? "▲" : "▼"}</span>
+          </button>
+          {showTools && (
+        <div className="mt-3 animate-fade-in">
         {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
         <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
           <div className="relative flex-1">
@@ -1259,6 +1284,9 @@ function ScriptDetail() {
                 📚 Groupes
               </button>
             </div>
+          )}
+        </div>
+        </div>
           )}
         </div>
 
