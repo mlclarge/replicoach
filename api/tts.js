@@ -98,7 +98,7 @@ export default async function handler(req, res) {
     return fail(res, 403, "not_premium", "Fonctionnalité réservée aux abonnés Premium");
   }
 
-  const { action, scriptId, characterId, voiceId, replicaId } = req.body || {};
+  const { action, scriptId, characterId, voiceId, replicaId, cacheOnly } = req.body || {};
 
   try {
     if (action === "status") {
@@ -145,15 +145,18 @@ export default async function handler(req, res) {
     }
 
     if (action === "speak") {
-      if (!(await ownedScript(supabase, userId, scriptId))) {
+      const [owned, { data: replica }] = await Promise.all([
+        ownedScript(supabase, userId, scriptId),
+        supabase
+          .from("replicas")
+          .select("id, character_id, text")
+          .eq("id", replicaId)
+          .eq("script_id", scriptId)
+          .maybeSingle(),
+      ]);
+      if (!owned) {
         return fail(res, 404, "not_found", "Script introuvable");
       }
-      const { data: replica } = await supabase
-        .from("replicas")
-        .select("id, character_id, text")
-        .eq("id", replicaId)
-        .eq("script_id", scriptId)
-        .maybeSingle();
       if (!replica) return fail(res, 404, "not_found", "Réplique introuvable");
 
       const text = cleanTextForTts(replica.text);
@@ -182,13 +185,18 @@ export default async function handler(req, res) {
         .eq("text_hash", textHash)
         .maybeSingle();
       if (cached) {
-        const url = await signedUrl(supabase, cached.storage_path);
+        const [url, usage] = await Promise.all([
+          signedUrl(supabase, cached.storage_path),
+          readUsage(supabase, userId),
+        ]);
         if (url) {
-          return res.status(200).json({ url, cached: true, usage: await readUsage(supabase, userId) });
+          return res.status(200).json({ url, cached: true, usage });
         }
       }
 
-      const period = currentPeriod();
+      // Préchargement en lecture seule : on ne génère jamais d'audio (pas de quota consommé)
+      if (cacheOnly) return fail(res, 404, "not_cached", "Audio non généré");
+
       const { data: reserved, error: reserveError } = await supabase.rpc("reserve_tts_quota", {
         p_user: userId,
         p_period: period,

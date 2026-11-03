@@ -53,13 +53,14 @@ export const lockTtsVoice = (scriptId, characterId, voiceId) =>
   callTts("lock", { scriptId, characterId, voiceId });
 
 // Récupère ou génère l'URL audio MP3 d'une réplique
-export const fetchTtsAudioUrl = (scriptId, replicaId) =>
-  callTts("speak", { scriptId, replicaId });
+export const fetchTtsAudioUrl = (scriptId, replicaId, cacheOnly = false) =>
+  callTts("speak", { scriptId, replicaId, cacheOnly });
 
 // Récupère l'audio pré-généré en cache pour les membres de la troupe (Accès Standard / Gratuit)
-export async function fetchTroupeTtsAudioUrl(scriptId, replicaId) {
+// cacheOnly : ne déclenche jamais de génération (donc aucun coût Google TTS)
+export async function fetchTroupeTtsAudioUrl(scriptId, replicaId, cacheOnly = false) {
   // Essaie d'abord via l'API standard tts
-  const res = await fetchTtsAudioUrl(scriptId, replicaId);
+  const res = await fetchTtsAudioUrl(scriptId, replicaId, cacheOnly);
   if (res.ok) return res;
 
   // Fallback : recherche directe dans le stockage Supabase si la pièce est partagée dans la troupe

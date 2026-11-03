@@ -421,11 +421,31 @@ function AudioMode() {
   const audioPlayerRef = useRef(null);
   const playTokenRef = useRef(0);
   const runRef = useRef(0);
+
+  // Message d'attente ludique, affiché seulement si le démarrage dépasse ~0,3 s
+  const [prepMessage, setPrepMessage] = useState("");
+  const prepTimerRef = useRef(null);
+  const startPreparing = () => {
+    clearTimeout(prepTimerRef.current);
+    const messages = [
+      "🎭 Préparez-vous à répéter…",
+      "🎬 Silence, on répète !",
+      "🎤 Respirez, la scène arrive…",
+      "✨ Le rideau va se lever…",
+    ];
+    const msg = messages[Math.floor(Math.random() * messages.length)];
+    prepTimerRef.current = setTimeout(() => setPrepMessage(msg), 300);
+  };
+  const stopPreparing = () => {
+    clearTimeout(prepTimerRef.current);
+    setPrepMessage("");
+  };
   const cancelPremiumRef = useRef(null);
   const audioContextRef = useRef(null);
 
   // 🚀 CACHE & PRÉCHARGEMENT AUDIO PREMIUM (Optimisation latence entre répliques)
   const ttsCacheRef = useRef({}); // Cache : { [replicaId]: { url, audio, usage } }
+  const ttsPromisesRef = useRef({}); // Requêtes en cours : { [replicaId]: Promise }
 
   // Charger le statut Premium et/ou les verrous de voix du script (Troupe)
   useEffect(() => {
@@ -913,18 +933,42 @@ function AudioMode() {
     }
   };
 
-  // ⚡ PRÉCHARGEMENT DE LA RÉPLIQUE SUIVANTE (Anticipation TTS pour latence 0ms)
-  const preloadNextTts = async (nextReplica) => {
-    if (!nextReplica || ttsCacheRef.current[nextReplica.id]) return;
+  // ⚡ Récupération d'une réplique premium : une seule requête par réplique, partagée entre
+  // le préchargement et la lecture. Les URL signées expirent (5 min) : on ne réutilise pas
+  // une entrée trop ancienne.
+  const loadTtsEntry = (replicaId, cacheOnly = false) => {
+    const existing = ttsCacheRef.current[replicaId];
+    if (existing && Date.now() - existing.at < 240000) {
+      return Promise.resolve({ ok: true, entry: existing });
+    }
+    const key = cacheOnly ? `c:${replicaId}` : String(replicaId);
+    // Une lecture normale ne réutilise jamais une requête « cache seul » (qui peut échouer)
+    const inFlight = ttsPromisesRef.current[String(replicaId)] || (cacheOnly && ttsPromisesRef.current[key]);
+    if (inFlight) return inFlight;
 
+    const promise = (async () => {
+      const res = await fetchTroupeTtsAudioUrl(id, replicaId, cacheOnly);
+      if (!res?.ok || !res.url) return { ok: false, res };
+      const audio = new Audio();
+      audio.preload = "auto";
+      audio.src = res.url;
+      const entry = { res, audio, at: Date.now() };
+      ttsCacheRef.current[replicaId] = entry;
+      return { ok: true, entry };
+    })()
+      .catch(() => ({ ok: false }))
+      .finally(() => {
+        delete ttsPromisesRef.current[key];
+      });
+
+    ttsPromisesRef.current[key] = promise;
+    return promise;
+  };
+
+  const preloadNextTts = async (nextReplica, cacheOnly = false) => {
+    if (!nextReplica) return;
     try {
-      let res = await fetchTroupeTtsAudioUrl(id, nextReplica.id);
-      if (res && res.ok && res.url) {
-        const audio = new Audio();
-        audio.preload = "auto";
-        audio.src = res.url;
-        ttsCacheRef.current[nextReplica.id] = { res, audio };
-      }
+      await loadTtsEntry(nextReplica.id, cacheOnly);
     } catch (e) {
       console.warn("Erreur préchargement TTS:", e);
     }
@@ -933,25 +977,17 @@ function AudioMode() {
   // Google Cloud TTS (Premium & Cache Troupe) avec Préchargement
   // Retourne "ok" | "cancelled" | "failed"
   const speakPremium = async (replicaId, token) => {
-    let cached = ttsCacheRef.current[replicaId];
-
-    if (!cached) {
-      // Pour les membres de la troupe (Accès Standard), tente d'abord la récupération en cache
-      const res = await fetchTroupeTtsAudioUrl(id, replicaId);
-      if (token !== playTokenRef.current) return "cancelled";
-      if (!res.ok) {
-        setPremiumNotice(
-          "Veuillez vérifier vos voix Premium verrouillées pour ce script."
-        );
-        return "failed";
-      }
-      const audio = new Audio();
-      audio.preload = "auto";
-      audio.src = res.url;
-      cached = { res, audio };
-      ttsCacheRef.current[replicaId] = cached;
+    const loaded = await loadTtsEntry(replicaId);
+    if (token !== playTokenRef.current) return "cancelled";
+    if (!loaded.ok) {
+      stopPreparing();
+      setPremiumNotice(
+        "Veuillez vérifier vos voix Premium verrouillées pour ce script."
+      );
+      return "failed";
     }
-
+    const cached = loaded.entry;
+    stopPreparing();
     setPremiumNotice("");
     if (cached.res?.usage) setTtsUsage(cached.res.usage);
 
@@ -1003,6 +1039,11 @@ function AudioMode() {
 
     const cleanedForDecision = cleanTextForSpeech(text || "");
 
+    const usesPremium = !!(replicaId && premiumLocks[characterId]) &&
+      !replicaRecordings[replicaId]?.data &&
+      !((voiceMode[characterId] || "synth") === "recorded" && characterRecordings[characterId]?.audioUrl);
+    if (!usesPremium) stopPreparing();
+
     if (replicaId && replicaRecordings[replicaId]?.data) {
       return await playReplicaRecording(replicaId);
     }
@@ -1023,6 +1064,7 @@ function AudioMode() {
     }
 
     // Premium : jamais de voix de synthèse (réservée au mode gratuit)
+    stopPreparing();
     if (isPremium) {
       if (token === playTokenRef.current && !premiumLocks[characterId]) {
         setPremiumNotice(
@@ -1055,6 +1097,7 @@ function AudioMode() {
     waitingRef.current = false;
     singleBubbleRef.current = false;
     setWaitingForClick(false);
+    stopPreparing();
   };
 
   const playAll = async (startIndex = currentIndex) => {
@@ -1062,6 +1105,7 @@ function AudioMode() {
     if (!(startIndex >= 0 && startIndex < displayReplicas.length)) startIndex = 0;
 
     stop();
+    startPreparing();
     const run = ++runRef.current;
     const isActive = () => playingRef.current && run === runRef.current;
     // Débloque l'audio dans le geste utilisateur, avant tout await
@@ -1111,6 +1155,7 @@ function AudioMode() {
       preloadAhead(i + 1);
 
       if (hiddenCharacters.has(replica.character_id)) {
+        if (opts.readMine !== "read") stopPreparing();
         if (opts.readMine === "read") {
           await speak(replica.text, replica.character_id, replica.id, nextReplica);
           if (!isActive()) break;
@@ -1151,6 +1196,7 @@ function AudioMode() {
     }
 
     if (run === runRef.current) {
+      stopPreparing();
       setIsPlaying(false);
       playingRef.current = false;
       setWaitingForClick(false);
@@ -1161,6 +1207,7 @@ function AudioMode() {
     if (!displayReplicas || displayReplicas.length === 0) return;
 
     stop();
+    startPreparing();
     ensureAudioUnlocked();
 
     const replica = displayReplicas[index];
@@ -1345,6 +1392,22 @@ function AudioMode() {
     listenIndices && displayReplicas.length > 0
       ? `≈ ${listenIndices.size} répliques écoutées sur ${displayReplicas.length}`
       : "";
+
+  // Préchargement avant le clic sur Play : les premières répliques premium à lire sont déjà prêtes
+  useEffect(() => {
+    if (!displayReplicas.length || !Object.keys(premiumLocks).length) return;
+    const readHidden = rehearsal.readMine === "read";
+    let count = 0;
+    for (let k = Math.max(0, currentIndex); k < displayReplicas.length && count < 3; k++) {
+      if (listenIndices && !listenIndices.has(k)) continue;
+      const r = displayReplicas[k];
+      if (!premiumLocks[r.character_id]) continue;
+      if (hiddenCharacters.has(r.character_id) && !readHidden) continue;
+      preloadNextTts(r, true);
+      count++;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayReplicas, listenIndices, premiumLocks, currentIndex, hiddenCharacters, rehearsal.readMine]);
 
   if (loading || !currentScript) {
     return (
@@ -1684,6 +1747,15 @@ function AudioMode() {
         onSpeedChange={handleSpeedChange}
         listenSummary={listenSummary}
       />
+
+      {prepMessage && (
+        <div
+          role="status"
+          className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-3 text-center sticky top-[110px] z-20 shadow-lg font-bold text-xs sm:text-sm max-w-7xl mx-auto rounded-xl animate-pulse"
+        >
+          {prepMessage}
+        </div>
+      )}
 
       {/* Indicateur d'attente */}
       {waitingForClick && (
