@@ -93,6 +93,7 @@ function ScriptDetail() {
   const title = currentScript?.title || "";
 
   const [viewMode, setViewMode] = useState("full");
+  const [showMoreActions, setShowMoreActions] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [selectedSceneKey, setSelectedSceneKey] = useState(null);
@@ -993,7 +994,7 @@ function ScriptDetail() {
         </div>
 
         {/* Sommaire des Passages */}
-        {myCharacterId && characterPassages.length > 0 && (
+        {myCharacterId && filterMode !== "role" && characterPassages.length > 0 && (
           <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm">
             <p className="font-semibold text-indigo-900 text-sm mb-2 flex items-center gap-2">
               📍 Accès direct à vos passages ({characterPassages.length})
@@ -1213,29 +1214,52 @@ function ScriptDetail() {
         </div>
 
         {/* Actions secondaires */}
-        <div className="flex gap-2 mb-4">
+        <div className="relative flex justify-end gap-2 mb-4">
+          {editMode && (
+            <button
+              onClick={() => setEditMode(false)}
+              className="py-2 px-3 rounded-lg text-sm font-semibold bg-orange-500 text-white shadow-lg"
+            >
+              ✅ Terminer l'édition
+            </button>
+          )}
           <button
-            onClick={() => setEditMode(!editMode)}
-            className={`flex-1 py-2 px-3 rounded-lg text-sm font-semibold transition ${
-              editMode
-                ? "bg-orange-500 text-white shadow-lg"
-                : "bg-white text-gray-600 border border-gray-300 hover:bg-orange-50"
-            }`}
+            onClick={() => setShowMoreActions((v) => !v)}
+            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition"
           >
-            {editMode ? "✅ Terminer" : "✏️ Mode édition"}
+            ⋯ Plus d'actions
           </button>
-          <button
-            onClick={() => setShowCharacterManager(true)}
-            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 border border-gray-300 hover:bg-purple-50 transition"
-          >
-            👥 Personnages
-          </button>
-          <button
-            onClick={() => setShowReplicaGroups(true)}
-            className="py-2 px-4 rounded-lg text-sm font-semibold bg-white text-gray-600 border border-gray-300 hover:bg-indigo-50 transition"
-          >
-            📚 Groupes
-          </button>
+          {showMoreActions && (
+            <div className="absolute right-0 top-full mt-1 z-30 w-56 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
+              <button
+                onClick={() => {
+                  setEditMode(!editMode);
+                  setShowMoreActions(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-orange-50"
+              >
+                {editMode ? "✅ Terminer l'édition" : "✏️ Mode édition"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowCharacterManager(true);
+                  setShowMoreActions(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50"
+              >
+                👥 Personnages
+              </button>
+              <button
+                onClick={() => {
+                  setShowReplicaGroups(true);
+                  setShowMoreActions(false);
+                }}
+                className="w-full text-left px-4 py-2.5 text-sm hover:bg-indigo-50"
+              >
+                📚 Groupes
+              </button>
+            </div>
+          )}
         </div>
 
         {studyingGroup && (
