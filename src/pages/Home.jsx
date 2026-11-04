@@ -731,17 +731,35 @@ export default function Home() {
                   <p className="text-gray-300 text-xs sm:text-sm leading-relaxed mb-4">
                     Importez directement vos pièces personnelles, scripts ou livrets pour répéter vos répliques en toute autonomie.
                   </p>
-                  <ul className="space-y-2 text-xs sm:text-sm text-gray-300 mb-6">
-                    <li className="flex items-center gap-2">
-                      <span className="text-amber-400 font-bold">✓</span> Importation PDF, TXT ou Scan photo
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-amber-400 font-bold">✓</span> Audio, italienne & mémorisation interactive
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="text-amber-400 font-bold">✓</span> Espace de travail 100 % privé
-                    </li>
-                  </ul>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 text-xs sm:text-sm">
+                    <div className="rounded-xl border border-gray-600/60 bg-gray-950/40 p-3">
+                      <p className="font-extrabold text-gray-100 mb-2 flex items-center gap-1.5">
+                        <span>🆓</span> Gratuit
+                      </p>
+                      <ul className="space-y-1.5 text-gray-300">
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> 1 texte (PDF, TXT, scan photo classique)</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Modification manuelle des textes</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Notes personnelles : déplacement, intention, accessoire, repère</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Enregistrement audio et vidéo</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Écoute audio avec les voix de l'appareil</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Italienne & mémorisation interactive</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">✓</span> Espace de travail 100 % privé</li>
+                      </ul>
+                    </div>
+                    <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3">
+                      <p className="font-extrabold text-amber-300 mb-2 flex items-center gap-1.5">
+                        <span>✨</span> Premium
+                      </p>
+                      <p className="text-[11px] text-amber-200/80 mb-1.5">Tout le gratuit, plus :</p>
+                      <ul className="space-y-1.5 text-gray-200">
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">★</span> Textes illimités</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">★</span> Scan Express IA : personnages et scènes détectés automatiquement</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">★</span> Voix premium, une par personnage</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">★</span> Coach IA personnalisé</li>
+                        <li className="flex gap-2"><span className="text-amber-400 font-bold">★</span> Résumés IA des scènes</li>
+                      </ul>
+                    </div>
+                  </div>
                 </div>
                 <div className="mt-2 pt-3 border-t border-amber-500/20">
                   <span className="w-full py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 group-hover:from-amber-400 group-hover:to-amber-500 text-gray-950 rounded-xl font-extrabold text-xs sm:text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2">
