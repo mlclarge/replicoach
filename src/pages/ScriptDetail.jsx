@@ -11,6 +11,7 @@ import PremiumGateModal from "../components/PremiumGateModal";
 import { buildSceneSummaryContext } from "../lib/geminiService";
 import SceneSummaryModal from "../components/SceneSummaryModal";
 import VideoBubble from "../components/VideoBubble";
+import { NOTE_TYPES, getNoteType } from "../lib/noteTypes";
 import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
 
 import {
@@ -1609,6 +1610,7 @@ function ScriptDetail() {
       {showAddNote && (
         <AddNoteModal
           replicas={replicas}
+          characters={characters}
           afterReplicaId={showAddNote.afterReplicaId}
           onAdd={handleAddNote}
           onClose={() => setShowAddNote(null)}
@@ -2348,10 +2350,10 @@ function ChatBubble({
               setShowMenu(!showMenu);
             }}
             className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center bg-white border-2 border-gray-300 shadow-md hover:border-primary-400 hover:shadow-lg transition-all z-10"
-            title="Options"
+            title="Éditer cette réplique : modifier, ajouter une note, diviser…"
           >
-            <span className="text-gray-400 text-sm font-bold leading-none">
-              ⋯
+            <span className="text-sm leading-none">
+              ✏️
             </span>
           </button>
         </div>
@@ -3439,14 +3441,8 @@ function AddCharacterModal({ existingColors, onAdd, onClose }) {
 }
 
 function NoteBubble({ note, onEdit, onDelete }) {
-  const NOTE_TYPES = {
-    general: { icon: "📝", label: "Note" },
-    movement: { icon: "🚶", label: "Déplacement" },
-    intention: { icon: "💭", label: "Intention" },
-    prop: { icon: "🎪", label: "Accessoire" },
-    cue: { icon: "🎯", label: "Repère" },
-  };
-  const typeInfo = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
+  const typeInfo = { ...getNoteType(note.note_type) };
+  typeInfo.label = typeInfo.shortLabel;
 
   return (
     <div className="flex justify-center my-2">
@@ -3483,19 +3479,63 @@ function NoteBubble({ note, onEdit, onDelete }) {
   );
 }
 
-function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
+function AddNoteModal({ replicas, characters, afterReplicaId, onAdd, onClose }) {
   const [text, setText] = useState("");
   const [noteType, setNoteType] = useState("general");
-  const [selectedReplicaId, setSelectedReplicaId] = useState(afterReplicaId);
+  const [selectedReplicaId, setSelectedReplicaId] = useState(afterReplicaId || null);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const NOTE_TYPES = [
-    { value: "general", icon: "📝", label: "Note générale" },
-    { value: "movement", icon: "🚶", label: "Déplacement" },
-    { value: "intention", icon: "💭", label: "Intention de jeu" },
-    { value: "prop", icon: "🎪", label: "Accessoire" },
-    { value: "cue", icon: "🎯", label: "Repère / Signal" },
-  ];
+  const numbered = useMemo(
+    () => (replicas || []).map((r, idx) => ({ replica: r, number: idx + 1 })),
+    [replicas]
+  );
+
+  const acts = useMemo(() => {
+    const list = [];
+    numbered.forEach(({ replica }) => {
+      const a = replica.act_title || "";
+      if (!list.includes(a)) list.push(a);
+    });
+    return list;
+  }, [numbered]);
+
+  const initial = numbered.find(({ replica }) => replica.id === afterReplicaId)?.replica;
+  const [actKey, setActKey] = useState(initial?.act_title ?? acts[0] ?? "");
+  const [sceneKey, setSceneKey] = useState(initial?.scene_title ?? "");
+
+  const scenesOfAct = useMemo(() => {
+    const list = [];
+    numbered.forEach(({ replica }) => {
+      if ((replica.act_title || "") !== actKey) return;
+      const s = replica.scene_title || "";
+      if (!list.includes(s)) list.push(s);
+    });
+    return list;
+  }, [numbered, actKey]);
+
+  const effectiveScene = scenesOfAct.includes(sceneKey) ? sceneKey : scenesOfAct[0] ?? "";
+
+  const query = search.trim().replace(/^#/, "").toLowerCase();
+  const visibleReplicas = useMemo(() => {
+    if (query) {
+      return numbered.filter(({ replica, number }) => {
+        if (/^\d+$/.test(query)) return String(number) === query;
+        return (replica.text || "").toLowerCase().includes(query);
+      });
+    }
+    return numbered.filter(
+      ({ replica }) =>
+        (replica.act_title || "") === actKey && (replica.scene_title || "") === effectiveScene
+    );
+  }, [numbered, query, actKey, effectiveScene]);
+
+  const selectedEntry = numbered.find(({ replica }) => replica.id === selectedReplicaId);
+  const characterName = (r) => characters?.find((c) => c.id === r.character_id)?.name || "";
+  const excerpt = (r) => {
+    const t = (r.text || "").replace(/\s+/g, " ").trim();
+    return t.length > 70 ? `${t.slice(0, 70)}…` : t;
+  };
 
   const handleSubmit = async () => {
     if (!text.trim()) return;
@@ -3554,20 +3594,99 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
           {replicas && replicas.length > 0 && (
             <div className="mb-4">
               <label className="block text-sm text-gray-400 mb-2">
-                Placer après la réplique (optionnel)
+                Placer après la réplique
               </label>
-              <select
-                value={selectedReplicaId || ""}
-                onChange={(e) => setSelectedReplicaId(e.target.value || null)}
-                className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white"
-              >
-                <option value="">-- Au début du texte --</option>
-                {replicas.slice(0, 20).map((r, idx) => (
-                  <option key={r.id} value={r.id}>
-                    #{idx + 1} - {r.text.substring(0, 40)}...
-                  </option>
+              <p className="text-xs text-amber-300 mb-2">
+                📍{" "}
+                {selectedEntry
+                  ? `Après #${selectedEntry.number}${
+                      characterName(selectedEntry.replica)
+                        ? ` · ${characterName(selectedEntry.replica)}`
+                        : ""
+                    }`
+                  : "Au début du texte"}
+              </p>
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔍 Rechercher par # (ex: 12) ou mot-clé…"
+                className="w-full mb-2 bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm focus:border-amber-500 focus:outline-none"
+              />
+
+              {!query && (acts.length > 1 || scenesOfAct.length > 1) && (
+                <div className="grid grid-cols-1 gap-2 mb-2">
+                  {acts.length > 1 && (
+                    <select
+                      value={actKey}
+                      onChange={(e) => {
+                        setActKey(e.target.value);
+                        setSceneKey("");
+                      }}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm"
+                    >
+                      {acts.map((a) => (
+                        <option key={a} value={a}>
+                          {a || "Sans acte"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {scenesOfAct.length > 1 && (
+                    <select
+                      value={effectiveScene}
+                      onChange={(e) => setSceneKey(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm"
+                    >
+                      {scenesOfAct.map((s) => (
+                        <option key={s} value={s}>
+                          {s || "Sans scène"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReplicaId(null)}
+                  className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 ${
+                    selectedReplicaId === null
+                      ? "bg-amber-500/20 text-amber-200"
+                      : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  }`}
+                >
+                  <span>{selectedReplicaId === null ? "◉" : "○"}</span>
+                  <span>-- Au début du texte --</span>
+                </button>
+                {visibleReplicas.map(({ replica, number }) => (
+                  <button
+                    type="button"
+                    key={replica.id}
+                    onClick={() => setSelectedReplicaId(replica.id)}
+                    className={`w-full text-left px-3 py-2.5 text-sm flex items-start gap-2 ${
+                      selectedReplicaId === replica.id
+                        ? "bg-amber-500/20 text-amber-200"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    <span className="mt-0.5">{selectedReplicaId === replica.id ? "◉" : "○"}</span>
+                    <span className="min-w-0">
+                      <span className="font-bold">#{number}</span>
+                      {characterName(replica) && (
+                        <span className="text-gray-400"> · {characterName(replica)}</span>
+                      )}
+                      <span className="block text-xs text-gray-400 truncate">{excerpt(replica)}</span>
+                    </span>
+                  </button>
                 ))}
-              </select>
+                {visibleReplicas.length === 0 && (
+                  <p className="px-3 py-4 text-sm text-gray-500 text-center">Aucune réplique trouvée</p>
+                )}
+              </div>
             </div>
           )}
           {text && (
@@ -3575,11 +3694,9 @@ function AddNoteModal({ replicas, afterReplicaId, onAdd, onClose }) {
               <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
               <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 border-2 border-amber-400 border-dashed">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-lg">
-                    {NOTE_TYPES.find((t) => t.value === noteType)?.icon}
-                  </span>
+                  <span className="text-lg">{getNoteType(noteType).icon}</span>
                   <span className="text-xs font-bold text-amber-900 uppercase">
-                    {NOTE_TYPES.find((t) => t.value === noteType)?.label}
+                    {getNoteType(noteType).label}
                   </span>
                 </div>
                 <p className="text-amber-950 text-sm font-medium">{text}</p>
@@ -3609,14 +3726,6 @@ function EditNoteModal({ note, onSave, onClose }) {
   const [text, setText] = useState(note.text);
   const [noteType, setNoteType] = useState(note.note_type || "general");
   const [saving, setSaving] = useState(false);
-
-  const NOTE_TYPES = [
-    { value: "general", icon: "📝", label: "Note générale" },
-    { value: "movement", icon: "🚶", label: "Déplacement" },
-    { value: "intention", icon: "💭", label: "Intention de jeu" },
-    { value: "prop", icon: "🎪", label: "Accessoire" },
-    { value: "cue", icon: "🎯", label: "Repère / Signal" },
-  ];
 
   const handleSubmit = async () => {
     if (!text.trim()) return;
@@ -3861,14 +3970,6 @@ function EditCharacterModal({ character, existingColors, onSave, onClose }) {
 }
 
 function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
-  const NOTE_TYPES = {
-    general: { icon: "📝", label: "Note générale", color: "amber" },
-    movement: { icon: "🚶", label: "Déplacement", color: "blue" },
-    intention: { icon: "🎭", label: "Intention", color: "purple" },
-    accessory: { icon: "🎒", label: "Accessoire", color: "green" },
-    cue: { icon: "⏰", label: "Repère", color: "red" },
-  };
-
   const getReplicaContext = (afterReplicaId) => {
     if (!afterReplicaId) return "Au début du texte";
     const replica = replicas.find((r) => r.id === afterReplicaId);
@@ -3896,7 +3997,7 @@ function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
             </p>
           ) : (
             notes.map((note) => {
-              const noteType = NOTE_TYPES[note.note_type] || NOTE_TYPES.general;
+              const noteType = getNoteType(note.note_type);
               return (
                 <div
                   key={note.id}

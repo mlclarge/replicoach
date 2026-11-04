@@ -315,7 +315,13 @@ function AudioMode() {
   const handleSaveAICoachingNote = async ({ text, type }) => {
     if (!id || !user?.id) return;
     try {
-      await addPersonalNote(id, user.id, text, type || "intention");
+      await addPersonalNote({
+        user_id: user.id,
+        script_id: id,
+        after_replica_id: null,
+        text,
+        note_type: type || "intention",
+      });
     } catch (err) {
       console.error("Error saving AI coaching note:", err);
     }
