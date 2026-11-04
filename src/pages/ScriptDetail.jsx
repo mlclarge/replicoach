@@ -832,7 +832,35 @@ function ScriptDetail() {
                 ⚙️
               </button>
               {showMoreMenu && (
-                <div className="absolute right-0 mt-2 w-52 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                <div className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                  <button
+                    onClick={() => {
+                      setEditMode(!editMode);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-orange-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    {editMode ? "✅ Terminer l'édition" : "✏️ Mode édition"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCharacterManager(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-purple-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    👥 Personnages
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowReplicaGroups(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-indigo-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    📚 Groupes de répliques
+                  </button>
+                  <div className="border-t border-gray-700 my-1" />
                   {(originalFileUrl || full_text) && (
                     <button
                       onClick={() => {
@@ -1131,7 +1159,7 @@ function ScriptDetail() {
         </>
       )}
 
-        {/* Accordéon d'outils : recherche, exercices, plus d'actions (replié par défaut) */}
+        {/* Accordéon d'outils : recherche et exercices (replié par défaut) */}
         <div className="mb-4">
           <button
             onClick={() => setShowTools((v) => !v)}
@@ -1139,7 +1167,7 @@ function ScriptDetail() {
           >
             <span className="flex items-center gap-2 text-left">
               <span>🎯</span>
-              <span>Exercez-vous · Recherchez · Plus d'actions</span>
+              <span>Exercez-vous · Recherchez</span>
               {searchQuery && (
                 <span className="text-xs bg-gold-100 text-gold-900 border border-gold-300 px-2 py-0.5 rounded-full">
                   🔍 {filteredReplicas.length}
