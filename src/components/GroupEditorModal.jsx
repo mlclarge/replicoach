@@ -16,13 +16,26 @@ export function GroupEditorModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Debug log
+  useEffect(() => {
+    console.log('[GroupEditorModal] Opened for group:', {
+      groupId: group?.id,
+      groupName: group?.name,
+      replicasCount: replicas?.length,
+      groupItemsCount: group?.replica_group_items?.length,
+      group
+    });
+  }, [group]);
+
   // Pré-sélectionner les répliques déjà dans le groupe
   useEffect(() => {
-    if (group?.replica_group_items) {
+    if (group?.replica_group_items?.length > 0) {
       const existingIds = new Set(
         group.replica_group_items.map(item => item.replica_id)
       );
       setSelectedReplicas(existingIds);
+    } else {
+      setSelectedReplicas(new Set());
     }
   }, [group]);
 
