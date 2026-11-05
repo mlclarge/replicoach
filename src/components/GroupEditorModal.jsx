@@ -40,6 +40,7 @@ export function GroupEditorModal({
   }, [group]);
 
   const handleToggleReplica = (replicaId) => {
+    console.log('[GroupEditorModal] Toggle replica:', replicaId);
     setSelectedReplicas(prev => {
       const newSet = new Set(prev);
       if (newSet.has(replicaId)) {
@@ -47,23 +48,32 @@ export function GroupEditorModal({
       } else {
         newSet.add(replicaId);
       }
+      console.log('[GroupEditorModal] Selected count now:', newSet.size);
       return newSet;
     });
   };
 
   const handleSave = async () => {
-    if (!group) return;
+    if (!group) {
+      console.error('[GroupEditorModal] ERROR: group is undefined');
+      setError('Erreur: groupe non défini');
+      return;
+    }
     
     setSaving(true);
     setError(null);
     
     try {
       const replicaIds = Array.from(selectedReplicas);
+      console.log('[GroupEditorModal] Saving:', { groupId: group.id, count: replicaIds.length });
+      
       await addReplicasToGroup(group.id, replicaIds);
+      console.log('[GroupEditorModal] Save successful');
+      
       onSave?.(replicaIds);
       onClose();
     } catch (err) {
-      console.error('Error saving group:', err);
+      console.error('[GroupEditorModal] Save ERROR:', err);
       setError('Erreur sauvegarde: ' + err.message);
       setSaving(false);
     }
