@@ -127,6 +127,7 @@ function cleanTextForSpeech(text) {
 
 const REHEARSAL_DEFAULTS = {
   myRole: null,
+  hideUnlistened: false, // ⚡ OPTIMISATION : masque visuellement les répliques non écoutées
   hideMyRole: true,
   dimOthers: true, // estompe les bulles des autres rôles
   readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
@@ -1908,6 +1909,10 @@ function AudioMode() {
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {renderScopeVideo(SCRIPT_VIDEO_KEY)}
         {displayReplicas.map((replica, index) => {
+          // ⚡ OPTIMISATION : Masquage visuel des répliques non écoutées
+          if (rehearsal.hideUnlistened && listenIndices && !listenIndices.has(index)) {
+            return null;
+          }
           const character = characters.find(
             (c) => c.id === replica.character_id
           );

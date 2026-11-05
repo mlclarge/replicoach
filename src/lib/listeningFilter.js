@@ -50,3 +50,14 @@ export function computeListenIndices({ replicas, mineIds, mode, before = 1, afte
   }
   return result;
 }
+
+/**
+ * ⚡ OPTIMISATION : Teste si une réplique doit être affichée visuellement à l'écran.
+ * - index : index de la réplique
+ * - listenIndices : Set des index à écouter
+ * - hideUnlistened : boolean (true si l'option de masquage visuel est activée)
+ */
+export function isReplicaVisible({ index, listenIndices, hideUnlistened }) {
+  if (!hideUnlistened || !listenIndices) return true;
+  return listenIndices.has(index);
+}
