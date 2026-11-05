@@ -879,17 +879,31 @@ export const fetchReplicaGroups = async (scriptId, userId) => {
 };
 
 export const addReplicasToGroup = async (groupId, replicaIds) => {
+  // 1. Supprimer TOUTES les répliques existantes du groupe
+  const { error: deleteError } = await supabase
+    .from("replica_group_items")
+    .delete()
+    .eq("group_id", groupId);
+
+  if (deleteError) throw deleteError;
+
+  // 2. Insérer les nouvelles répliques
+  if (replicaIds.length === 0) {
+    // Si liste vide, c'est ok, on a juste supprimé tout
+    return;
+  }
+
   const items = replicaIds.map((replicaId, index) => ({
     group_id: groupId,
     replica_id: replicaId,
     order_index: index,
   }));
 
-  const { error } = await supabase
+  const { error: insertError } = await supabase
     .from("replica_group_items")
-    .upsert(items, { onConflict: "group_id,replica_id" });
+    .insert(items);
 
-  if (error) throw error;
+  if (insertError) throw insertError;
 };
 
 export const removeReplicaFromGroup = async (groupId, replicaId) => {
