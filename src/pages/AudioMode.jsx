@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
+import { useAudioSettings } from "../hooks/useAudioSettings";
 import {
   fetchCharacterRecordings,
   supabase,
@@ -162,6 +163,9 @@ function AudioMode() {
   const navigate = useNavigate();
   const { user, isPremium, audioPreferences, loadAudioPreferences } = useAuthStore();
   const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
+  
+  // Audio delays - Feature 2
+  const { delayBeforeMs, delayAfterMs, loading: audioSettingsLoading } = useAudioSettings(user?.id);
 
   const replicas = useMemo(() => {
     return currentScript?.replicas || [];
@@ -1169,8 +1173,8 @@ function AudioMode() {
         if (opts.readMine !== "read") stopPreparing();
         if (opts.readMine === "read") {
           // ⏱️ Délai AVANT MA réplique (si configuré)
-          if (audioPreferences?.delayBeforeMine > 0) {
-            await new Promise((r) => setTimeout(r, audioPreferences.delayBeforeMine * 1000));
+          if (delayBeforeMs > 0) {
+            await new Promise((r) => setTimeout(r, delayBeforeMs));
             if (!isActive()) break;
           }
 
@@ -1178,8 +1182,8 @@ function AudioMode() {
           if (!isActive()) break;
 
           // ⏱️ Délai APRÈS MA réplique (pause)
-          if (audioPreferences?.delayAfterMine > 0) {
-            await new Promise((r) => setTimeout(r, audioPreferences.delayAfterMine * 1000));
+          if (delayAfterMs > 0) {
+            await new Promise((r) => setTimeout(r, delayAfterMs));
             if (!isActive()) break;
           }
         }
@@ -1211,16 +1215,16 @@ function AudioMode() {
       }
 
       // ⏱️ Délai AVANT MA réplique (si configuré)
-      if (audioPreferences?.delayBeforeMine > 0) {
-        await new Promise((r) => setTimeout(r, audioPreferences.delayBeforeMine * 1000));
+      if (delayBeforeMs > 0) {
+        await new Promise((r) => setTimeout(r, delayBeforeMs));
         if (!isActive()) break;
       }
 
       await speak(replica.text, replica.character_id, replica.id, nextReplica);
 
       // ⏱️ Délai APRÈS MA réplique (pause)
-      if (audioPreferences?.delayAfterMine > 0) {
-        await new Promise((r) => setTimeout(r, audioPreferences.delayAfterMine * 1000));
+      if (delayAfterMs > 0) {
+        await new Promise((r) => setTimeout(r, delayAfterMs));
         if (!isActive()) break;
       }
 
