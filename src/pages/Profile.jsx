@@ -6,6 +6,7 @@ import { fetchDirectorNotes } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
 import AdminPanel from "../components/AdminPanel";
+import AudioSettingsPanel from "../components/AudioSettingsPanel";
 
 // Emails autorisés à voir le monitoring (legacy, maintenant géré par user_roles)
 const ADMIN_EMAILS = [
@@ -162,10 +163,10 @@ function Profile() {
       )}
 
       {/* Onglets */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setActiveTab("scripts")}
-          className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-sm
             ${activeTab === "scripts" 
               ? "bg-primary-700 text-white" 
               : "bg-gray-800 text-gray-400"
@@ -175,7 +176,7 @@ function Profile() {
         </button>
         <button
           onClick={() => setActiveTab("notes")}
-          className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-sm
             ${activeTab === "notes" 
               ? "bg-primary-700 text-white" 
               : "bg-gray-800 text-gray-400"
@@ -185,13 +186,23 @@ function Profile() {
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`flex-1 py-2 rounded-lg font-semibold transition text-sm
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-sm
             ${activeTab === "history" 
               ? "bg-primary-700 text-white" 
               : "bg-gray-800 text-gray-400"
             }`}
         >
           📅 Historique
+        </button>
+        <button
+          onClick={() => setActiveTab("audio")}
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-sm
+            ${activeTab === "audio" 
+              ? "bg-primary-700 text-white" 
+              : "bg-gray-800 text-gray-400"
+            }`}
+        >
+          🔊 Audio
         </button>
       </div>
 
@@ -274,6 +285,10 @@ function Profile() {
               </div>
             ))
           )
+        )}
+
+        {activeTab === "audio" && (
+          <AudioSettingsPanel />
         )}
       </div>
 

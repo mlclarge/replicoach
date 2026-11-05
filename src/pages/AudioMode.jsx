@@ -160,7 +160,7 @@ function removeStageDirections(text) {
 function AudioMode() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, isPremium } = useAuthStore();
+  const { user, isPremium, audioPreferences, loadAudioPreferences } = useAuthStore();
   const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
 
   const replicas = useMemo(() => {
@@ -496,6 +496,11 @@ function AudioMode() {
       fetchScript(id);
     }
   }, [id, currentScript, fetchScript]);
+
+  // Charger les préférences audio au montage
+  useEffect(() => {
+    loadAudioPreferences();
+  }, [loadAudioPreferences]);
 
   useEffect(() => {
     let active = true;
@@ -1163,8 +1168,20 @@ function AudioMode() {
       if (hiddenCharacters.has(replica.character_id)) {
         if (opts.readMine !== "read") stopPreparing();
         if (opts.readMine === "read") {
+          // ⏱️ Délai AVANT MA réplique (si configuré)
+          if (audioPreferences?.delayBeforeMine > 0) {
+            await new Promise((r) => setTimeout(r, audioPreferences.delayBeforeMine * 1000));
+            if (!isActive()) break;
+          }
+
           await speak(replica.text, replica.character_id, replica.id, nextReplica);
           if (!isActive()) break;
+
+          // ⏱️ Délai APRÈS MA réplique (pause)
+          if (audioPreferences?.delayAfterMine > 0) {
+            await new Promise((r) => setTimeout(r, audioPreferences.delayAfterMine * 1000));
+            if (!isActive()) break;
+          }
         }
 
         setWaitingForClick(true);
@@ -1193,7 +1210,19 @@ function AudioMode() {
         continue;
       }
 
+      // ⏱️ Délai AVANT MA réplique (si configuré)
+      if (audioPreferences?.delayBeforeMine > 0) {
+        await new Promise((r) => setTimeout(r, audioPreferences.delayBeforeMine * 1000));
+        if (!isActive()) break;
+      }
+
       await speak(replica.text, replica.character_id, replica.id, nextReplica);
+
+      // ⏱️ Délai APRÈS MA réplique (pause)
+      if (audioPreferences?.delayAfterMine > 0) {
+        await new Promise((r) => setTimeout(r, audioPreferences.delayAfterMine * 1000));
+        if (!isActive()) break;
+      }
 
       if (opts.playback === "manual") {
         if (isActive()) setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));

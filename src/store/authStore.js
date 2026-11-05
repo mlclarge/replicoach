@@ -19,16 +19,35 @@ const fetchProfile = async (userId) => {
   }
 };
 
+// Préférences audio par défaut
+const DEFAULT_AUDIO_PREFERENCES = {
+  delayBeforeMine: 0, // délai avant MA réplique en secondes (0, 1, 1.5, 2, 2.5)
+  delayAfterMine: 0, // pause après MA réplique en secondes (0, 1, 2)
+  delayBeforeNext: 0, // délai avant la réplique suivante en secondes (0, 1, 2)
+};
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   isPremium: false, // Nouvel état
   loading: true,
   initialized: false,
+  audioPreferences: { ...DEFAULT_AUDIO_PREFERENCES },
 
   initialize: async () => {
     // Éviter double initialisation
     if (get().initialized) return;
     set({ initialized: true });
+
+    // Charger les prefs audio au démarrage
+    try {
+      const saved = localStorage.getItem("audioPreferences");
+      if (saved) {
+        const prefs = JSON.parse(saved);
+        set({ audioPreferences: { ...DEFAULT_AUDIO_PREFERENCES, ...prefs } });
+      }
+    } catch (err) {
+      console.error("Error loading audio preferences:", err);
+    }
 
     try {
       // Récupérer la session existante
@@ -212,5 +231,29 @@ export const useAuthStore = create((set, get) => ({
       set({ user: data.session.user });
     }
     return { data, error };
+  },
+
+  updateAudioPreferences: (prefs) => {
+    set((state) => {
+      const updated = { ...state.audioPreferences, ...prefs };
+      // Persister dans localStorage pour que ce soit conservé à la prochaine visite
+      localStorage.setItem(
+        "audioPreferences",
+        JSON.stringify(updated)
+      );
+      return { audioPreferences: updated };
+    });
+  },
+
+  loadAudioPreferences: () => {
+    try {
+      const saved = localStorage.getItem("audioPreferences");
+      if (saved) {
+        const prefs = JSON.parse(saved);
+        set({ audioPreferences: { ...DEFAULT_AUDIO_PREFERENCES, ...prefs } });
+      }
+    } catch (err) {
+      console.error("Error loading audio preferences:", err);
+    }
   },
 }));
