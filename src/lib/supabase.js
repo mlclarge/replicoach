@@ -1551,4 +1551,56 @@ export const getAudioUrl = (audioPath) => {
   return data.publicUrl;
 };
 
+// =====================================================
+// AUDIO DELAYS (Feature 2 - Délais personnalisés)
+// =====================================================
+
+export const getUserAudioSettings = async (userId) => {
+  const { data, error } = await supabase
+    .from("user_audio_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Error fetching audio settings:", error);
+    return null;
+  }
+
+  // Si aucun paramètre n'existe, retourner les valeurs par défaut
+  if (!data) {
+    return {
+      id: null,
+      user_id: userId,
+      delay_before_ms: 1500,
+      delay_after_ms: 1000,
+    };
+  }
+
+  return data;
+};
+
+export const updateUserAudioSettings = async (
+  userId,
+  delayBeforeMs,
+  delayAfterMs
+) => {
+  const { data, error } = await supabase
+    .from("user_audio_settings")
+    .upsert(
+      {
+        user_id: userId,
+        delay_before_ms: delayBeforeMs,
+        delay_after_ms: delayAfterMs,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    )
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
 

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { getUserAudioSettings, updateUserAudioSettings } from '../lib/supabase';
 
 /**
  * Hook pour récupérer/gérer les paramètres audio du comédien
  * (délai avant et après réplique en mode audio)
+ * Persiste dans Supabase + fallback localStorage
  */
 export const useAudioSettings = (userId) => {
   const [settings, setSettings] = useState({
@@ -12,7 +14,7 @@ export const useAudioSettings = (userId) => {
     error: null,
   });
 
-  // Charger les settings depuis localStorage ou DB
+  // Charger les settings depuis Supabase ou localStorage
   useEffect(() => {
     if (!userId) {
       setSettings(prev => ({ ...prev, loading: false }));
@@ -21,29 +23,50 @@ export const useAudioSettings = (userId) => {
 
     const loadSettings = async () => {
       try {
-        // TODO: Charger depuis Supabase quand DB prête
-        // const data = await getUserAudioSettings(userId);
+        setSettings(prev => ({ ...prev, loading: true }));
         
-        // Pour l'instant, utiliser localStorage
-        const stored = localStorage.getItem(`audio_settings_${userId}`);
-        if (stored) {
-          const parsed = JSON.parse(stored);
+        // Charger depuis Supabase
+        const data = await getUserAudioSettings(userId);
+        
+        if (data) {
           setSettings(prev => ({
             ...prev,
-            delayBeforeMs: parsed.delayBeforeMs || 1500,
-            delayAfterMs: parsed.delayAfterMs || 1000,
+            delayBeforeMs: data.delay_before_ms || 1500,
+            delayAfterMs: data.delay_after_ms || 1000,
             loading: false,
+            error: null,
           }));
         } else {
           setSettings(prev => ({ ...prev, loading: false }));
         }
       } catch (err) {
         console.error('Error loading audio settings:', err);
-        setSettings(prev => ({
-          ...prev,
-          loading: false,
-          error: err.message,
-        }));
+        // Fallback to localStorage
+        try {
+          const stored = localStorage.getItem(`audio_settings_${userId}`);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setSettings(prev => ({
+              ...prev,
+              delayBeforeMs: parsed.delayBeforeMs || 1500,
+              delayAfterMs: parsed.delayAfterMs || 1000,
+              loading: false,
+              error: null,
+            }));
+          } else {
+            setSettings(prev => ({
+              ...prev,
+              loading: false,
+              error: err.message,
+            }));
+          }
+        } catch (localErr) {
+          setSettings(prev => ({
+            ...prev,
+            loading: false,
+            error: err.message,
+          }));
+        }
       }
     };
 
@@ -53,23 +76,24 @@ export const useAudioSettings = (userId) => {
   // Sauvegarder les settings
   const saveSettings = async (delayBeforeMs, delayAfterMs) => {
     try {
-      const newSettings = {
-        delayBeforeMs,
-        delayAfterMs,
-      };
-
-      // TODO: Sauvegarder dans Supabase quand DB prête
-      // await updateUserAudioSettings(userId, delayBeforeMs, delayAfterMs);
-
-      // Pour l'instant, utiliser localStorage
+      // Sauvegarder dans Supabase
       if (userId) {
-        localStorage.setItem(`audio_settings_${userId}`, JSON.stringify(newSettings));
+        await updateUserAudioSettings(userId, delayBeforeMs, delayAfterMs);
+      }
+
+      // Backup localStorage
+      if (userId) {
+        localStorage.setItem(`audio_settings_${userId}`, JSON.stringify({
+          delayBeforeMs,
+          delayAfterMs,
+        }));
       }
 
       setSettings(prev => ({
         ...prev,
         delayBeforeMs,
         delayAfterMs,
+        error: null,
       }));
 
       return { success: true };
