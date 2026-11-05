@@ -128,6 +128,7 @@ function ScriptDetail() {
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
   const [myCharacterId, setMyCharacterId] = useState(null);
   const [filterMode, setFilterMode] = useState("all"); // "all" | "role"
+  const [contextBefore, setContextBefore] = useState(1); // nb de répliques d'amorce avant les miennes
   const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
@@ -373,9 +374,11 @@ function ScriptDetail() {
 
         const includedIndices = new Set();
         mySet.forEach((idx) => {
-          // Inclure la réplique d'amorce précédente si elle appartient à un autre personnage
-          if (idx > 0 && !mySet.has(idx - 1)) {
-            includedIndices.add(idx - 1);
+          // Inclure les répliques d'amorce précédentes (autres personnages)
+          for (let k = 1; k <= contextBefore; k++) {
+            const prevIdx = idx - k;
+            if (prevIdx < 0 || mySet.has(prevIdx)) break;
+            includedIndices.add(prevIdx);
           }
           includedIndices.add(idx);
         });
@@ -425,6 +428,7 @@ function ScriptDetail() {
     currentScript?.characters,
     selectedCharacter,
     filterMode,
+    contextBefore,
     selectedSceneKey,
     studyingGroup,
     searchQuery,
@@ -1018,6 +1022,36 @@ function ScriptDetail() {
                   <span>🎯</span> Mes répliques uniquement
                 </button>
               </div>
+
+              {filterMode === "role" && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-purple-200 block">
+                    💬 Répliques précédentes affichées avant les miennes
+                  </span>
+                  <div className="flex gap-1" role="group" aria-label="Répliques précédentes affichées">
+                    {[0, 1, 2, 3].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={contextBefore === n}
+                        onClick={() => setContextBefore(n)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
+                          contextBefore === n
+                            ? "bg-amber-500 text-gray-950 shadow-md"
+                            : "bg-gray-950/60 text-gray-300 border border-white/10 hover:text-white"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  {contextBefore > 0 && viewMode !== "full" && (
+                    <p className="text-[11px] text-purple-200/80">
+                      Les longues répliques sont abrégées : touchez-les pour lire la réplique entière.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -1978,9 +2012,44 @@ function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink
   );
 }
 
-function CueContextCard({ replica, character, number }) {
+const CUE_PREVIEW_CHARS = 140;
+
+function CueContextCard({ replica, character, number, collapsible = false }) {
+  const [expanded, setExpanded] = useState(false);
+  const fullText = stripHtml(replica.text || "").trim();
+  const isLong = collapsible && fullText.length > CUE_PREVIEW_CHARS;
+  const isCollapsed = isLong && !expanded;
+
+  // L'amorce utile est la fin de la réplique : on garde les derniers mots
+  let shownText = fullText;
+  if (isCollapsed) {
+    const tail = fullText.slice(-CUE_PREVIEW_CHARS);
+    const cut = tail.indexOf(" ");
+    shownText = `…${cut > 0 && cut < 30 ? tail.slice(cut + 1) : tail}`;
+  }
+
+  const toggle = () => setExpanded((v) => !v);
+
   return (
-    <div className="my-2.5 p-3 bg-slate-100/90 border-l-4 border-amber-500 rounded-r-2xl shadow-sm text-gray-800 text-xs sm:text-sm animate-fade-in max-w-[90%] sm:max-w-[80%] mx-auto">
+    <div
+      className={`my-2.5 p-3 bg-slate-100/90 border-l-4 border-amber-500 rounded-r-2xl shadow-sm text-gray-800 text-xs sm:text-sm animate-fade-in max-w-[90%] sm:max-w-[80%] mx-auto ${
+        isLong ? "cursor-pointer hover:bg-slate-200/80" : ""
+      }`}
+      {...(isLong
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": expanded,
+            onClick: toggle,
+            onKeyDown: (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+              }
+            },
+          }
+        : {})}
+    >
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-1.5 font-extrabold text-amber-900">
           <span>💬</span>
@@ -1989,8 +2058,13 @@ function CueContextCard({ replica, character, number }) {
         <span className="text-[10px] text-gray-400 font-mono font-bold">#{number}</span>
       </div>
       <p className="italic text-gray-700 whitespace-pre-wrap leading-relaxed">
-        "{stripHtml(replica.text)}"
+        "{shownText}"
       </p>
+      {isLong && (
+        <p className="mt-1 text-[11px] font-bold text-amber-800">
+          {expanded ? "▲ Réduire" : "👆 Toucher pour lire la réplique entière"}
+        </p>
+      )}
     </div>
   );
 }
@@ -2023,7 +2097,12 @@ function SortableReplicaBubble({
   if (replica.isContextLine) {
     return (
       <div ref={setNodeRef} style={style} id={`replica-anchor-${replica.id}`}>
-        <CueContextCard replica={replica} character={character} number={number} />
+        <CueContextCard
+          replica={replica}
+          character={character}
+          number={number}
+          collapsible={viewMode !== "full"}
+        />
       </div>
     );
   }
