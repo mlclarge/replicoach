@@ -13,6 +13,7 @@ import {
   deleteReplicaRecordingDB,
 } from "../lib/audioStorage";
 import Loader from "../components/ui/Loader";
+import AudioDelayIndicator from "../components/AudioDelayIndicator";
 import PremiumVoicePicker from "../components/PremiumVoicePicker";
 import AICoachingModal from "../components/AICoachingModal";
 import SceneSummaryModal from "../components/SceneSummaryModal";
@@ -335,6 +336,10 @@ function AudioMode() {
   // Lecture
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
+  
+  // Audio delays visualization - Feature 2
+  const [activeDelay, setActiveDelay] = useState(null); // { type: 'before'|'after', ms: number }
+  
   const [rate, setRate] = useState(1);
   const [femalePitch, setFemalePitch] = useState(1.8);
   const [malePitch, setMalePitch] = useState(0.5);
@@ -1174,7 +1179,9 @@ function AudioMode() {
         if (opts.readMine === "read") {
           // ⏱️ Délai AVANT MA réplique (si configuré)
           if (delayBeforeMs > 0) {
+            setActiveDelay({ type: 'before', ms: delayBeforeMs });
             await new Promise((r) => setTimeout(r, delayBeforeMs));
+            setActiveDelay(null);
             if (!isActive()) break;
           }
 
@@ -1183,7 +1190,9 @@ function AudioMode() {
 
           // ⏱️ Délai APRÈS MA réplique (pause)
           if (delayAfterMs > 0) {
+            setActiveDelay({ type: 'after', ms: delayAfterMs });
             await new Promise((r) => setTimeout(r, delayAfterMs));
+            setActiveDelay(null);
             if (!isActive()) break;
           }
         }
@@ -1216,7 +1225,9 @@ function AudioMode() {
 
       // ⏱️ Délai AVANT MA réplique (si configuré)
       if (delayBeforeMs > 0) {
+        setActiveDelay({ type: 'before', ms: delayBeforeMs });
         await new Promise((r) => setTimeout(r, delayBeforeMs));
+        setActiveDelay(null);
         if (!isActive()) break;
       }
 
@@ -1224,7 +1235,9 @@ function AudioMode() {
 
       // ⏱️ Délai APRÈS MA réplique (pause)
       if (delayAfterMs > 0) {
+        setActiveDelay({ type: 'after', ms: delayAfterMs });
         await new Promise((r) => setTimeout(r, delayAfterMs));
+        setActiveDelay(null);
         if (!isActive()) break;
       }
 
@@ -1467,6 +1480,13 @@ function AudioMode() {
 
   return (
     <div className="min-h-screen bg-amber-50/60 pb-56 w-full relative">
+      {/* 🎵 Audio Delay Indicator - Feature 2 */}
+      <AudioDelayIndicator 
+        isActive={isPlaying && activeDelay !== null}
+        delayMs={activeDelay?.ms}
+        isBeforeReading={activeDelay?.type === 'before'}
+      />
+      
       {/* 📌 MENU FLOTTANT À GAUCHE POUR LA NAVIGATION PAR SCÈNE (Positionné en bas à gauche, au niveau du menu +) */}
       {hasScenes && (
         <>
