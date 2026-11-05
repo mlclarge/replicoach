@@ -65,8 +65,14 @@ export default function ListeningWorkflow({
   speed,
   onSpeedChange,
   listenSummary,
+  delayBeforeMs,
+  delayAfterMs,
+  delayBeforeOptions = [1000, 1500, 2000, 2500, 3000],
+  delayAfterOptions = [500, 1000, 1500, 2000],
+  onDelaysChange,
 }) {
   const hasRole = !!rehearsal.myRole;
+  const formatSeconds = (ms) => `${String(ms / 1000).replace(".", ",")} s`;
   const [open, setOpen] = useState(false);
 
   return (
@@ -228,6 +234,41 @@ export default function ListeningWorkflow({
               {rehearsal.readMine === "read"
                 ? "Votre réplique est lue à voix haute, puis la lecture vous laisse la répéter."
                 : "L'application se tait et attend. Cliquez sur votre réplique pour la révéler si besoin."}
+            </p>
+          </div>
+        )}
+
+        {hasRole && onDelaysChange && (
+          <div className="space-y-2 rounded-lg bg-amber-50 border border-amber-300 p-2">
+            <span className="text-xs font-extrabold text-amber-900 block">
+              ⏱️ Temps pour dire ma réplique
+            </span>
+            {rehearsal.hideMyRole && rehearsal.readMine === "read" && (
+              <div>
+                <span className="text-xs font-bold text-gray-800 block mb-1">
+                  Attente avant que l'application lise ma réplique
+                </span>
+                <Segmented
+                  label="Attente avant ma réplique"
+                  value={delayBeforeMs}
+                  onChange={(v) => onDelaysChange(v, delayAfterMs)}
+                  options={delayBeforeOptions.map((ms) => ({ value: ms, label: formatSeconds(ms) }))}
+                />
+              </div>
+            )}
+            <div>
+              <span className="text-xs font-bold text-gray-800 block mb-1">
+                Pause après ma réplique (avant la réplique suivante)
+              </span>
+              <Segmented
+                label="Pause après ma réplique"
+                value={delayAfterMs}
+                onChange={(v) => onDelaysChange(delayBeforeMs, v)}
+                options={delayAfterOptions.map((ms) => ({ value: ms, label: formatSeconds(ms) }))}
+              />
+            </div>
+            <p className="text-[11px] text-gray-500">
+              Un compte à rebours s'affiche pendant ces pauses. Enregistré automatiquement.
             </p>
           </div>
         )}

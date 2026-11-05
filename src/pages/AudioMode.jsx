@@ -166,7 +166,15 @@ function AudioMode() {
   const { currentScript, loading, fetchScript, addPersonalNote } = useScriptStore();
   
   // Audio delays - Feature 2
-  const { delayBeforeMs, delayAfterMs, loading: audioSettingsLoading } = useAudioSettings(user?.id);
+  const {
+    delayBeforeMs,
+    delayAfterMs,
+    saveSettings: saveAudioDelays,
+    delayBeforeOptions,
+    delayAfterOptions,
+  } = useAudioSettings(user?.id);
+  const delaysRef = useRef({ before: delayBeforeMs, after: delayAfterMs });
+  delaysRef.current = { before: delayBeforeMs, after: delayAfterMs };
 
   const replicas = useMemo(() => {
     return currentScript?.replicas || [];
@@ -1117,6 +1125,7 @@ function AudioMode() {
     waitingRef.current = false;
     singleBubbleRef.current = false;
     setWaitingForClick(false);
+    setActiveDelay(null);
     stopPreparing();
   };
 
@@ -1128,7 +1137,16 @@ function AudioMode() {
     startPreparing();
     const run = ++runRef.current;
     const isActive = () => playingRef.current && run === runRef.current;
-    // Débloque l'audio dans le geste utilisateur, avant tout await
+    // Pause visible (compte à rebours) interrompue dès qu'on arrête la lecture
+    const pauseWithCountdown = async (type, ms) => {
+      if (!(ms > 0)) return;
+      setActiveDelay({ type, ms });
+      const end = Date.now() + ms;
+      while (Date.now() < end && isActive()) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      setActiveDelay(null);
+    };
     ensureAudioUnlocked();
 
     setIsPlaying(true);
@@ -1177,24 +1195,12 @@ function AudioMode() {
       if (hiddenCharacters.has(replica.character_id)) {
         if (opts.readMine !== "read") stopPreparing();
         if (opts.readMine === "read") {
-          // ⏱️ Délai AVANT MA réplique (si configuré)
-          if (delayBeforeMs > 0) {
-            setActiveDelay({ type: 'before', ms: delayBeforeMs });
-            await new Promise((r) => setTimeout(r, delayBeforeMs));
-            setActiveDelay(null);
-            if (!isActive()) break;
-          }
+          // ⏱️ Attente AVANT que l'application lise MA réplique
+          await pauseWithCountdown("before", delaysRef.current.before);
+          if (!isActive()) break;
 
           await speak(replica.text, replica.character_id, replica.id, nextReplica);
           if (!isActive()) break;
-
-          // ⏱️ Délai APRÈS MA réplique (pause)
-          if (delayAfterMs > 0) {
-            setActiveDelay({ type: 'after', ms: delayAfterMs });
-            await new Promise((r) => setTimeout(r, delayAfterMs));
-            setActiveDelay(null);
-            if (!isActive()) break;
-          }
         }
 
         setWaitingForClick(true);
@@ -1220,26 +1226,14 @@ function AudioMode() {
           setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
           break;
         }
+
+        // ⏱️ Pause APRÈS MA réplique, avant la réplique du partenaire
+        await pauseWithCountdown("after", delaysRef.current.after);
+        if (!isActive()) break;
         continue;
       }
 
-      // ⏱️ Délai AVANT MA réplique (si configuré)
-      if (delayBeforeMs > 0) {
-        setActiveDelay({ type: 'before', ms: delayBeforeMs });
-        await new Promise((r) => setTimeout(r, delayBeforeMs));
-        setActiveDelay(null);
-        if (!isActive()) break;
-      }
-
       await speak(replica.text, replica.character_id, replica.id, nextReplica);
-
-      // ⏱️ Délai APRÈS MA réplique (pause)
-      if (delayAfterMs > 0) {
-        setActiveDelay({ type: 'after', ms: delayAfterMs });
-        await new Promise((r) => setTimeout(r, delayAfterMs));
-        setActiveDelay(null);
-        if (!isActive()) break;
-      }
 
       if (opts.playback === "manual") {
         if (isActive()) setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
@@ -1805,6 +1799,11 @@ function AudioMode() {
         speed={rate}
         onSpeedChange={handleSpeedChange}
         listenSummary={listenSummary}
+        delayBeforeMs={delayBeforeMs}
+        delayAfterMs={delayAfterMs}
+        delayBeforeOptions={delayBeforeOptions}
+        delayAfterOptions={delayAfterOptions}
+        onDelaysChange={saveAudioDelays}
       />
 
       {prepMessage && (
