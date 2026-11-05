@@ -59,7 +59,7 @@ export function GroupEditorModal({
   const selectedCount = selectedReplicas.size;
 
   return (
-    <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/70 z-[100] flex items-center justify-center p-4">
       <div className="bg-white w-full max-w-lg max-h-[85vh] rounded-2xl overflow-hidden flex flex-col shadow-2xl">
         {/* Header */}
         <div className="p-4 border-b bg-primary-800 text-white flex-shrink-0">
