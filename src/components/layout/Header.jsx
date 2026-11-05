@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../../store/authStore";
+import ConnectionBadge from "../ConnectionBadge";
 
 export default function Header() {
   const navigate = useNavigate();
@@ -30,6 +31,7 @@ export default function Header() {
       </Link>
 
       <div className="flex items-center gap-2 relative">
+        <ConnectionBadge />
         <button
           onClick={() => setShowMenu(!showMenu)}
           className="w-10 h-10 rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-gray-950 font-extrabold flex items-center justify-center hover:scale-105 transition active:scale-95 shadow-md border-2 border-amber-300"
