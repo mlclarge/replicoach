@@ -8,6 +8,7 @@ import {
   updateReplicaGroup,
   fetchUserTags 
 } from '../lib/supabase';
+import GroupEditorModal from './GroupEditorModal';
 
 /**
  * Modal pour gérer les sous-ensembles de répliques
@@ -265,15 +266,15 @@ export function ReplicaGroupsManager({
                         </div>
                         <div className="flex gap-1">
                           <button
-                            onClick={() => handleStartSelection(group)}
-                            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded"
-                            title="Modifier les répliques"
+                            onClick={() => setEditingGroup(group)}
+                            className="p-2 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded transition"
+                            title="Éditer le nombre de répliques"
                           >
                             ✏️
                           </button>
                           <button
                             onClick={() => handleDeleteGroup(group.id)}
-                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                            className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded transition"
                             title="Supprimer"
                           >
                             🗑️
@@ -402,6 +403,20 @@ export function ReplicaGroupsManager({
           )}
         </div>
       </div>
+
+      {/* Modal d'édition du groupe */}
+      {editingGroup && (
+        <GroupEditorModal
+          group={editingGroup}
+          replicas={replicas}
+          characters={characters}
+          onSave={() => {
+            setEditingGroup(null);
+            loadData(); // Recharger les groupes
+          }}
+          onClose={() => setEditingGroup(null)}
+        />
+      )}
     </div>
   );
 }
