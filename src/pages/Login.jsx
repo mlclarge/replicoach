@@ -20,17 +20,20 @@ function Login() {
     setError(null);
     setSuccess(null);
 
-    if (!email || !password) {
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
       setError("Veuillez remplir tous les champs");
       return;
     }
 
     if (isSignUp) {
-      if (password.length < 6) {
+      if (cleanPassword.length < 6) {
         setError("Le mot de passe doit contenir au moins 6 caractères");
         return;
       }
-      if (password !== confirmPassword) {
+      if (cleanPassword !== confirmPassword.trim()) {
         setError("Les mots de passe ne correspondent pas");
         return;
       }
@@ -40,7 +43,7 @@ function Login() {
 
     try {
       if (isSignUp) {
-        const { error: signUpError } = await signUp(email, password);
+        const { error: signUpError } = await signUp(cleanEmail, cleanPassword);
         if (signUpError) {
           if (signUpError.message.includes("already registered")) {
             setError("Cet email est déjà utilisé");
@@ -52,7 +55,7 @@ function Login() {
           setShowConfirmation(true);
         }
       } else {
-        const { error: signInError } = await signIn(email, password);
+        const { error: signInError } = await signIn(cleanEmail, cleanPassword);
         if (signInError) {
           const msg = signInError.message.toLowerCase();
           if (msg.includes("email not confirmed")) {
@@ -116,7 +119,7 @@ function Login() {
             </p>
 
             <p className="text-gold-500 font-semibold mb-6 break-all">
-              {email}
+              {cleanEmail || email}
             </p>
 
             <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
