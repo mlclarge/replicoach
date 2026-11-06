@@ -1,332 +1,382 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { useScriptStore } from "../store/scriptStore";
+import { fetchDirectorNotes, getUserRole } from "../lib/supabase";
+import { fetchMyAssignedScripts, syncAssignedScriptsToActor } from "../lib/directorService";
+import Loader from "../components/ui/Loader";
+import { MonitoringPanel } from "../components/Monitoring";
+import AdminPanel from "../components/AdminPanel";
+import DirectorTroupeManager from "../components/DirectorTroupeManager";
+import AudioSettingsPanel from "../components/AudioSettingsPanel";
 
-function Login() {
+// Emails autorisés d'administration globale
+const ADMIN_EMAILS = ["moz2611@gmail.com"];
+
+/**
+ * Page Profil (v2)
+ * - Informations utilisateur & statut du profil
+ * - Espace Metteur en Scène (pour rôle director ou dev)
+ * - Zone Admin Développeur (pour rôle dev)
+ * - Textes affectés par le Metteur en scène
+ * - Statistiques, consignes & réglages audio
+ */
+function Profile() {
   const navigate = useNavigate();
-  const { signIn, signUp, signInWithGoogle } = useAuthStore();
+  const { user, isPremium, signOut } = useAuthStore();
+  const { scripts, fetchScripts } = useScriptStore();
 
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPasswordText, setShowPasswordText] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
-  const [showConfirmation, setShowConfirmation] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRoleState] = useState("member");
+  const [directorNotes, setDirectorNotes] = useState([]);
+  const [assignedScripts, setAssignedScripts] = useState([]);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [activeTab, setActiveTab] = useState("scripts"); // scripts | notes | history | audio
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(null);
+  useEffect(() => {
+    loadData();
+  }, [user]);
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
-
-    if (!cleanEmail || !cleanPassword) {
-      setError("Veuillez remplir tous les champs (Email et Mot de passe).");
-      return;
-    }
-
-    if (isSignUp) {
-      if (cleanPassword.length < 6) {
-        setError("Le mot de passe doit contenir au moins 6 caractères.");
-        return;
-      }
-      if (cleanPassword !== confirmPassword.trim()) {
-        setError("Les mots de passe ne correspondent pas.");
-        return;
-      }
-    }
+  const loadData = async () => {
+    if (!user) return;
 
     setLoading(true);
-
     try {
-      if (isSignUp) {
-        const { error: signUpError } = await signUp(cleanEmail, cleanPassword);
-        if (signUpError) {
-          console.error("❌ Erreur Inscription Supabase:", signUpError);
-          if (signUpError.message.includes("already registered")) {
-            setError("Cet email est déjà utilisé. Essayez de vous connecter.");
-          } else {
-            setError(`Erreur d'inscription: ${signUpError.message}`);
-          }
-        } else {
-          setShowConfirmation(true);
-        }
-      } else {
-        const { error: signInError } = await signIn(cleanEmail, cleanPassword);
+      // 1. Récupérer le rôle utilisateur
+      const role = await getUserRole(user.id);
+      setUserRoleState(role);
 
-        if (signInError) {
-          console.error("❌ Erreur Connexion Supabase:", signInError);
-          const msg = (signInError.message || "").toLowerCase();
-
-          if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
-            setError(
-              "⚠️ Identifiants incorrects : Veuillez vérifier l'adresse e-mail et le mot de passe (attention aux majuscules et espaces)."
-            );
-          } else if (msg.includes("email not confirmed")) {
-            setError(
-              "⚠️ E-mail non confirmé : Veuillez cliquer sur le lien de confirmation reçu dans votre boîte mail."
-            );
-          } else {
-            setError(`⚠️ Connexion échouée : ${signInError.message}`);
-          }
-        } else {
-          // Redirection explicite et immédiate
-          window.location.href = "/";
-        }
+      // 2. Synchroniser/importer automatiquement les textes affectés par le metteur en scène
+      if (user.email) {
+        await syncAssignedScriptsToActor(user.id, user.email);
+        const assigned = await fetchMyAssignedScripts(user.email);
+        setAssignedScripts(assigned || []);
       }
+
+      // 3. Charger les scripts personnels (y compris les textes synchronisés)
+      await fetchScripts(user.id);
+
+      // 4. Charger les consignes metteur en scène
+      const notes = await fetchDirectorNotes(user.id);
+      setDirectorNotes(notes || []);
     } catch (err) {
-      console.error("❌ Exception Connexion:", err);
-      setError("Une erreur inattendue est survenue. Veuillez réessayer.");
+      console.error("Erreur chargement données profil:", err);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setLoading(true);
-
-    try {
-      const { error: googleErr } = await signInWithGoogle();
-      if (googleErr) {
-        console.error("❌ Erreur Google Auth:", googleErr);
-        setError(`Erreur Google Auth : ${googleErr.message}`);
-      }
-    } catch (err) {
-      console.error("❌ Exception Google Auth:", err);
-      setError("Une erreur est survenue avec le compte Google.");
-    } finally {
-      setLoading(false);
-    }
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/login");
   };
 
-  // Page de confirmation après inscription
-  if (showConfirmation) {
+  // Calculer les statistiques
+  const stats = {
+    totalScripts: scripts.length,
+    totalReplicas: scripts.reduce((acc, s) => acc + (s.replicas?.length || 0), 0),
+    totalCharacters: scripts.reduce((acc, s) => acc + (s.characters?.length || 0), 0),
+    totalNotes: directorNotes.length,
+  };
+
+  // Historique combiné (scripts + notes) trié par date
+  const history = [
+    ...scripts.map((s) => ({
+      id: s.id,
+      type: "script",
+      title: s.title,
+      date: new Date(s.created_at),
+      icon: "📜",
+      detail: `${s.characters?.length || 0} personnages • ${s.replicas?.length || 0} répliques`,
+    })),
+    ...directorNotes.map((n) => ({
+      id: n.id,
+      type: "note",
+      title: n.file_name,
+      date: new Date(n.created_at),
+      icon: n.file_name?.endsWith(".pdf") ? "📕" : "📝",
+      detail: n.file_size ? `${(n.file_size / 1024).toFixed(0)} Ko` : "",
+    })),
+  ].sort((a, b) => b.date - a.date);
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-darker flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-sm">
-          <div className="card text-center">
-            <div className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full flex items-center justify-center">
-              <span className="text-5xl">📧</span>
-            </div>
-
-            <h2 className="text-xl font-semibold text-white mb-3">
-              Vérifiez votre boîte mail !
-            </h2>
-
-            <p className="text-gray-400 mb-6">
-              Un email de confirmation a été envoyé à :
-            </p>
-
-            <p className="text-gold-500 font-semibold mb-6 break-all">
-              {email}
-            </p>
-
-            <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
-              <h3 className="text-white font-medium mb-2 flex items-center gap-2">
-                📋 Étapes suivantes :
-              </h3>
-              <ol className="text-gray-400 text-sm space-y-2">
-                <li className="flex items-start gap-2">
-                  <span className="text-gold-500 font-bold">1.</span>
-                  <span>Ouvrez votre boîte mail</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gold-500 font-bold">2.</span>
-                  <span>Cliquez sur le lien de confirmation</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gold-500 font-bold">3.</span>
-                  <span>Revenez ici pour vous connecter</span>
-                </li>
-              </ol>
-            </div>
-
-            <button
-              onClick={() => {
-                setShowConfirmation(false);
-                setIsSignUp(false);
-                setPassword("");
-                setConfirmPassword("");
-              }}
-              className="btn-gold w-full"
-            >
-              ← Retour à la connexion
-            </button>
-          </div>
-        </div>
+      <div className="flex justify-center py-12">
+        <Loader />
       </div>
     );
   }
 
+  const isDirectorOrDev = userRole === "director" || userRole === "dev";
+  const isDev = userRole === "dev" || ADMIN_EMAILS.includes(user?.email?.toLowerCase());
+
   return (
-    <div className="min-h-screen bg-darker flex flex-col items-center justify-center p-4">
-      {/* Logo */}
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-display text-gold-500 flex items-center justify-center gap-2">
-          🎭 RépliCoach
-        </h1>
-        <p className="text-gray-400 mt-2">Mémorisez vos répliques facilement</p>
-      </div>
-
-      {/* Formulaire */}
-      <div className="w-full max-w-sm">
-        <div className="card">
-          <h2 className="text-xl font-semibold text-white mb-6 text-center">
-            {isSignUp ? "Créer un compte" : "Se connecter"}
-          </h2>
-
-          {/* Bouton Google */}
-          <button
-            type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded-full transition mb-6"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Continuer avec Google
-          </button>
-
-          {/* Séparateur */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 h-px bg-gray-700"></div>
-            <span className="text-gray-500 text-sm">ou</span>
-            <div className="flex-1 h-px bg-gray-700"></div>
+    <div className="p-4 pb-24 max-w-4xl mx-auto">
+      {/* Carte En-tête utilisateur */}
+      <div className="card mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border border-gray-700">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-gold-500 rounded-full flex items-center justify-center text-3xl shadow-lg">
+            🎭
           </div>
-
-          <form onSubmit={handleSubmit}>
-            {/* Email */}
-            <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input w-full"
-                placeholder="votre@email.com"
-                disabled={loading}
-              />
-            </div>
-
-            {/* Mot de passe avec toggle visuel */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-gray-400 text-sm">Mot de passe</label>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordText(!showPasswordText)}
-                  className="text-xs text-gold-500 hover:text-gold-400"
-                >
-                  {showPasswordText ? "👁️ Masquer" : "👁️ Afficher"}
-                </button>
-              </div>
-              <input
-                type={showPasswordText ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input w-full font-mono"
-                placeholder={isSignUp ? "Minimum 6 caractères" : "Votre mot de passe"}
-                disabled={loading}
-              />
-            </div>
-
-            {/* Confirmation mot de passe */}
-            {isSignUp && (
-              <div className="mb-4">
-                <label className="block text-gray-400 text-sm mb-2">
-                  Confirmer le mot de passe
-                </label>
-                <input
-                  type={showPasswordText ? "text" : "password"}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input w-full font-mono"
-                  placeholder="Retapez votre mot de passe"
-                  disabled={loading}
-                />
-              </div>
-            )}
-
-            {/* Alerte Utilisateur Visuelle en Cas d'Erreur */}
-            {error && (
-              <div className="mb-4 p-3 bg-red-500/20 border-2 border-red-500 rounded-xl text-red-300 text-xs shadow-lg animate-pulse">
-                <p className="font-bold flex items-center gap-1.5 mb-1">
-                  <span>🚨</span> Alerte de connexion :
-                </p>
-                <p className="text-red-200">{error}</p>
-              </div>
-            )}
-
-            {success && (
-              <div className="mb-4 p-3 bg-green-500/20 border border-green-500 rounded-lg text-green-300 text-xs">
-                {success}
-              </div>
-            )}
-
-            {/* Bouton principal */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-primary w-full mb-4"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⏳</span> Connexion en cours...
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-xl font-display text-white font-bold truncate">
+                {user?.user_metadata?.full_name || "Comédien"}
+              </h1>
+              {userRole === "dev" && (
+                <span className="px-2 py-0.5 bg-purple-600 text-white text-[10px] font-bold rounded-full">
+                  DEV
                 </span>
-              ) : isSignUp ? (
-                "S'inscrire"
-              ) : (
-                "Se connecter"
               )}
-            </button>
-          </form>
+              {userRole === "director" && (
+                <span className="px-2 py-0.5 bg-gold-500 text-black text-[10px] font-extrabold rounded-full">
+                  METTEUR EN SCÈNE
+                </span>
+              )}
+              {isPremium && (
+                <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold rounded-full">
+                  ✨ PREMIUM
+                </span>
+              )}
+            </div>
 
-          {/* Toggle inscription/connexion */}
-          <div className="text-center pt-4 border-t border-gray-700">
-            <p className="text-gray-400 text-sm">
-              {isSignUp ? "Déjà un compte ?" : "Pas encore de compte ?"}
+            <p className="text-gray-400 text-xs truncate mt-0.5">{user?.email}</p>
+            <p className="text-gray-500 text-[11px] mt-1">
+              Membre depuis{" "}
+              {new Date(user?.created_at).toLocaleDateString("fr-FR", {
+                month: "long",
+                year: "numeric",
+              })}
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                setIsSignUp(!isSignUp);
-                setError(null);
-                setSuccess(null);
-              }}
-              className="text-gold-500 hover:text-gold-400 font-semibold mt-1"
-            >
-              {isSignUp ? "Se connecter" : "S'inscrire"}
-            </button>
           </div>
         </div>
       </div>
 
-      <p className="text-gray-600 text-sm mt-8">
-        Une application pour les comédiens 🎭
-      </p>
+      {/* Textes affectés par le Metteur en scène (Alerte visuelle pour comédien) */}
+      {assignedScripts.length > 0 && (
+        <div className="mb-6 p-4 bg-amber-950/40 border-2 border-gold-500/50 rounded-xl shadow-lg animate-fade-in">
+          <h3 className="text-sm font-bold text-gold-400 flex items-center gap-2 mb-1">
+            <span>📌</span> Texte par défaut affecté par votre Metteur en Scène :
+          </h3>
+          <p className="text-xs text-amber-200/80 mb-3">
+            Votre metteur en scène a configuré les voix IA et le texte ci-dessous pour vos répétitions.
+          </p>
+
+          <div className="space-y-2">
+            {assignedScripts.map((a) => (
+              <div
+                key={a.id}
+                onClick={() => navigate(`/script/${a.script_id}`)}
+                className="p-3 bg-gray-900/80 hover:bg-gray-900 border border-gold-500/40 rounded-lg cursor-pointer transition flex items-center justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-white text-xs font-bold truncate">📜 {a.scripts?.title}</p>
+                  <p className="text-[11px] text-gray-400">Prêt pour les séances d'écoute en Mode Audio</p>
+                </div>
+                <span className="px-3 py-1 bg-gold-500 text-black text-xs font-bold rounded-full flex-shrink-0">
+                  Ouvrir ▶
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Statistiques */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-gold-500">{stats.totalScripts}</p>
+          <p className="text-gray-400 text-xs">Textes</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-primary-500">{stats.totalReplicas}</p>
+          <p className="text-gray-400 text-xs">Répliques</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-emerald-500">{stats.totalCharacters}</p>
+          <p className="text-gray-400 text-xs">Personnages</p>
+        </div>
+        <div className="card text-center">
+          <p className="text-2xl font-bold text-yellow-500">{stats.totalNotes}</p>
+          <p className="text-gray-400 text-xs">Consignes</p>
+        </div>
+      </div>
+
+      {/* ESPACE METTEUR EN SCÈNE (Directeurs ou Devs) */}
+      {isDirectorOrDev && <DirectorTroupeManager />}
+
+      {/* Monitoring (Dev / Admin unique) */}
+      {isDev && ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
+        <div className="mb-6">
+          <MonitoringPanel />
+        </div>
+      )}
+
+      {/* Panneau Admin Développeur */}
+      {isDev && <AdminPanel currentUserId={user?.id} />}
+
+      {/* Onglets */}
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <button
+          onClick={() => setActiveTab("scripts")}
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-xs ${
+            activeTab === "scripts" ? "bg-primary-700 text-white" : "bg-gray-800 text-gray-400"
+          }`}
+        >
+          📜 Textes ({stats.totalScripts})
+        </button>
+        <button
+          onClick={() => setActiveTab("notes")}
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-xs ${
+            activeTab === "notes" ? "bg-primary-700 text-white" : "bg-gray-800 text-gray-400"
+          }`}
+        >
+          📁 Consignes ({stats.totalNotes})
+        </button>
+        <button
+          onClick={() => setActiveTab("history")}
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-xs ${
+            activeTab === "history" ? "bg-primary-700 text-white" : "bg-gray-800 text-gray-400"
+          }`}
+        >
+          📅 Historique
+        </button>
+        <button
+          onClick={() => setActiveTab("audio")}
+          className={`flex-1 min-w-[100px] py-2 rounded-lg font-semibold transition text-xs ${
+            activeTab === "audio" ? "bg-primary-700 text-white" : "bg-gray-800 text-gray-400"
+          }`}
+        >
+          🔊 Audio
+        </button>
+      </div>
+
+      {/* Contenu de l'onglet */}
+      <div className="space-y-3 mb-8">
+        {activeTab === "scripts" &&
+          (scripts.length === 0 ? (
+            <p className="text-gray-500 text-center py-8 text-xs">Aucun texte importé</p>
+          ) : (
+            scripts.map((script) => (
+              <div
+                key={script.id}
+                onClick={() => navigate(`/script/${script.id}`)}
+                className="card cursor-pointer hover:border-gray-600 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">📜</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-xs truncate">{script.title}</p>
+                    <p className="text-gray-500 text-[11px]">
+                      {script.characters?.length || 0} personnages • {script.replicas?.length || 0}{" "}
+                      répliques
+                    </p>
+                  </div>
+                  <span className="text-gray-500 text-[11px]">
+                    {new Date(script.created_at).toLocaleDateString("fr-FR")}
+                  </span>
+                </div>
+              </div>
+            ))
+          ))}
+
+        {activeTab === "notes" &&
+          (directorNotes.length === 0 ? (
+            <p className="text-gray-500 text-center py-8 text-xs">Aucune consigne uploadée</p>
+          ) : (
+            directorNotes.map((note) => (
+              <div key={note.id} className="card">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{note.file_name?.endsWith(".pdf") ? "📕" : "📝"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white font-medium text-xs truncate">{note.file_name}</p>
+                    <p className="text-gray-500 text-[11px]">
+                      {note.file_size ? `${(note.file_size / 1024).toFixed(0)} Ko` : ""}
+                    </p>
+                  </div>
+                  <span className="text-gray-500 text-[11px]">
+                    {new Date(note.created_at).toLocaleDateString("fr-FR")}
+                  </span>
+                </div>
+              </div>
+            ))
+          ))}
+
+        {activeTab === "history" &&
+          (history.length === 0 ? (
+            <p className="text-gray-500 text-center py-8 text-xs">Aucune activité</p>
+          ) : (
+            history.map((item) => (
+              <div
+                key={`${item.type}-${item.id}`}
+                className="flex items-center gap-3 p-3 bg-gray-800/30 rounded-lg"
+              >
+                <span className="text-xl">{item.icon}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs truncate">{item.title}</p>
+                  <p className="text-gray-500 text-[11px]">{item.detail}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-gray-400 text-[11px]">{item.date.toLocaleDateString("fr-FR")}</p>
+                  <p className="text-gray-500 text-[10px]">
+                    {item.date.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            ))
+          ))}
+
+        {activeTab === "audio" && <AudioSettingsPanel />}
+      </div>
+
+      {/* Actions de session */}
+      <div className="space-y-3">
+        <button
+          onClick={() => {
+            localStorage.removeItem("replicoach-onboarding-seen");
+            window.location.reload();
+          }}
+          className="w-full p-3.5 bg-gray-800 hover:bg-primary-900/30 text-gray-400 hover:text-primary-400 rounded-xl transition flex items-center justify-center gap-2 text-xs font-semibold"
+        >
+          📖 Revoir le tutoriel
+        </button>
+
+        <button
+          onClick={() => setShowLogoutConfirm(true)}
+          className="w-full p-3.5 bg-gray-800 hover:bg-red-900/30 text-gray-400 hover:text-red-400 rounded-xl transition flex items-center justify-center gap-2 text-xs font-semibold"
+        >
+          🚪 Se déconnecter
+        </button>
+      </div>
+
+      {/* Modal confirmation déconnexion */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">
+            <div className="p-6 text-center">
+              <span className="text-5xl mb-4 block">👋</span>
+              <h3 className="text-lg font-semibold text-white mb-2">Se déconnecter ?</h3>
+              <p className="text-gray-400 text-xs">
+                Vous pourrez vous reconnecter à tout moment avec votre compte RépliCoach.
+              </p>
+            </div>
+
+            <div className="p-4 border-t border-gray-700 flex gap-3">
+              <button onClick={() => setShowLogoutConfirm(false)} className="btn-secondary flex-1 text-xs">
+                Annuler
+              </button>
+              <button
+                onClick={handleLogout}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1 transition text-xs"
+              >
+                Déconnecter
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-export default Login;
+export default Profile;

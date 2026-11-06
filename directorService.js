@@ -106,3 +106,115 @@ export const fetchMyAssignedScripts = async (userEmail) => {
   }
   return data || [];
 };
+
+// 8. Synchronisation et importation automatique des textes affectés vers la bibliothèque du comédien
+export const syncAssignedScriptsToActor = async (userId, userEmail) => {
+  if (!userId || !userEmail) return [];
+  const cleanEmail = userEmail.trim().toLowerCase();
+
+  try {
+    // 1. Récupérer les affectations de textes pour cet e-mail
+    const { data: assignments, error: assignErr } = await supabase
+      .from("script_assignments")
+      .select("*, scripts(*)")
+      .eq("assigned_to_email", cleanEmail);
+
+    if (assignErr || !assignments || assignments.length === 0) return [];
+
+    const importedScripts = [];
+
+    for (const assignment of assignments) {
+      const originalScript = assignment.scripts;
+      if (!originalScript) continue;
+
+      // 2. Vérifier si le comédien possède déjà ce texte dans sa bibliothèque
+      const { data: existing } = await supabase
+        .from("scripts")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("title", originalScript.title)
+        .maybeSingle();
+
+      if (existing) {
+        importedScripts.push(existing);
+        continue;
+      }
+
+      // 3. Importer la copie du script dans la bibliothèque personnelle du comédien
+      const scriptData = {
+        user_id: userId,
+        title: originalScript.title,
+        full_text: originalScript.full_text || "",
+        original_filename: originalScript.original_filename || null,
+        pdf_url: originalScript.pdf_url || null,
+      };
+
+      const { data: newScript, error: createScriptErr } = await supabase
+        .from("scripts")
+        .insert([scriptData])
+        .select()
+        .single();
+
+      if (createScriptErr) {
+        console.error("Erreur création copie script affecté:", createScriptErr);
+        continue;
+      }
+
+      // 4. Copier les personnages
+      const { data: originalChars } = await supabase
+        .from("characters")
+        .select("*")
+        .eq("script_id", originalScript.id);
+
+      const charMap = {};
+      for (const char of originalChars || []) {
+        const charData = {
+          script_id: newScript.id,
+          name: char.name,
+          color: char.color,
+          gender: char.gender || null,
+        };
+        const { data: newChar } = await supabase
+          .from("characters")
+          .insert([charData])
+          .select()
+          .single();
+
+        if (newChar) {
+          charMap[char.id] = newChar.id;
+        }
+      }
+
+      // 5. Copier les répliques
+      const { data: originalReps } = await supabase
+        .from("replicas")
+        .select("*")
+        .eq("script_id", originalScript.id)
+        .order("order_index", { ascending: true });
+
+      if (originalReps && originalReps.length > 0) {
+        const repsToInsert = originalReps.map((r) => ({
+          script_id: newScript.id,
+          character_id: charMap[r.character_id] || null,
+          order_index: r.order_index,
+          text: r.text,
+          text_gaps: r.text_gaps || null,
+          cue_words: r.cue_words || null,
+          act_title: r.act_title || null,
+          scene_title: r.scene_title || null,
+          is_context: r.is_context || false,
+          page_number: r.page_number || null,
+        }));
+
+        await supabase.from("replicas").insert(repsToInsert);
+      }
+
+      importedScripts.push(newScript);
+    }
+
+    return importedScripts;
+  } catch (err) {
+    console.error("Erreur syncAssignedScriptsToActor:", err);
+    return [];
+  }
+};
