@@ -10,17 +10,8 @@ import AdminPanel from "../components/AdminPanel";
 import DirectorTroupeManager from "../components/DirectorTroupeManager";
 import AudioSettingsPanel from "../components/AudioSettingsPanel";
 
-// Emails autorisés d'administration globale
 const ADMIN_EMAILS = ["moz2611@gmail.com"];
 
-/**
- * Page Profil (v2)
- * - Informations utilisateur & statut du profil
- * - Espace Metteur en Scène (pour rôle director ou dev)
- * - Zone Admin Développeur (pour rôle dev)
- * - Textes affectés par le Metteur en scène
- * - Statistiques, consignes & réglages audio
- */
 function Profile() {
   const navigate = useNavigate();
   const { user, isPremium, signOut } = useAuthStore();
@@ -31,7 +22,7 @@ function Profile() {
   const [directorNotes, setDirectorNotes] = useState([]);
   const [assignedScripts, setAssignedScripts] = useState([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [activeTab, setActiveTab] = useState("scripts"); // scripts | notes | history | audio
+  const [activeTab, setActiveTab] = useState("scripts");
 
   useEffect(() => {
     loadData();
@@ -42,21 +33,17 @@ function Profile() {
 
     setLoading(true);
     try {
-      // 1. Récupérer le rôle utilisateur
       const role = await getUserRole(user.id);
       setUserRoleState(role);
 
-      // 2. Synchroniser/importer automatiquement les textes affectés par le metteur en scène
       if (user.email) {
         await syncAssignedScriptsToActor(user.id, user.email);
         const assigned = await fetchMyAssignedScripts(user.email);
         setAssignedScripts(assigned || []);
       }
 
-      // 3. Charger les scripts personnels (y compris les textes synchronisés)
       await fetchScripts(user.id);
 
-      // 4. Charger les consignes metteur en scène
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
     } catch (err) {
@@ -71,7 +58,6 @@ function Profile() {
     navigate("/login");
   };
 
-  // Calculer les statistiques
   const stats = {
     totalScripts: scripts.length,
     totalReplicas: scripts.reduce((acc, s) => acc + (s.replicas?.length || 0), 0),
@@ -79,7 +65,6 @@ function Profile() {
     totalNotes: directorNotes.length,
   };
 
-  // Historique combiné (scripts + notes) trié par date
   const history = [
     ...scripts.map((s) => ({
       id: s.id,
@@ -112,7 +97,6 @@ function Profile() {
 
   return (
     <div className="p-4 pb-24 max-w-4xl mx-auto">
-      {/* Carte En-tête utilisateur */}
       <div className="card mb-6 bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 border border-gray-700">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 bg-gradient-to-br from-primary-500 to-gold-500 rounded-full flex items-center justify-center text-3xl shadow-lg">
@@ -152,26 +136,29 @@ function Profile() {
         </div>
       </div>
 
-      {/* Textes affectés par le Metteur en scène (Alerte visuelle pour comédien) */}
       {assignedScripts.length > 0 && (
         <div className="mb-6 p-4 bg-amber-950/40 border-2 border-gold-500/50 rounded-xl shadow-lg animate-fade-in">
           <h3 className="text-sm font-bold text-gold-400 flex items-center gap-2 mb-1">
-            <span>📌</span> Texte par défaut affecté par votre Metteur en Scène :
+            <span>📌</span> Texte affecté par votre Metteur en Scène :
           </h3>
           <p className="text-xs text-amber-200/80 mb-3">
-            Votre metteur en scène a configuré les voix IA et le texte ci-dessous pour vos répétitions.
+            Votre metteur en scène a configuré ce texte et ses voix IA pour vos répétitions de troupe.
           </p>
 
           <div className="space-y-2">
             {assignedScripts.map((a) => (
               <div
                 key={a.id}
-                onClick={() => navigate(`/script/${a.script_id}`)}
+                onClick={async () => {
+                  await syncAssignedScriptsToActor(user.id, user.email);
+                  await fetchScripts(user.id);
+                  navigate(`/script/${a.script_id}`);
+                }}
                 className="p-3 bg-gray-900/80 hover:bg-gray-900 border border-gold-500/40 rounded-lg cursor-pointer transition flex items-center justify-between"
               >
                 <div className="min-w-0">
-                  <p className="text-white text-xs font-bold truncate">📜 {a.scripts?.title}</p>
-                  <p className="text-[11px] text-gray-400">Prêt pour les séances d'écoute en Mode Audio</p>
+                  <p className="text-white text-xs font-bold truncate">📜 {a.scripts?.title || "Texte de troupe"}</p>
+                  <p className="text-[11px] text-gray-400">Synchronisé pour répétition en Mode Audio</p>
                 </div>
                 <span className="px-3 py-1 bg-gold-500 text-black text-xs font-bold rounded-full flex-shrink-0">
                   Ouvrir ▶
@@ -182,7 +169,6 @@ function Profile() {
         </div>
       )}
 
-      {/* Statistiques */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="card text-center">
           <p className="text-2xl font-bold text-gold-500">{stats.totalScripts}</p>
@@ -202,20 +188,16 @@ function Profile() {
         </div>
       </div>
 
-      {/* ESPACE METTEUR EN SCÈNE (Directeurs ou Devs) */}
       {isDirectorOrDev && <DirectorTroupeManager />}
 
-      {/* Monitoring (Dev / Admin unique) */}
       {isDev && ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
         <div className="mb-6">
           <MonitoringPanel />
         </div>
       )}
 
-      {/* Panneau Admin Développeur */}
       {isDev && <AdminPanel currentUserId={user?.id} />}
 
-      {/* Onglets */}
       <div className="flex gap-2 mb-4 flex-wrap">
         <button
           onClick={() => setActiveTab("scripts")}
@@ -251,7 +233,6 @@ function Profile() {
         </button>
       </div>
 
-      {/* Contenu de l'onglet */}
       <div className="space-y-3 mb-8">
         {activeTab === "scripts" &&
           (scripts.length === 0 ? (
@@ -329,7 +310,6 @@ function Profile() {
         {activeTab === "audio" && <AudioSettingsPanel />}
       </div>
 
-      {/* Actions de session */}
       <div className="space-y-3">
         <button
           onClick={() => {
@@ -349,7 +329,6 @@ function Profile() {
         </button>
       </div>
 
-      {/* Modal confirmation déconnexion */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">

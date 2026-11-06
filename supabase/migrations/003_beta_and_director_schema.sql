@@ -54,29 +54,33 @@ CREATE POLICY "Comédien voit ses textes affectés"
   ON script_assignments FOR SELECT
   USING (LOWER(assigned_to_email) = LOWER(auth.jwt()->>'email'));
 
--- Politiques RLS complémentaires sur scripts, characters et replicas pour autoriser la lecture des textes affectés
-DROP POLICY IF EXISTS "Comédien peut lire le script affecté" ON scripts;
-CREATE POLICY "Comédien peut lire le script affecté"
+-- =========================================================
+-- ACCÈS RLS COMPLÉMENTAIRES SUR SCRIPTS, CHARACTERS, REPLICAS
+-- Autoriser les comédiens à lire les pièces affectées par leur e-mail
+-- =========================================================
+
+DROP POLICY IF EXISTS "Comédien lit son texte affecté" ON scripts;
+CREATE POLICY "Comédien lit son texte affecté"
   ON scripts FOR SELECT
   USING (
-    auth.uid() = user_id OR
-    EXISTS (
+    auth.uid() = user_id
+    OR EXISTS (
       SELECT 1 FROM script_assignments
       WHERE script_assignments.script_id = scripts.id
       AND LOWER(script_assignments.assigned_to_email) = LOWER(auth.jwt()->>'email')
     )
   );
 
-DROP POLICY IF EXISTS "Comédien peut lire les personnages du script affecté" ON characters;
-CREATE POLICY "Comédien peut lire les personnages du script affecté"
+DROP POLICY IF EXISTS "Comédien lit les personnages du texte affecté" ON characters;
+CREATE POLICY "Comédien lit les personnages du texte affecté"
   ON characters FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM scripts
       WHERE scripts.id = characters.script_id
       AND (
-        scripts.user_id = auth.uid() OR
-        EXISTS (
+        scripts.user_id = auth.uid()
+        OR EXISTS (
           SELECT 1 FROM script_assignments
           WHERE script_assignments.script_id = scripts.id
           AND LOWER(script_assignments.assigned_to_email) = LOWER(auth.jwt()->>'email')
@@ -85,16 +89,16 @@ CREATE POLICY "Comédien peut lire les personnages du script affecté"
     )
   );
 
-DROP POLICY IF EXISTS "Comédien peut lire les répliques du script affecté" ON replicas;
-CREATE POLICY "Comédien peut lire les répliques du script affecté"
+DROP POLICY IF EXISTS "Comédien lit les répliques du texte affecté" ON replicas;
+CREATE POLICY "Comédien lit les répliques du texte affecté"
   ON replicas FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM scripts
       WHERE scripts.id = replicas.script_id
       AND (
-        scripts.user_id = auth.uid() OR
-        EXISTS (
+        scripts.user_id = auth.uid()
+        OR EXISTS (
           SELECT 1 FROM script_assignments
           WHERE script_assignments.script_id = scripts.id
           AND LOWER(script_assignments.assigned_to_email) = LOWER(auth.jwt()->>'email')

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { fetchDirectorNotes, getUserRole } from "../lib/supabase";
-import { fetchMyAssignedScripts } from "../lib/directorService";
+import { fetchMyAssignedScripts, syncAssignedScriptsToActor } from "../lib/directorService";
 import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
 import AdminPanel from "../components/AdminPanel";
@@ -46,18 +46,19 @@ function Profile() {
       const role = await getUserRole(user.id);
       setUserRoleState(role);
 
-      // 2. Charger les scripts personnels
-      await fetchScripts(user.id);
-
-      // 3. Charger les consignes metteur en scène
-      const notes = await fetchDirectorNotes(user.id);
-      setDirectorNotes(notes || []);
-
-      // 4. Récupérer les textes affectés par un metteur en scène pour cette adresse e-mail
+      // 2. Synchroniser/importer automatiquement les textes affectés par le metteur en scène
       if (user.email) {
+        await syncAssignedScriptsToActor(user.id, user.email);
         const assigned = await fetchMyAssignedScripts(user.email);
         setAssignedScripts(assigned || []);
       }
+
+      // 3. Charger les scripts personnels (y compris les textes synchronisés)
+      await fetchScripts(user.id);
+
+      // 4. Charger les consignes metteur en scène
+      const notes = await fetchDirectorNotes(user.id);
+      setDirectorNotes(notes || []);
     } catch (err) {
       console.error("Erreur chargement données profil:", err);
     } finally {
