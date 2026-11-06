@@ -10,6 +10,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPasswordText, setShowPasswordText] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -24,17 +25,17 @@ function Login() {
     const cleanPassword = password.trim();
 
     if (!cleanEmail || !cleanPassword) {
-      setError("Veuillez remplir tous les champs");
+      setError("Veuillez remplir tous les champs (Email et Mot de passe).");
       return;
     }
 
     if (isSignUp) {
       if (cleanPassword.length < 6) {
-        setError("Le mot de passe doit contenir au moins 6 caractères");
+        setError("Le mot de passe doit contenir au moins 6 caractères.");
         return;
       }
       if (cleanPassword !== confirmPassword.trim()) {
-        setError("Les mots de passe ne correspondent pas");
+        setError("Les mots de passe ne correspondent pas.");
         return;
       }
     }
@@ -45,36 +46,41 @@ function Login() {
       if (isSignUp) {
         const { error: signUpError } = await signUp(cleanEmail, cleanPassword);
         if (signUpError) {
+          console.error("❌ Erreur Inscription Supabase:", signUpError);
           if (signUpError.message.includes("already registered")) {
-            setError("Cet email est déjà utilisé");
+            setError("Cet email est déjà utilisé. Essayez de vous connecter.");
           } else {
-            setError(signUpError.message);
+            setError(`Erreur d'inscription: ${signUpError.message}`);
           }
         } else {
-          // Afficher la page de confirmation
           setShowConfirmation(true);
         }
       } else {
         const { error: signInError } = await signIn(cleanEmail, cleanPassword);
+
         if (signInError) {
-          const msg = signInError.message.toLowerCase();
-          if (msg.includes("email not confirmed")) {
+          console.error("❌ Erreur Connexion Supabase:", signInError);
+          const msg = (signInError.message || "").toLowerCase();
+
+          if (msg.includes("invalid login") || msg.includes("invalid credentials")) {
             setError(
-              "Veuillez d'abord confirmer votre e-mail en cliquant sur le lien reçu dans votre boîte de réception.",
+              "⚠️ Identifiants incorrects : Veuillez vérifier l'adresse e-mail et le mot de passe (attention aux majuscules et espaces)."
             );
-          } else if (msg.includes("invalid login")) {
+          } else if (msg.includes("email not confirmed")) {
             setError(
-              "Email ou mot de passe incorrect (pensez aussi à vérifier si votre e-mail a été confirmé).",
+              "⚠️ E-mail non confirmé : Veuillez cliquer sur le lien de confirmation reçu dans votre boîte mail."
             );
           } else {
-            setError(signInError.message);
+            setError(`⚠️ Connexion échouée : ${signInError.message}`);
           }
         } else {
-          navigate("/");
+          // Redirection explicite et immédiate
+          window.location.href = "/";
         }
       }
     } catch (err) {
-      setError("Une erreur est survenue. Veuillez réessayer.");
+      console.error("❌ Exception Connexion:", err);
+      setError("Une erreur inattendue est survenue. Veuillez réessayer.");
     } finally {
       setLoading(false);
     }
@@ -85,12 +91,14 @@ function Login() {
     setLoading(true);
 
     try {
-      const { error } = await signInWithGoogle();
-      if (error) {
-        setError("Erreur de connexion avec Google");
+      const { error: googleErr } = await signInWithGoogle();
+      if (googleErr) {
+        console.error("❌ Erreur Google Auth:", googleErr);
+        setError(`Erreur Google Auth : ${googleErr.message}`);
       }
     } catch (err) {
-      setError("Une erreur est survenue avec Google");
+      console.error("❌ Exception Google Auth:", err);
+      setError("Une erreur est survenue avec le compte Google.");
     } finally {
       setLoading(false);
     }
@@ -102,11 +110,7 @@ function Login() {
       <div className="min-h-screen bg-darker flex flex-col items-center justify-center p-4">
         <div className="w-full max-w-sm">
           <div className="card text-center">
-            {/* Icône email */}
-            <div
-              className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full 
-                            flex items-center justify-center"
-            >
+            <div className="w-20 h-20 mx-auto mb-6 bg-green-500/20 rounded-full flex items-center justify-center">
               <span className="text-5xl">📧</span>
             </div>
 
@@ -119,7 +123,7 @@ function Login() {
             </p>
 
             <p className="text-gold-500 font-semibold mb-6 break-all">
-              {cleanEmail || email}
+              {email}
             </p>
 
             <div className="bg-gray-800/50 rounded-lg p-4 mb-6 text-left">
@@ -133,22 +137,14 @@ function Login() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-gold-500 font-bold">2.</span>
-                  <span>Cherchez l'email de RépliCoach</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-gold-500 font-bold">3.</span>
                   <span>Cliquez sur le lien de confirmation</span>
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="text-gold-500 font-bold">4.</span>
+                  <span className="text-gold-500 font-bold">3.</span>
                   <span>Revenez ici pour vous connecter</span>
                 </li>
               </ol>
             </div>
-
-            <p className="text-gray-500 text-xs mb-6">
-              💡 Pensez à vérifier vos spams si vous ne trouvez pas l'email
-            </p>
 
             <button
               onClick={() => {
@@ -163,11 +159,6 @@ function Login() {
             </button>
           </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-gray-600 text-sm mt-8">
-          Une application pour les comédiens 🎭
-        </p>
       </div>
     );
   }
@@ -194,8 +185,7 @@ function Login() {
             type="button"
             onClick={handleGoogleSignIn}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 
-                       text-gray-800 font-semibold py-3 px-4 rounded-full transition mb-6"
+            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-800 font-semibold py-3 px-4 rounded-full transition mb-6"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -239,19 +229,24 @@ function Login() {
               />
             </div>
 
-            {/* Mot de passe */}
+            {/* Mot de passe avec toggle visuel */}
             <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-2">
-                Mot de passe
-              </label>
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-gray-400 text-sm">Mot de passe</label>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordText(!showPasswordText)}
+                  className="text-xs text-gold-500 hover:text-gold-400"
+                >
+                  {showPasswordText ? "👁️ Masquer" : "👁️ Afficher"}
+                </button>
+              </div>
               <input
-                type="password"
+                type={showPasswordText ? "text" : "password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="input w-full"
-                placeholder={
-                  isSignUp ? "Minimum 6 caractères" : "Votre mot de passe"
-                }
+                className="input w-full font-mono"
+                placeholder={isSignUp ? "Minimum 6 caractères" : "Votre mot de passe"}
                 disabled={loading}
               />
             </div>
@@ -263,26 +258,29 @@ function Login() {
                   Confirmer le mot de passe
                 </label>
                 <input
-                  type="password"
+                  type={showPasswordText ? "text" : "password"}
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="input w-full"
+                  className="input w-full font-mono"
                   placeholder="Retapez votre mot de passe"
                   disabled={loading}
                 />
               </div>
             )}
 
-            {/* Messages d'erreur/succès */}
+            {/* Alerte Utilisateur Visuelle en Cas d'Erreur */}
             {error && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500 rounded-lg">
-                <p className="text-red-400 text-sm">{error}</p>
+              <div className="mb-4 p-3 bg-red-500/20 border-2 border-red-500 rounded-xl text-red-300 text-xs shadow-lg animate-pulse">
+                <p className="font-bold flex items-center gap-1.5 mb-1">
+                  <span>🚨</span> Alerte de connexion :
+                </p>
+                <p className="text-red-200">{error}</p>
               </div>
             )}
 
             {success && (
-              <div className="mb-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
-                <p className="text-green-400 text-sm">{success}</p>
+              <div className="mb-4 p-3 bg-green-500/20 border border-green-500 rounded-lg text-green-300 text-xs">
+                {success}
               </div>
             )}
 
@@ -294,7 +292,7 @@ function Login() {
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⏳</span> Chargement...
+                  <span className="animate-spin">⏳</span> Connexion en cours...
                 </span>
               ) : isSignUp ? (
                 "S'inscrire"
@@ -324,7 +322,6 @@ function Login() {
         </div>
       </div>
 
-      {/* Footer */}
       <p className="text-gray-600 text-sm mt-8">
         Une application pour les comédiens 🎭
       </p>

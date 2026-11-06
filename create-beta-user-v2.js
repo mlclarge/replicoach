@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 
 /**
  * API Serverless Vercel (v2) - Création et Réinitialisation de Comptes Bêta-Testeurs
- * Gère à la fois les NOUVEAUX utilisateurs et les utilisateurs DÉJÀ EXISTRANTS dans Supabase Auth.
+ * Gère les utilisateurs nouveaux et existants, valide l'e-mail et définit le mot de passe.
  */
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
 
   if (!supabaseUrl || !serviceRoleKey) {
     return res.status(500).json({
-      error: "Variables d'environnement Supabase manquantes (SUPABASE_SERVICE_ROLE_KEY requis).",
+      error: "Variables d'environnement Supabase manquantes (SUPABASE_SERVICE_ROLE_KEY requis sur Vercel).",
     });
   }
 
@@ -58,23 +58,23 @@ export default async function handler(req, res) {
     });
 
     if (createError) {
-      // Cas 2B : L'adresse email existe DÉJÀ dans Supabase Auth (ex: inscription antérieure ou Google OAuth)
+      // Si le compte existe déjà dans Supabase Auth
       if (
         createError.message.includes("already registered") ||
         createError.message.includes("already exists") ||
         createError.status === 422
       ) {
-        // Récupérer l'utilisateur existant
-        const { data: usersList, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+        // Retrouver l'utilisateur par e-mail
+        const { data: usersData, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
         if (listErr) throw listErr;
 
-        const existingUser = usersList?.users?.find(
+        const existingUser = usersData?.users?.find(
           (u) => u.email?.toLowerCase() === cleanEmail
         );
 
         if (existingUser) {
           userId = existingUser.id;
-          // Forcer la mise à jour du mot de passe et valider l'email
+          // Forcer la mise à jour du mot de passe et la confirmation de l'e-mail
           const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
             password: cleanPassword,
             email_confirm: true,
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
           });
           if (updateErr) throw updateErr;
         } else {
-          return res.status(400).json({ error: createError.message });
+          return res.status(400).json({ error: `Impossible de mettre à jour le compte : ${createError.message}` });
         }
       } else {
         return res.status(400).json({ error: createError.message });

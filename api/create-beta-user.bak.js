@@ -1,11 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Fonction API Serverless (Vercel/Node.js) pour la création de comptes Bêta-Testeurs
- * Accès réservé aux développeurs authentifiés.
+ * API Serverless Vercel (v2) - Création et Réinitialisation de Comptes Bêta-Testeurs
+ * Gère à la fois les NOUVEAUX utilisateurs et les utilisateurs DÉJÀ EXISTRANTS dans Supabase Auth.
  */
 export default async function handler(req, res) {
-  // CORS & Méthode POST uniquement
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Méthode non autorisée. Utiliser POST." });
   }
@@ -25,7 +24,9 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Paramètres manquants : email, password et requesterUserId sont requis." });
   }
 
-  // Client Supabase Admin avec Clé Service Role
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanPassword = password.trim();
+
   const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
@@ -42,13 +43,13 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: "🔒 Accès refusé : Seul un profil développeur peut créer des comptes Bêta." });
     }
 
-    // Déterminer le statut Premium (Metteur en scène est Premium par défaut)
     const finalPremium = role === "director" ? true : !!isPremium;
+    let userId = null;
 
-    // 2. Créer l'utilisateur dans auth.users (sans validation e-mail requise)
+    // 2. Tenter de créer l'utilisateur dans auth.users
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email: email.trim().toLowerCase(),
-      password,
+      email: cleanEmail,
+      password: cleanPassword,
       email_confirm: true,
       user_metadata: {
         created_by_dev: requesterUserId,
@@ -57,12 +58,44 @@ export default async function handler(req, res) {
     });
 
     if (createError) {
-      return res.status(400).json({ error: createError.message });
+      // Cas 2B : L'adresse email existe DÉJÀ dans Supabase Auth (ex: inscription antérieure ou Google OAuth)
+      if (
+        createError.message.includes("already registered") ||
+        createError.message.includes("already exists") ||
+        createError.status === 422
+      ) {
+        // Récupérer l'utilisateur existant
+        const { data: usersList, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
+        if (listErr) throw listErr;
+
+        const existingUser = usersList?.users?.find(
+          (u) => u.email?.toLowerCase() === cleanEmail
+        );
+
+        if (existingUser) {
+          userId = existingUser.id;
+          // Forcer la mise à jour du mot de passe et valider l'email
+          const { error: updateErr } = await supabaseAdmin.auth.admin.updateUserById(userId, {
+            password: cleanPassword,
+            email_confirm: true,
+            user_metadata: {
+              ...existingUser.user_metadata,
+              updated_by_dev: requesterUserId,
+              account_type: "beta_tester",
+            },
+          });
+          if (updateErr) throw updateErr;
+        } else {
+          return res.status(400).json({ error: createError.message });
+        }
+      } else {
+        return res.status(400).json({ error: createError.message });
+      }
+    } else {
+      userId = newUser.user.id;
     }
 
-    const userId = newUser.user.id;
-
-    // 3. Assigner le statut Premium dans la table `profiles`
+    // 3. Assigner le statut Premium dans `profiles`
     await supabaseAdmin
       .from("profiles")
       .upsert({ id: userId, is_premium: finalPremium }, { onConflict: "id" });
@@ -76,7 +109,7 @@ export default async function handler(req, res) {
       ok: true,
       user: {
         id: userId,
-        email: newUser.user.email,
+        email: cleanEmail,
         role,
         is_premium: finalPremium,
       },
