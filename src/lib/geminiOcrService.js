@@ -9,7 +9,10 @@ function getEndpoint() {
   const configuredUrl =
     import.meta.env.VITE_BACKEND_OCR_URL || import.meta.env.VITE_API_URL;
   const backendUrl =
-    configuredUrl || (import.meta.env.DEV ? "http://127.0.0.1:8000" : null);
+    configuredUrl ||
+    (import.meta.env.DEV
+      ? "http://127.0.0.1:8000"
+      : "https://replicoach.onrender.com");
 
   if (!backendUrl) {
     throw new Error(
@@ -28,7 +31,10 @@ function getEndpoint() {
 // Réveille le backend Render (démarrage à froid ~30 s) dès l'arrivée sur la page d'import.
 export function warmUpOcrBackend() {
   try {
-    const healthUrl = getEndpoint().replace(/\/api\/extract-premium$/, "/api/health");
+    const healthUrl = getEndpoint().replace(
+      /\/api\/extract-premium$/,
+      "/api/health",
+    );
     fetch(healthUrl, { mode: "no-cors", cache: "no-store" }).catch(() => {});
   } catch {
     // backend non configuré : rien à réveiller
@@ -59,7 +65,9 @@ export async function processWithGemini(file, onProgress) {
     "La vérification de votre session a expiré. Rechargez la page et réessayez.",
   );
   if (sessionError) {
-    throw new Error(`Impossible de vérifier la session : ${sessionError.message}`);
+    throw new Error(
+      `Impossible de vérifier la session : ${sessionError.message}`,
+    );
   }
   if (!session?.access_token) {
     throw new Error("Connectez-vous pour lancer le scan Premium.");
@@ -125,7 +133,9 @@ export async function processWithGemini(file, onProgress) {
 
 async function readProgressStream(response, onProgress) {
   if (!response.body) {
-    throw new Error("Le service OCR Premium n'a pas fourni de flux de progression.");
+    throw new Error(
+      "Le service OCR Premium n'a pas fourni de flux de progression.",
+    );
   }
 
   const reader = response.body.getReader();
@@ -150,12 +160,16 @@ async function readProgressStream(response, onProgress) {
     try {
       payload = JSON.parse(data.join("\n"));
     } catch {
-      throw new Error("Le service OCR Premium a transmis un événement invalide.");
+      throw new Error(
+        "Le service OCR Premium a transmis un événement invalide.",
+      );
     }
 
     if (event === "progress") {
       if (typeof payload.stage !== "string") {
-        throw new Error("Le service OCR Premium a transmis une étape invalide.");
+        throw new Error(
+          "Le service OCR Premium me a transmis une étape invalide.",
+        );
       }
       if (onProgress) onProgress(payload.stage);
     } else if (event === "result") {
@@ -173,9 +187,7 @@ async function readProgressStream(response, onProgress) {
   try {
     while (true) {
       const { done, value } = await reader.read();
-      buffer += decoder
-        .decode(value, { stream: !done })
-        .replace(/\r\n/g, "\n");
+      buffer += decoder.decode(value, { stream: !done }).replace(/\r\n/g, "\n");
 
       let boundary;
       while ((boundary = buffer.indexOf("\n\n")) !== -1) {
@@ -192,7 +204,9 @@ async function readProgressStream(response, onProgress) {
   }
 
   if (!result) {
-    throw new Error("Le service Gemini Vision n'a pas transmis de résultat final.");
+    throw new Error(
+      "Le service Gemini Vision n'a pas transmis de résultat final.",
+    );
   }
   return result;
 }
