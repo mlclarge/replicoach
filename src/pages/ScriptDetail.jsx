@@ -1,3 +1,4 @@
+import { useScriptFilters } from "../hooks/useScriptFilters";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
@@ -96,8 +97,22 @@ function ScriptDetail() {
   const [viewMode, setViewMode] = useState("full");
   const [showTools, setShowTools] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState(null);
-  const [selectedSceneKey, setSelectedSceneKey] = useState(null);
+  const {
+    myCharacterId,
+    setMyCharacterId,
+    selectedCharacter,
+    setSelectedCharacter,
+    filterMode,
+    setFilterMode,
+    contextBefore,
+    setContextBefore,
+    selectedSceneKey,
+    setSelectedSceneKey,
+    hideMyReplicas,
+    setHideMyReplicas,
+    resetFilters,
+    hasActiveFilters,
+  } = useScriptFilters(id);
   const [isSceneDrawerOpen, setIsSceneDrawerOpen] = useState(false);
   const [editingReplica, setEditingReplica] = useState(null);
   const [showOriginalFile, setShowOriginalFile] = useState(false);
@@ -126,10 +141,6 @@ function ScriptDetail() {
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null);
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
-  const [myCharacterId, setMyCharacterId] = useState(null);
-  const [filterMode, setFilterMode] = useState("all"); // "all" | "role"
-  const [contextBefore, setContextBefore] = useState(1); // nb de répliques d'amorce avant les miennes
-  const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
@@ -916,16 +927,13 @@ function ScriptDetail() {
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <span>🎭</span> Sélectionner mon personnage :
             </span>
-            {myCharacterId && (
+            {hasActiveFilters && (
               <button
-                onClick={() => {
-                  setMyCharacterId(null);
-                  setSelectedCharacter(null);
-                  setFilterMode("all");
-                }}
-                className="text-xs text-rose-600 hover:text-rose-800 font-bold underline flex items-center gap-1"
+                onClick={resetFilters}
+                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-sm active:scale-95"
+                title="Remise à zéro de tous les filtres"
               >
-                <span>✖</span> Réinitialiser
+                <span>🔄</span> Remise à zéro des filtres
               </button>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { useScriptFilters } from "../hooks/useScriptFilters";
 import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
@@ -415,6 +416,26 @@ function AudioMode() {
       const role = rehearsalRef.current.myRole;
       setHiddenCharacters(new Set(role && patch.hideMyRole ? [role] : []));
     }
+  };
+
+    const { resetFilters, hasActiveFilters } = useScriptFilters(id);
+
+  const handleResetAllFilters = () => {
+    resetFilters();
+    setRehearsal({
+      myRole: null,
+      listenMode: "all",
+      contextLines: 1,
+      hideMyRole: false,
+      dimOthers: false,
+      readMine: "read",
+      speed: 1,
+    });
+    setHiddenCharacters(new Set());
+    try {
+      localStorage.removeItem(`rehearsal-${id}`);
+      localStorage.removeItem(`replicoach_filters_${id}`);
+    } catch (e) {}
   };
 
   const handleSpeedChange = (value) => {

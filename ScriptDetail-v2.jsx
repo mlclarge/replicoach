@@ -1,0 +1,4124 @@
+import { useScriptFilters } from "../hooks/useScriptFilters";
+import { useEffect, useState, useMemo, useRef } from "react";
+import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
+import { useScriptStore, extractScenes } from "../store/scriptStore";
+import { useAuthStore } from "../store/authStore";
+import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
+import Loader from "../components/ui/Loader";
+import ReplicaGroupsManager from "../components/ReplicaGroups";
+import FloatingRecorder from "../components/FloatingRecorder";
+import AICoachingModal from "../components/AICoachingModal";
+import PremiumGateModal from "../components/PremiumGateModal";
+import { buildSceneSummaryContext } from "../lib/geminiService";
+import SceneSummaryModal from "../components/SceneSummaryModal";
+import VideoBubble from "../components/VideoBubble";
+import { NOTE_TYPES, getNoteType } from "../lib/noteTypes";
+import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
+
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import DOMPurify from "dompurify";
+
+const VIEW_MODE_LABELS = {
+  full: "📖 Complet",
+  first3: "3️⃣ 3 mots",
+  debut_fin: "🟢 Début/Fin",
+  cue: "🎭 Répliques",
+};
+
+
+function normalizeStr(str) {
+  if (!str) return "";
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function stripHtml(text) {
+  if (!text) return "";
+  try {
+    if (typeof document !== "undefined") {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = text;
+      return tmp.textContent || tmp.innerText || text;
+    }
+  } catch (e) {}
+  return text.replace(/<[^>]+>/g, "");
+}
+
+function ScriptDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // Récupération de user et isPremium pour la gestion du Coach IA
+  const { user, isPremium } = useAuthStore();
+  const {
+    currentScript,
+    loading,
+    error,
+    fetchScript,
+    deleteScript,
+    clearCurrentScript,
+    updateReplica,
+    addSingleReplica,
+    deleteReplica,
+    addCharacter,
+    updateCharacter,
+    deleteCharacter,
+    reorderReplicas,
+    fetchPersonalNotes,
+    addPersonalNote,
+    updatePersonalNote,
+    deletePersonalNote,
+    updateScript,
+  } = useScriptStore();
+  const characters = useMemo(() => currentScript?.characters || [], [currentScript?.characters]);
+  const replicas = useMemo(() => currentScript?.replicas || [], [currentScript?.replicas]);
+  const stage_directions = currentScript?.stage_directions;
+  const full_text = currentScript?.full_text;
+  const original_filename = currentScript?.original_filename;
+  const title = currentScript?.title || "";
+
+  const [viewMode, setViewMode] = useState("full");
+  const [showTools, setShowTools] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const {
+    myCharacterId,
+    setMyCharacterId,
+    selectedCharacter,
+    setSelectedCharacter,
+    filterMode,
+    setFilterMode,
+    contextBefore,
+    setContextBefore,
+    selectedSceneKey,
+    setSelectedSceneKey,
+    hideMyReplicas,
+    setHideMyReplicas,
+    resetFilters,
+    hasActiveFilters,
+  } = useScriptFilters(id);
+  const [isSceneDrawerOpen, setIsSceneDrawerOpen] = useState(false);
+  const [editingReplica, setEditingReplica] = useState(null);
+  const [showOriginalFile, setShowOriginalFile] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [showAddReplica, setShowAddReplica] = useState(false);
+  const [deleteReplicaConfirm, setDeleteReplicaConfirm] = useState(null);
+  const [splittingReplica, setSplittingReplica] = useState(null);
+  const [showAddCharacter, setShowAddCharacter] = useState(false);
+  const [showAddNote, setShowAddNote] = useState(null);
+  const [editingNote, setEditingNote] = useState(null);
+  const [deleteNoteConfirm, setDeleteNoteConfirm] = useState(null);
+
+  const [editMode, setEditMode] = useState(false);
+  const [showCharacterManager, setShowCharacterManager] = useState(false);
+  const [editingCharacter, setEditingCharacter] = useState(null);
+  const [deleteCharacterConfirm, setDeleteCharacterConfirm] = useState(null);
+  const [insertAfterIndex, setInsertAfterIndex] = useState(null);
+  const [showNotesListModal, setShowNotesListModal] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [showExerciseMenu, setShowExerciseMenu] = useState(false);
+  const [showAddDropdown, setShowAddDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+
+  const [showReplicaGroups, setShowReplicaGroups] = useState(false);
+  const [studyingGroup, setStudyingGroup] = useState(null);
+  const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
+  const [coachingMode, setCoachingMode] = useState(null);
+  const [coachingCharacterId, setCoachingCharacterId] = useState(null);
+
+  // État pour le Paywall Premium Coach IA
+  const [showPremiumModal, setShowPremiumModal] = useState(false);
+  const [showStudioMenu, setShowStudioMenu] = useState(false);
+  const [replicaVideos, setReplicaVideos] = useState({});
+  const [summaryScene, setSummaryScene] = useState(null);
+  const [sceneSummaries, setSceneSummaries] = useState({});
+
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem("sceneSummaries_" + id);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Purge des faux résumés générés localement par l'ancienne version
+        const clean = Object.fromEntries(
+          Object.entries(parsed).filter(([, v]) => typeof v === "string" && !v.includes("Scène à forte tension dramatique")),
+        );
+        if (Object.keys(clean).length !== Object.keys(parsed).length) {
+          localStorage.setItem("sceneSummaries_" + id, JSON.stringify(clean));
+        }
+        setSceneSummaries(clean);
+      }
+    } catch (e) {}
+  }, [id]);
+
+  const handleSavePermanentSummary = (sceneKey, summaryText) => {
+    if (!sceneKey || !summaryText) return;
+    setSceneSummaries((prev) => {
+      const updated = { ...prev, [sceneKey]: summaryText };
+      try {
+        localStorage.setItem("sceneSummaries_" + id, JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  
+  useEffect(() => {
+    const handleVideoUpdate = () => {
+      if (id) {
+        loadAllReplicaVideosDB(id).then((dbVideos) => {
+          if (dbVideos) setReplicaVideos(dbVideos);
+        });
+      }
+    };
+    window.addEventListener("replica-video-updated", handleVideoUpdate);
+    return () => window.removeEventListener("replica-video-updated", handleVideoUpdate);
+  }, [id]);
+
+  useEffect(() => {
+    const handleStudioMenuEvent = () => {
+      setShowStudioMenu(true);
+    };
+    window.addEventListener("open-studio-menu", handleStudioMenuEvent);
+    return () => window.removeEventListener("open-studio-menu", handleStudioMenuEvent);
+  }, []);
+
+  useEffect(() => {
+    if (!id) return;
+    let active = true;
+    async function initVideos() {
+      const dbVideos = await loadAllReplicaVideosDB(id);
+      if (active && dbVideos) {
+        setReplicaVideos(dbVideos);
+      }
+    }
+    initVideos();
+    return () => {
+      active = false;
+    };
+  }, [id]);
+
+  const handleDeleteVideo = (targetReplicaId) => {
+    if (!targetReplicaId) return;
+    setReplicaVideos((prev) => {
+      const updated = { ...prev };
+      delete updated[targetReplicaId];
+      delete updated[String(targetReplicaId)];
+      return updated;
+    });
+    deleteReplicaVideoDB(id, targetReplicaId);
+  };
+
+  const renderScopeVideo = (key) => {
+    const video = replicaVideos[key];
+    if (!video) return null;
+    return (
+      <VideoBubble
+        video={video}
+        character={characters.find((c) => c.id === video.characterId)}
+        onDelete={() => handleDeleteVideo(key)}
+      />
+    );
+  };
+
+  // Extraction ordonnée des actes et scènes du script
+  const { hasScenes, scenes } = useMemo(() => {
+    return extractScenes(currentScript?.replicas || []);
+  }, [currentScript?.replicas]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: { distance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  
+  useEffect(() => {
+    const handleAICoachEvent = () => {
+      let charId = myCharacterId || characters[0]?.id;
+      if (charId) {
+        if (isPremium) {
+          setCoachingMode("character");
+          setCoachingCharacterId(charId);
+        } else {
+          setShowPremiumModal(true);
+        }
+      }
+    };
+    window.addEventListener("open-aicoaching", handleAICoachEvent);
+
+    if (searchParams.get("openCoach") === "true") {
+      handleAICoachEvent();
+    }
+    return () => window.removeEventListener("open-aicoaching", handleAICoachEvent);
+  }, [myCharacterId, characters, isPremium]);
+
+  useEffect(() => {
+    fetchScript(id);
+    return () => clearCurrentScript();
+  }, [id, fetchScript, clearCurrentScript]);
+
+  useEffect(() => {
+    if (currentScript?.id && user?.id) {
+      fetchPersonalNotes(currentScript.id, user.id);
+    }
+  }, [currentScript?.id, user?.id, fetchPersonalNotes]);
+
+  const characterPositions = useMemo(() => {
+    if (!currentScript?.characters) return {};
+    const positions = {};
+    currentScript.characters.forEach((char, index) => {
+      positions[char.id] = index % 2;
+    });
+    return positions;
+  }, [currentScript?.characters]);
+
+  const originalFileUrl = useMemo(() => {
+    if (!currentScript?.pdf_url) return null;
+    return getFileUrl(currentScript.pdf_url);
+  }, [currentScript?.pdf_url]);
+
+  const replicaCountByCharacter = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const counts = {};
+    currentScript.replicas.forEach((r) => {
+      counts[r.character_id] = (counts[r.character_id] || 0) + 1;
+    });
+    return counts;
+  }, [currentScript?.replicas]);
+
+  // Sommaire des passages
+  const characterPassages = useMemo(() => {
+    if (!myCharacterId || !currentScript?.replicas) return [];
+
+    const passages = [];
+    let currentPassage = null;
+    const MAX_GAP = 15;
+    const CONTEXT_WINDOW = 5;
+
+    currentScript.replicas.forEach((replica, index) => {
+      if (replica.character_id === myCharacterId) {
+        if (!currentPassage) {
+          currentPassage = { startIndex: index, endIndex: index };
+        } else {
+          if (index - currentPassage.endIndex <= MAX_GAP) {
+            currentPassage.endIndex = index;
+          } else {
+            passages.push(currentPassage);
+            currentPassage = { startIndex: index, endIndex: index };
+          }
+        }
+      }
+    });
+
+    if (currentPassage) {
+      passages.push(currentPassage);
+    }
+
+    return passages.map((p, i) => {
+      const anchorIndex = Math.max(0, p.startIndex - CONTEXT_WINDOW);
+      const anchorReplicaId = currentScript.replicas[anchorIndex].id;
+
+      return {
+        id: i + 1,
+        anchorReplicaId: anchorReplicaId,
+        displayNumber: anchorIndex + 1,
+      };
+    });
+  }, [currentScript?.replicas, myCharacterId]);
+
+  // Mapping pour conserver le numéro d'origine de chaque réplique dans le script complet
+  const replicaGlobalNumberMap = useMemo(() => {
+    if (!currentScript?.replicas) return {};
+    const map = {};
+    currentScript.replicas.forEach((rep, idx) => {
+      map[rep.id] = idx + 1;
+    });
+    return map;
+  }, [currentScript?.replicas]);
+
+  // Répliques filtrées avec support de la recherche par #numéro ou texte (Stabilisé)
+  const filteredReplicas = useMemo(() => {
+    if (!currentScript?.replicas) return [];
+    let result = currentScript.replicas;
+
+    if (studyingGroup?.replicaIds?.length > 0) {
+      const groupSet = new Set(studyingGroup.replicaIds);
+      result = result.filter((r) => groupSet.has(r.id));
+    }
+
+    if (selectedSceneKey) {
+      result = result.filter((r) => {
+        const key = `${r.act_title || ""}_${r.scene_title || ""}`;
+        return key === selectedSceneKey;
+      });
+    }
+
+    if (myCharacterId) {
+      if (filterMode === "role") {
+        // Mode répliques du rôle + amorces de contexte
+        const mySet = new Set();
+        result.forEach((r, idx) => {
+          if (r.character_id === myCharacterId) mySet.add(idx);
+        });
+
+        const includedIndices = new Set();
+        mySet.forEach((idx) => {
+          // Inclure les répliques d'amorce précédentes (autres personnages)
+          for (let k = 1; k <= contextBefore; k++) {
+            const prevIdx = idx - k;
+            if (prevIdx < 0 || mySet.has(prevIdx)) break;
+            includedIndices.add(prevIdx);
+          }
+          includedIndices.add(idx);
+        });
+
+        result = result
+          .filter((_, idx) => includedIndices.has(idx))
+          .map((r) => ({
+            ...r,
+            isContextLine: r.character_id !== myCharacterId,
+          }));
+      }
+    } else if (selectedCharacter) {
+      result = result.filter((r) => r.character_id === selectedCharacter);
+    }
+
+    if (searchQuery.trim()) {
+      const query = normalizeStr(searchQuery.trim());
+      const numMatch = query.match(/^#?\s*(\d+)$/);
+      if (numMatch) {
+        const targetNum = parseInt(numMatch[1], 10);
+        const numMatched = result.filter(
+          (r) => replicaGlobalNumberMap[r.id] === targetNum
+        );
+        if (numMatched.length > 0) {
+          result = numMatched;
+        } else {
+          result = result.filter((r) =>
+            normalizeStr(stripHtml(r.text || "")).includes(query)
+          );
+        }
+      } else {
+        result = result.filter((r) => {
+          const charName =
+            currentScript?.characters?.find((c) => c.id === r.character_id)?.name || "";
+          const plainText = normalizeStr(stripHtml(r.text || ""));
+          const normCharName = normalizeStr(charName);
+          return (
+            plainText.includes(query) || normCharName.includes(query)
+          );
+        });
+      }
+    }
+
+    return result;
+  }, [
+    currentScript?.replicas,
+    currentScript?.characters,
+    selectedCharacter,
+    filterMode,
+    contextBefore,
+    selectedSceneKey,
+    studyingGroup,
+    searchQuery,
+    replicaGlobalNumberMap,
+  ]);
+
+  // Auto-scroll et surbrillance lorsqu'une réplique exacte est ciblée par #numéro
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const numMatch = searchQuery.trim().match(/^#?\s*(\d+)$/);
+      if (numMatch && filteredReplicas.length === 1) {
+        const targetReplica = filteredReplicas[0];
+        const element = document.getElementById(
+          `replica-anchor-${targetReplica.id}`
+        );
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth", block: "center" });
+          element.classList.add("ring-4", "ring-gold-400", "transition-all");
+          setTimeout(() => {
+            element.classList.remove("ring-4", "ring-gold-400");
+          }, 2000);
+        }
+      }
+    }
+  }, [searchQuery, filteredReplicas]);
+
+  // Fonction d'interception du clic Coach (Sécurisée avec Paywall Premium)
+  const handleCoachClick = (e, characterId) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    const targetCharId = characterId || myCharacterId || characters[0]?.id;
+    if (targetCharId) {
+      if (isPremium) {
+        setCoachingMode("character");
+        setCoachingCharacterId(targetCharId);
+      } else {
+        setShowPremiumModal(true);
+      }
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteScript(id);
+      navigate("/");
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
+  };
+
+  const handleSaveReplica = async (replicaId, newCharacterId, newText) => {
+    try {
+      await updateReplica(replicaId, {
+        character_id: newCharacterId,
+        text: newText,
+      });
+      setEditingReplica(null);
+    } catch (err) {
+      console.error("Error updating replica:", err);
+      alert("Erreur lors de la mise à jour de la réplique");
+    }
+  };
+
+  const generateGapsText = (text) => {
+    return text.replace(/\b(\w)(\w+)\b/g, (match, first, rest) => {
+      return first + "_".repeat(Math.min(rest.length, 5));
+    });
+  };
+
+  const handleDeleteReplica = async (replicaId) => {
+    try {
+      await deleteReplica(replicaId);
+      setDeleteReplicaConfirm(null);
+    } catch (err) {
+      console.error("Error deleting replica:", err);
+      alert("Erreur lors de la suppression de la réplique");
+    }
+  };
+
+  const handleAddCharacter = async (name, color) => {
+    try {
+      const newChar = await addCharacter(id, { name, color });
+      setShowAddCharacter(false);
+      return newChar;
+    } catch (err) {
+      console.error("Error adding character:", err);
+      if (err.code === "23505") {
+        alert("Un personnage avec ce nom existe déjà dans ce script");
+      } else if (err.code === "42501") {
+        alert("Vous n'avez pas la permission d'ajouter un personnage");
+      } else {
+        alert("Erreur lors de l'ajout du personnage: " + (err.message || "Erreur inconnue"));
+      }
+      throw err;
+    }
+  };
+
+  const handleSplitReplica = async (originalReplica, splitIndex, newCharacterId) => {
+    try {
+      const originalText = originalReplica.text;
+      const firstPart = originalText.substring(0, splitIndex).trim();
+      const secondPart = originalText.substring(splitIndex).trim();
+
+      if (!firstPart || !secondPart) {
+        alert("Les deux parties doivent contenir du texte");
+        return;
+      }
+
+      await updateReplica(originalReplica.id, {
+        text: firstPart,
+        text_gaps: generateGapsText(firstPart),
+      });
+
+      const replicas = currentScript?.replicas || [];
+      const maxOrderIndex = Math.max(...replicas.map((r) => r.order_index || 0), 0) + 1000;
+
+      const newReplica = await addSingleReplica({
+        script_id: id,
+        character_id: newCharacterId,
+        text: secondPart,
+        order_index: maxOrderIndex,
+        text_gaps: generateGapsText(secondPart),
+        cue_words: "..." + firstPart.split(/\s+/).slice(-3).join(" "),
+      });
+
+      const originalIndex = replicas.findIndex((r) => r.id === originalReplica.id);
+      const replicasBefore = replicas.slice(0, originalIndex + 1);
+      const replicasAfter = replicas.slice(originalIndex + 1);
+
+      const newOrder = [
+        ...replicasBefore.map((r) => r.id),
+        newReplica.id,
+        ...replicasAfter.map((r) => r.id),
+      ];
+
+      await reorderReplicas(id, newOrder);
+      setSplittingReplica(null);
+    } catch (err) {
+      console.error("Error splitting replica:", err);
+      alert("Erreur lors de la division: " + (err.message || "Erreur inconnue"));
+    }
+  };
+
+  const handleSaveTitle = async () => {
+    if (!newTitle.trim()) return;
+    try {
+      await updateScript(id, { title: newTitle.trim() });
+      setEditingTitle(false);
+    } catch (err) {
+      console.error("Error updating title:", err);
+      alert("Erreur lors de la modification du titre");
+    }
+  };
+
+  const handleAddNote = async (afterReplicaId, text, noteType) => {
+    try {
+      await addPersonalNote({
+        user_id: user.id,
+        script_id: id,
+        after_replica_id: afterReplicaId,
+        text: text,
+        note_type: noteType,
+      });
+      setShowAddNote(null);
+    } catch (err) {
+      console.error("Error adding note:", err);
+      alert("Erreur lors de l'ajout de la note");
+    }
+  };
+
+  const openSceneSummary = (replica) => {
+    const context = buildSceneSummaryContext(
+      replicas,
+      characters,
+      replica.act_title,
+      replica.scene_title,
+      title
+    );
+    setSummaryScene({
+      sceneLabel: `${replica.act_title ? replica.act_title + " — " : ""}${replica.scene_title}`,
+      sceneKey: `${replica.act_title || ""}_${replica.scene_title || ""}`,
+      sceneText: context.sceneText,
+      sceneContext: context,
+    });
+  };
+
+  const handleSaveAICoachingNote = async ({ text, type }) => {
+    try {
+      await addPersonalNote({
+        user_id: user.id,
+        script_id: id,
+        after_replica_id: null,
+        text: text,
+        note_type: type,
+      });
+    } catch (err) {
+      console.error("Error saving AI coaching note:", err);
+      throw err;
+    }
+  };
+
+  const handleUpdateNote = async (noteId, text, noteType) => {
+    try {
+      await updatePersonalNote(noteId, { text, note_type: noteType });
+      setEditingNote(null);
+    } catch (err) {
+      console.error("Error updating note:", err);
+      alert("Erreur lors de la modification de la note");
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    try {
+      await deletePersonalNote(noteId);
+      setDeleteNoteConfirm(null);
+    } catch (err) {
+      console.error("Error deleting note:", err);
+      alert("Erreur lors de la suppression de la note");
+    }
+  };
+
+  const notesByReplicaId = useMemo(() => {
+    const notes = currentScript?.personalNotes || [];
+    const grouped = {};
+    notes.forEach((note) => {
+      const key = note.after_replica_id || "start";
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(note);
+    });
+    return grouped;
+  }, [currentScript?.personalNotes]);
+
+  const totalNotes = currentScript?.personalNotes?.length || 0;
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    const replicas = currentScript?.replicas || [];
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = replicas.findIndex((r) => r.id === active.id);
+    const newIndex = replicas.findIndex((r) => r.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const newOrder = arrayMove(replicas, oldIndex, newIndex);
+    const replicaIds = newOrder.map((r) => r.id);
+
+    try {
+      await reorderReplicas(id, replicaIds);
+    } catch (err) {
+      console.error("Error reordering:", err);
+      alert("Erreur lors du réordonnancement");
+    }
+  };
+
+  const handleUpdateCharacter = async (characterId, name, color) => {
+    try {
+      await updateCharacter(characterId, { name, color });
+      setEditingCharacter(null);
+    } catch (err) {
+      console.error("Error updating character:", err);
+      alert("Erreur lors de la modification du personnage");
+    }
+  };
+
+  const handleDeleteCharacter = async (characterId) => {
+    try {
+      await deleteCharacter(characterId);
+      setDeleteCharacterConfirm(null);
+    } catch (err) {
+      console.error("Error deleting character:", err);
+      alert("Erreur lors de la suppression du personnage");
+    }
+  };
+
+  const handleAddReplicaAt = async (characterId, text, afterIndex) => {
+    try {
+      const replicas = currentScript?.replicas || [];
+      const maxOrderIndex = Math.max(...replicas.map((r) => r.order_index || 0), 0) + 1000;
+
+      const newReplica = await addSingleReplica({
+        script_id: id,
+        character_id: characterId,
+        text: text,
+        order_index: maxOrderIndex,
+        text_gaps: generateGapsText(text),
+        cue_words: "",
+      });
+
+      if (afterIndex !== undefined && afterIndex !== null && afterIndex >= -1) {
+        let newOrder;
+        if (afterIndex === -1) {
+          newOrder = [newReplica.id, ...replicas.map((r) => r.id)];
+        } else {
+          const replicasBefore = replicas.slice(0, afterIndex + 1);
+          const replicasAfter = replicas.slice(afterIndex + 1);
+          newOrder = [
+            ...replicasBefore.map((r) => r.id),
+            newReplica.id,
+            ...replicasAfter.map((r) => r.id),
+          ];
+        }
+        await reorderReplicas(id, newOrder);
+      } else {
+        fetchScript(id);
+      }
+
+      setShowAddReplica(false);
+      setInsertAfterIndex(null);
+    } catch (err) {
+      console.error("Error adding replica:", err);
+      alert("Erreur lors de l'ajout de la réplique: " + (err.message || "Erreur inconnue"));
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader />
+      </div>
+    );
+  }
+
+  if (error || !currentScript) {
+    return (
+      <div className="p-4 text-center">
+        <p className="text-red-400 mb-4">Script non trouvé</p>
+        <Link to="/" className="btn-primary">
+          Retour
+        </Link>
+      </div>
+    );
+  }
+
+
+
+  return (
+    <div className="pb-32 min-h-screen bg-amber-50">
+      {/* En-tête de la pièce */}
+      <div className="bg-black p-4 mb-4 border-b-2 border-gray-800 shadow-lg">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            {editingTitle ? (
+              <div className="flex items-center gap-2 mb-1">
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="flex-1 bg-white/20 border border-gold-400 rounded-lg px-3 py-1 text-xl text-gold-400 font-display placeholder-gold-400/50"
+                  placeholder="Titre du texte"
+                  autoFocus
+                />
+                <button
+                  onClick={handleSaveTitle}
+                  className="p-2 bg-green-500 text-white rounded-lg"
+                >
+                  ✓
+                </button>
+                <button
+                  onClick={() => setEditingTitle(false)}
+                  className="p-2 bg-gray-600 text-white rounded-lg"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <h1
+                className="text-2xl font-display text-gold-400 mb-1 cursor-pointer hover:text-gold-300 flex items-center gap-2 group"
+                onClick={() => {
+                  setNewTitle(title);
+                  setEditingTitle(true);
+                }}
+                title="Cliquer pour modifier le titre"
+              >
+                {title}
+                <span className="text-sm opacity-0 group-hover:opacity-100 transition">
+                  ✏️
+                </span>
+              </h1>
+            )}
+            <p className="text-gray-300 text-sm">
+              {characters.length} personnage{characters.length > 1 ? "s" : ""} •{" "}
+              {replicas.length} réplique{replicas.length > 1 ? "s" : ""}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Bouton Mode Audio (Optimisé mobile) */}
+            <Link
+              to={`/script/${id}/audio`}
+              className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gradient-to-r from-gold-400 via-gold-500 to-amber-500 hover:from-gold-300 hover:to-amber-400 text-black font-extrabold text-xs sm:text-sm rounded-xl shadow-lg border-2 border-gold-300 transition flex items-center gap-1.5 active:scale-95"
+              title="Mode Audio - S'enregistrer & Écouter"
+            >
+              <span className="text-lg sm:text-xl">🎙️</span>
+              <span className="hidden sm:inline font-extrabold tracking-tight">S'enregistrer / Écouter</span>
+              <span className="sm:hidden font-extrabold">Audio</span>
+            </Link>
+
+            {/* Menu des options secondaires */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMoreMenu(!showMoreMenu)}
+                className="p-2.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 transition"
+                title="Plus d'options"
+              >
+                ⚙️
+              </button>
+              {showMoreMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+                  <button
+                    onClick={() => {
+                      setEditMode(!editMode);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-orange-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    {editMode ? "✅ Terminer l'édition" : "✏️ Mode édition"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowCharacterManager(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-purple-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    👥 Personnages
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowReplicaGroups(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-indigo-300 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    📚 Groupes de répliques
+                  </button>
+                  <div className="border-t border-gray-700 my-1" />
+                  {(originalFileUrl || full_text) && (
+                    <button
+                      onClick={() => {
+                        setShowOriginalFile(true);
+                        setShowMoreMenu(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-xs text-blue-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                    >
+                      📄 Voir fichier original
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setShowShareModal(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-green-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    👥 Partager à la troupe
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowDeleteConfirm(true);
+                      setShowMoreMenu(false);
+                    }}
+                    className="w-full px-4 py-2.5 text-left text-xs text-red-400 hover:bg-gray-800 flex items-center gap-2 font-medium"
+                  >
+                    🗑️ Supprimer le texte
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-4">
+        {stage_directions && (
+          <div className="mb-4 p-4 bg-white/80 rounded-lg border-l-4 border-amber-400 shadow">
+            <p className="text-gray-700 italic text-sm whitespace-pre-line">
+              {stage_directions}
+            </p>
+          </div>
+        )}
+
+        {/* Refonte Sélection de Rôle & Filtrage (UI/UX) */}
+        <div className="mb-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
+              <span>🎭</span> Sélectionner mon personnage :
+            </span>
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-sm active:scale-95"
+                title="Remise à zéro de tous les filtres"
+              >
+                <span>🔄</span> Remise à zéro des filtres
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            <button
+              onClick={() => {
+                setMyCharacterId(null);
+                setSelectedCharacter(null);
+                setFilterMode("all");
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
+                !myCharacterId
+                  ? "bg-amber-500 text-gray-950 ring-2 ring-amber-400"
+                  : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-300"
+              }`}
+            >
+              Tous ({replicas.length})
+            </button>
+
+            {characters.map((char) => {
+              const isMyRole = myCharacterId === char.id;
+              return (
+                <button
+                  key={char.id}
+                  onClick={() => {
+                    setSelectedCharacter(null);
+                    if (isMyRole) {
+                      setMyCharacterId(null);
+                      setFilterMode("all");
+                    } else {
+                      setMyCharacterId(char.id);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition shadow-sm ${
+                    isMyRole
+                      ? "ring-2 ring-amber-400 text-white shadow-md scale-105"
+                      : "bg-white text-gray-700 hover:border-gray-400 border border-gray-300"
+                  }`}
+                  style={isMyRole ? { backgroundColor: char.color } : {}}
+                >
+                  {isMyRole && <span>👑</span>}
+                  {char.name} ({replicaCountByCharacter[char.id] || 0})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Bandeau d'Action "Mon Rôle" & Commutateur de Mode */}
+          {myCharacterId && (
+            <div className="p-3.5 bg-gradient-to-r from-purple-900/90 via-indigo-900/90 to-gray-900 text-white rounded-2xl shadow-xl border border-purple-500/30 space-y-3 animate-fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-3.5 h-3.5 rounded-full ring-2 ring-white/50 flex-shrink-0"
+                    style={{ backgroundColor: characters?.find((c) => c.id === myCharacterId)?.color || "#A855F7" }}
+                  />
+                  <span className="font-extrabold text-sm sm:text-base text-amber-300">
+                    🎭 Mon rôle : {characters?.find((c) => c.id === myCharacterId)?.name}
+                  </span>
+                </div>
+
+                {/* Unique Bouton Coach IA contextuel */}
+                <button
+                  onClick={(e) => handleCoachClick(e, myCharacterId)}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-gray-950 font-extrabold rounded-xl text-xs shadow-lg transition active:scale-95"
+                  title={`Coaching IA pour ${characters?.find((c) => c.id === myCharacterId)?.name}`}
+                >
+                  <span>✨</span>
+                  <span>Coach IA {characters?.find((c) => c.id === myCharacterId)?.name}</span>
+                </button>
+              </div>
+
+              {/* Commutateur de Mode (Segmented Control) */}
+              <div className="flex bg-gray-950/60 p-1 rounded-xl border border-white/10">
+                <button
+                  onClick={() => setFilterMode("all")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    filterMode === "all"
+                      ? "bg-amber-500 text-gray-950 shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <span>📜</span> Pièce entière (avec surbrillance)
+                </button>
+                <button
+                  onClick={() => setFilterMode("role")}
+                  className={`flex-1 py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    filterMode === "role"
+                      ? "bg-purple-600 text-white shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  <span>🎯</span> Mes répliques uniquement
+                </button>
+              </div>
+
+              {filterMode === "role" && (
+                <div className="space-y-1.5">
+                  <span className="text-xs font-bold text-purple-200 block">
+                    💬 Répliques précédentes affichées avant les miennes
+                  </span>
+                  <div className="flex gap-1" role="group" aria-label="Répliques précédentes affichées">
+                    {[0, 1, 2, 3].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={contextBefore === n}
+                        onClick={() => setContextBefore(n)}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
+                          contextBefore === n
+                            ? "bg-amber-500 text-gray-950 shadow-md"
+                            : "bg-gray-950/60 text-gray-300 border border-white/10 hover:text-white"
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                  {contextBefore > 0 && viewMode !== "full" && (
+                    <p className="text-[11px] text-purple-200/80">
+                      Les longues répliques sont abrégées : touchez-les pour lire la réplique entière.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Sommaire des Passages */}
+        {myCharacterId && filterMode !== "role" && characterPassages.length > 0 && (
+          <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl shadow-sm">
+            <p className="font-semibold text-indigo-900 text-sm mb-2 flex items-center gap-2">
+              📍 Accès direct à vos passages ({characterPassages.length})
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {characterPassages.map((passage) => (
+                <button
+                  key={passage.id}
+                  onClick={() => {
+                    const element = document.getElementById(
+                      `replica-anchor-${passage.anchorReplicaId}`
+                    );
+                    if (element) {
+                      element.scrollIntoView({
+                        behavior: "smooth",
+                        block: "center",
+                      });
+                      element.classList.add(
+                        "ring-4",
+                        "ring-indigo-400",
+                        "transition-all"
+                      );
+                      setTimeout(
+                        () =>
+                          element.classList.remove(
+                            "ring-4",
+                            "ring-indigo-400"
+                          ),
+                        1500
+                      );
+                    }
+                  }}
+                  className="px-4 py-2 rounded-full text-xs font-bold transition shadow-sm border whitespace-nowrap bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-100 hover:scale-105 active:scale-95"
+                >
+                  Passage {passage.id} (Aller à #{passage.displayNumber})
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+              {/* 📌 MENU FLOTTANT À GAUCHE POUR LA NAVIGATION PAR SCÈNE */}
+      {hasScenes && (
+        <>
+          {/* Bouton Onglet Flottant à Gauche */}
+          <button
+            onClick={() => setIsSceneDrawerOpen(!isSceneDrawerOpen)}
+            className="fixed left-0 top-[55%] -translate-y-1/2 z-40 bg-gradient-to-r from-amber-500 to-gold-500 text-black font-extrabold text-xs px-2.5 py-3 rounded-r-2xl shadow-2xl border-y border-r border-amber-300 flex items-center gap-1.5 transition-all hover:pl-3 transform hover:scale-105 active:scale-95"
+            title="Ouvrir le sommaire des scènes"
+          >
+            <span className="text-base">📍</span>
+            <span className="[writing-mode:vertical-lr] rotate-180 uppercase tracking-widest font-bold">
+              Scènes ({scenes.length})
+            </span>
+          </button>
+
+          {/* Tiroir Latéral Rétractable */}
+          {isSceneDrawerOpen && (
+            <div className="fixed inset-0 z-50 flex">
+              <div
+                className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+                onClick={() => setIsSceneDrawerOpen(false)}
+              />
+              <div className="relative w-72 max-w-[80vw] bg-gray-900 border-r border-gray-800 text-white p-4 flex flex-col h-full shadow-2xl z-10 animate-fade-in">
+                <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📍</span>
+                    <h3 className="font-extrabold text-gold-400 text-sm uppercase tracking-wider">
+                      Sommaire des Scènes
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setIsSceneDrawerOpen(false)}
+                    className="p-1 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+                  <button
+                    onClick={() => {
+                      setSelectedSceneKey(null);
+                      setIsSceneDrawerOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-between ${
+                      !selectedSceneKey
+                        ? "bg-amber-500 text-black"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    <span>📜 Pièce entière</span>
+                    <span className="text-[10px] opacity-80">{replicas.length} rép.</span>
+                  </button>
+
+                  {scenes.map((scene) => {
+                    const sceneKey = `${scene.actTitle || ""}_${scene.sceneTitle || ""}`;
+                    const isSelected = selectedSceneKey === sceneKey;
+
+                    return (
+                      <button
+                        key={scene.id}
+                        onClick={() => {
+                          setSelectedSceneKey(sceneKey);
+                          setIsSceneDrawerOpen(false);
+                          setTimeout(() => {
+                            const el = document.getElementById(`scene-header-${scene.firstReplicaId}`) ||
+                                       document.getElementById(`replica-anchor-${scene.firstReplicaId}`);
+                            if (el) {
+                              const headerOffset = 130;
+                              const elementPosition = el.getBoundingClientRect().top + window.scrollY;
+                              window.scrollTo({
+                                top: Math.max(0, elementPosition - headerOffset),
+                                behavior: "smooth"
+                              });
+                            }
+                          }, 100);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl text-xs font-semibold transition flex flex-col gap-0.5 border ${
+                          isSelected
+                            ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
+                            : "bg-gray-800/60 text-gray-300 border-gray-800 hover:bg-gray-800 hover:border-gray-700"
+                        }`}
+                      >
+                        <span className="font-bold">{scene.fullLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+        {/* Accordéon d'outils : recherche et exercices (replié par défaut) */}
+        <div className="mb-4">
+          <button
+            onClick={() => setShowTools((v) => !v)}
+            className="w-full px-4 py-3 bg-white rounded-2xl border border-gold-500/40 shadow-sm flex items-center justify-between gap-2 text-sm font-bold text-primary-900 hover:bg-gold-50 transition"
+          >
+            <span className="flex items-center gap-2 text-left">
+              <span>🎯</span>
+              <span>Exercez-vous · Recherchez</span>
+              {searchQuery && (
+                <span className="text-xs bg-gold-100 text-gold-900 border border-gold-300 px-2 py-0.5 rounded-full">
+                  🔍 {filteredReplicas.length}
+                </span>
+              )}
+              {editMode && (
+                <span className="text-xs bg-orange-100 text-orange-700 border border-orange-300 px-2 py-0.5 rounded-full">
+                  ✏️ édition
+                </span>
+              )}
+            </span>
+            <span className="text-xs text-gold-700 flex-shrink-0">{showTools ? "▲" : "▼"}</span>
+          </button>
+          {showTools && (
+        <div className="mt-3 animate-fade-in">
+        {/* 🔍 Barre de recherche de répliques (#12 ou mot-clé) */}
+        <div className="mb-4 bg-white p-2.5 rounded-2xl border border-gray-200 shadow-sm flex items-center gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <input
+              type="text"
+              placeholder="Rechercher réplique par # (ex: #12 ou 12) ou mot-clé..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-9 py-2 bg-gray-50 hover:bg-gray-100 focus:bg-white text-gray-900 placeholder-gray-400 text-sm rounded-xl border border-gray-300 focus:border-gold-500 focus:outline-none transition font-medium"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 text-xs font-bold px-1"
+                title="Effacer la recherche"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <span
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex-shrink-0 ${
+                filteredReplicas.length > 0
+                  ? "bg-gold-100 text-gold-900 border border-gold-300"
+                  : "bg-red-50 text-red-600 border border-red-200"
+              }`}
+            >
+              {filteredReplicas.length}{" "}
+              {filteredReplicas.length > 1 ? "répliques" : "réplique"}
+            </span>
+          )}
+        </div>
+
+        {/* Accordéon pour les exercices / modes de mémorisation */}
+        <div className="mb-4 bg-white rounded-2xl border border-gold-500/30 shadow-md overflow-hidden">
+          <button
+            onClick={() => setShowExerciseMenu(!showExerciseMenu)}
+            className="w-full p-3.5 bg-gradient-to-r from-primary-900 to-primary-800 text-white font-bold text-sm flex items-center justify-between hover:from-primary-800 hover:to-primary-700 transition"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-base">🎯</span>
+              <span>Exercez-vous !</span>
+              <span className="text-xs text-gold-400 font-normal ml-2">
+                ({VIEW_MODE_LABELS[viewMode] || "Complet"})
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-gold-500/20 text-gold-300 px-2.5 py-1 rounded-full border border-gold-500/30 font-semibold">
+                {showExerciseMenu ? "Masquer ▲" : "Choisir un exercice ▼"}
+              </span>
+            </div>
+          </button>
+
+          {showExerciseMenu && (
+            <div className="p-3 bg-amber-50/50 border-t border-amber-200/60 animate-fade-in">
+              <p className="text-xs text-gray-600 mb-2 font-medium px-1">
+                Choisissez un mode de mémorisation pour masquer progressivement le texte :
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {Object.entries(VIEW_MODE_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => {
+                      setViewMode(key);
+                      setShowExerciseMenu(false);
+                    }}
+                    className={`py-2.5 px-3 rounded-xl text-xs font-bold transition shadow-sm border text-left flex items-center justify-between ${
+                      viewMode === key
+                        ? "bg-primary-800 text-gold-400 border-gold-500 shadow-md ring-2 ring-gold-400/30"
+                        : "bg-white text-gray-700 border-gray-200 hover:bg-gold-50 hover:border-gold-300"
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {viewMode === key && <span className="text-gold-400 font-extrabold">✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        </div>
+          )}
+        </div>
+
+        {studyingGroup && (
+          <div className="mb-4 p-3 bg-indigo-100 border border-indigo-300 rounded-lg flex items-center justify-between">
+            <p className="text-indigo-800 text-sm">
+              <strong>📚 Groupe :</strong> {studyingGroup.name} (
+              {studyingGroup.replicaIds?.length} répliques)
+            </p>
+            <button
+              onClick={() => setStudyingGroup(null)}
+              className="text-indigo-600 hover:text-indigo-800 font-semibold text-sm"
+            >
+              ✕ Quitter
+            </button>
+          </div>
+        )}
+
+        {totalNotes > 0 && (
+          <div className="mb-3">
+            <button
+              onClick={() => setShowNotesListModal(true)}
+              className="flex items-center gap-2 text-sm bg-amber-500/20 text-amber-700 px-3 py-2 rounded-full hover:bg-amber-500/30 transition"
+            >
+              <span>📝</span>
+              <span>
+                {totalNotes} note{totalNotes > 1 ? "s" : ""} personnelle
+                {totalNotes > 1 ? "s" : ""}
+              </span>
+              <span className="text-amber-500">→</span>
+            </button>
+          </div>
+        )}
+
+        {/* DnD Liste des répliques */}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={filteredReplicas.map((r) => r.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-3">
+              {renderScopeVideo(SCRIPT_VIDEO_KEY)}
+              {filteredReplicas.map((replica, index) => {
+                const character = characters.find(
+                  (c) => c.id === replica.character_id
+                );
+                const isRight = characterPositions[replica.character_id] === 1;
+                const notesAfterThisReplica =
+                  notesByReplicaId[replica.id] || [];
+
+                return (
+                  <div key={replica.id} id={`replica-anchor-${replica.id}`}>
+                    {/* Détection et affichage des bandeaux d'Acte et de Scène */}
+                    {(() => {
+                      const prevReplica = index > 0 ? filteredReplicas[index - 1] : null;
+                      const isNewAct = replica.act_title && replica.act_title !== prevReplica?.act_title;
+                      const isNewScene = replica.scene_title && replica.scene_title !== prevReplica?.scene_title;
+
+                      if (isNewAct || isNewScene) {
+                        return (
+                          <div id={`scene-header-${replica.id}`} className="w-full my-6 text-center space-y-2 clear-both scroll-mt-32">
+                            {isNewAct && (
+                              <div className="py-2 px-6 bg-gradient-to-r from-amber-600 via-amber-500 to-yellow-600 text-white rounded-2xl shadow-lg border border-amber-300/40 inline-block">
+                                <h2 className="text-lg sm:text-xl font-extrabold uppercase tracking-widest font-display">
+                                  {replica.act_title}
+                                </h2>
+                              </div>
+                            )}
+                            {isNewScene && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-center gap-2 flex-wrap">
+                                  <h3 className="text-xs sm:text-sm font-bold text-amber-200 bg-gray-900/90 inline-block px-5 py-1.5 rounded-full border border-amber-500/30 shadow-md">
+                                    🎭 {replica.scene_title}
+                                  </h3>
+                                  {isPremium && (
+                                    <button
+                                      onClick={() => openSceneSummary(replica)}
+                                      className="px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-gray-950 font-extrabold rounded-full text-xs shadow transition active:scale-95 inline-flex items-center gap-1.5"
+                                      title="Synthèse / Résumé IA de la scène"
+                                    >
+                                      <span>✨</span>
+                                      <span>Résumé IA</span>
+                                    </button>
+                                  )}
+                                </div>
+
+                                {/* Affichage permanent de la Synthèse IA si générée */}
+                                {isPremium && (() => {
+                                  const sceneKey = `${replica.act_title || ""}_${replica.scene_title || ""}`;
+                                  const savedSummary = sceneSummaries[sceneKey];
+                                  if (!savedSummary) return null;
+
+                                  return (
+                                    <div className="my-3 p-4 bg-gradient-to-r from-purple-950/90 via-gray-900 to-indigo-950/90 border-l-4 border-amber-400 rounded-r-2xl text-white shadow-xl max-w-4xl mx-auto animate-fade-in text-left">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2 text-amber-300 font-extrabold text-xs sm:text-sm">
+                                          <span>✨</span>
+                                          <span>Résumé de la scène</span>
+                                        </div>
+                                        <button
+                                          onClick={() => openSceneSummary(replica)}
+                                          className="text-[10px] bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 px-2.5 py-1 rounded-lg border border-amber-500/30 font-bold transition"
+                                        >
+                                          🔄 Régénérer
+                                        </button>
+                                      </div>
+                                      <div className="text-xs sm:text-sm text-gray-200 whitespace-pre-wrap leading-relaxed font-sans">
+                                        {savedSummary}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+                            {isNewAct && renderScopeVideo(actVideoKey(replica.act_title))}
+                            {replica.scene_title && renderScopeVideo(sceneVideoKey(replica.act_title, replica.scene_title))}
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                    {editMode && index === 0 && (
+                      <button
+                        onClick={() => {
+                          setInsertAfterIndex(-1);
+                          setShowAddReplica(true);
+                        }}
+                        className="w-full py-2 mb-2 border-2 border-dashed border-orange-400 rounded-lg text-orange-600 text-sm hover:bg-orange-50 transition"
+                      >
+                        ➕ Insérer au début
+                      </button>
+                    )}
+
+                    <SortableReplicaBubble
+                      replica={replica}
+                      character={character}
+                      characters={characters}
+                      viewMode={viewMode}
+                      isRight={isRight}
+                      number={replicaGlobalNumberMap[replica.id] || index + 1}
+                      editMode={editMode}
+                      myCharacterId={myCharacterId}
+                      hideMyReplicas={hideMyReplicas}
+                      onEdit={() => setEditingReplica(replica)}
+                      onDelete={() => setDeleteReplicaConfirm(replica)}
+                      onSplit={() => setSplittingReplica(replica)}
+                      onAddNote={() =>
+                        setShowAddNote({ afterReplicaId: replica.id })
+                      }
+                    />
+
+                    {/* Affichage de la vidéo ancrée si présente */}
+                    {(replicaVideos[replica.id] || replicaVideos[String(replica.id)]) && (
+                      <VideoBubble
+                        video={replicaVideos[replica.id] || replicaVideos[String(replica.id)]}
+                        character={characters.find((c) => c.id === (replicaVideos[replica.id] || replicaVideos[String(replica.id)])?.characterId) || character}
+                        onDelete={() => handleDeleteVideo(replica.id)}
+                      />
+                    )}
+
+                    {notesAfterThisReplica.map((note) => (
+                      <NoteBubble
+                        key={note.id}
+                        note={note}
+                        onEdit={() => setEditingNote(note)}
+                        onDelete={() => setDeleteNoteConfirm(note)}
+                      />
+                    ))}
+
+                    {editMode && (
+                      <button
+                        onClick={() => {
+                          setInsertAfterIndex(index);
+                          setShowAddReplica(true);
+                        }}
+                        className="w-full py-2 mt-2 border-2 border-dashed border-orange-400 rounded-lg text-orange-600 text-sm hover:bg-orange-50 transition opacity-50 hover:opacity-100"
+                      >
+                        ➕ Insérer après #{index + 1}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
+
+        {filteredReplicas.length === 0 && (
+          <p className="text-center text-gray-600 py-8 bg-white/50 rounded-lg">
+            Aucune réplique{selectedCharacter ? " pour ce personnage" : ""}
+          </p>
+        )}
+      </div>
+
+
+
+      {editingReplica && (
+        <EditReplicaModal
+          replica={editingReplica}
+          characters={characters}
+          onSave={handleSaveReplica}
+          onClose={() => setEditingReplica(null)}
+        />
+      )}
+
+      {showAddReplica && (
+        <AddReplicaModal
+          characters={characters}
+          insertAfterIndex={insertAfterIndex}
+          onAdd={handleAddReplicaAt}
+          onClose={() => {
+            setShowAddReplica(false);
+            setInsertAfterIndex(null);
+          }}
+        />
+      )}
+
+      {deleteReplicaConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer cette réplique ?
+            </h3>
+            <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+              "{deleteReplicaConfirm.text}"
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteReplicaConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteReplica(deleteReplicaConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {splittingReplica && (
+        <SplitReplicaModal
+          replica={splittingReplica}
+          characters={characters}
+          onSplit={handleSplitReplica}
+          onAddCharacter={handleAddCharacter}
+          onClose={() => setSplittingReplica(null)}
+        />
+      )}
+
+      {showAddCharacter && (
+        <AddCharacterModal
+          existingColors={characters.map((c) => c.color)}
+          onAdd={handleAddCharacter}
+          onClose={() => setShowAddCharacter(false)}
+        />
+      )}
+
+      {showCharacterManager && (
+        <CharacterManagerModal
+          characters={characters}
+          onEdit={(char) => {
+            setEditingCharacter(char);
+            setShowCharacterManager(false);
+          }}
+          onDelete={(char) => {
+            setDeleteCharacterConfirm(char);
+            setShowCharacterManager(false);
+          }}
+          onClose={() => setShowCharacterManager(false)}
+        />
+      )}
+
+      {editingCharacter && (
+        <EditCharacterModal
+          character={editingCharacter}
+          existingColors={characters
+            .filter((c) => c.id !== editingCharacter.id)
+            .map((c) => c.color)}
+          onSave={handleUpdateCharacter}
+          onClose={() => setEditingCharacter(null)}
+        />
+      )}
+
+      {deleteCharacterConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer {deleteCharacterConfirm.name} ?
+            </h3>
+            <p className="text-red-400 text-sm mb-4">
+              ⚠️ Toutes les répliques de ce personnage seront également supprimées !
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteCharacterConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteCharacter(deleteCharacterConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddNote && (
+        <AddNoteModal
+          replicas={replicas}
+          characters={characters}
+          afterReplicaId={showAddNote.afterReplicaId}
+          onAdd={handleAddNote}
+          onClose={() => setShowAddNote(null)}
+        />
+      )}
+
+      {editingNote && (
+        <EditNoteModal
+          note={editingNote}
+          onSave={handleUpdateNote}
+          onClose={() => setEditingNote(null)}
+        />
+      )}
+
+      {deleteNoteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer cette note ?
+            </h3>
+            <p className="text-gray-400 text-sm mb-4 line-clamp-2">
+              "{deleteNoteConfirm.text}"
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteNoteConfirm(null)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => handleDeleteNote(deleteNoteConfirm.id)}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-dark rounded-xl p-6 max-w-sm w-full border border-gray-700">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Supprimer ce texte ?
+            </h3>
+            <p className="text-gray-400 mb-6">Cette action est irréversible.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="btn-secondary flex-1"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-red-600 hover:bg-red-500 text-white px-6 py-3 rounded-full font-semibold flex-1"
+              >
+                Supprimer
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOriginalFile && (
+        <OriginalFileModal
+          fileUrl={originalFileUrl}
+          fullText={full_text}
+          filename={original_filename}
+          onClose={() => setShowOriginalFile(false)}
+        />
+      )}
+
+      {showShareModal && (
+        <ShareTroupeModal
+          script={currentScript}
+          userId={user?.id}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {showNotesListModal && (
+        <NotesListModal
+          notes={currentScript?.personalNotes || []}
+          replicas={replicas}
+          onClose={() => setShowNotesListModal(false)}
+          onEdit={(note) => {
+            setShowNotesListModal(false);
+            setEditingNote(note);
+          }}
+          onDelete={(note) => {
+            setShowNotesListModal(false);
+            setDeleteNoteConfirm(note);
+          }}
+        />
+      )}
+
+      {showReplicaGroups && (
+        <ReplicaGroupsManager
+          scriptId={id}
+          userId={user?.id}
+          replicas={replicas}
+          characters={characters}
+          onClose={() => setShowReplicaGroups(false)}
+          onSelectGroup={(group) => setStudyingGroup(group)}
+        />
+      )}
+
+      {showFloatingRecorder && (
+        <FloatingRecorder
+          onSave={(recording) => {
+            console.log("Enregistrement sauvegardé:", recording);
+            setShowFloatingRecorder(false);
+          }}
+          onClose={() => setShowFloatingRecorder(false)}
+        />
+      )}
+
+      {coachingMode && (
+        <AICoachingModal
+          isOpen={true}
+          onClose={() => {
+            setCoachingMode(null);
+            setCoachingCharacterId(null);
+          }}
+          characterName={
+            characters.find((c) => c.id === coachingCharacterId)?.name ||
+            "Personnage"
+          }
+          scriptText={replicas
+            .map((r) => `${r.character?.name}: ${r.text}`)
+            .join("\n\n")}
+          coachingCharacterId={coachingCharacterId}
+          allCharacters={characters}
+          allReplicas={replicas}
+          onSaveAsNote={handleSaveAICoachingNote}
+        />
+      )}
+
+      {/* 🎙️ STUDIO MENU DRAWER */}
+      {showStudioMenu && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div
+            className="fixed inset-0"
+            onClick={() => setShowStudioMenu(false)}
+          />
+          <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto mb-20 bg-gray-900 border-t-2 border-amber-500 rounded-t-3xl p-5 text-white shadow-2xl z-10 space-y-4 animate-slide-up">
+            <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">🎙️</span>
+                <h3 className="text-base font-extrabold text-amber-400">
+                  Studio RépliCoach — Menu Créatif
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowStudioMenu(false)}
+                className="w-8 h-8 rounded-full bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-300"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-400 font-medium">
+              Choisissez une action à insérer directement dans votre pièce :
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  navigate(`/free-recordings?script=${id}`);
+                }}
+                className="p-3 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95 col-span-1 sm:col-span-2"
+              >
+                <span className="text-2xl">🎙️</span>
+                <div>
+                  <div className="font-extrabold text-rose-300 text-xs">S'enregistrer (audio/vidéo)</div>
+                  <div className="text-[10px] text-gray-400">Audio ou vidéo, à insérer dans le texte (pièce, acte, scène, réplique)</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddNote({ afterReplicaId: null });
+                }}
+                className="p-3 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">📝</span>
+                <div>
+                  <div className="font-extrabold text-amber-300 text-xs">Ajouter une note</div>
+                  <div className="text-[10px] text-gray-400">Note d'intention ou mise en scène</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddReplica(true);
+                }}
+                className="p-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">💬</span>
+                <div>
+                  <div className="font-extrabold text-emerald-300 text-xs">Ajouter réplique</div>
+                  <div className="text-[10px] text-gray-400">Insérer un dialogue</div>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowStudioMenu(false);
+                  setShowAddCharacter(true);
+                }}
+                className="p-3 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 rounded-2xl flex items-center gap-3 text-left transition active:scale-95"
+              >
+                <span className="text-2xl">👤</span>
+                <div>
+                  <div className="font-extrabold text-purple-300 text-xs">Ajouter personnage</div>
+                  <div className="text-[10px] text-gray-400">Créer un nouveau rôle</div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✨ MODALE SYNTHÈSE / RÉSUMÉ IA DE SCÈNE */}
+      {summaryScene && (
+        <SceneSummaryModal
+          isOpen={true}
+          onClose={() => setSummaryScene(null)}
+          sceneLabel={summaryScene.sceneLabel}
+          sceneKey={summaryScene.sceneKey}
+          sceneText={summaryScene.sceneText}
+          sceneContext={summaryScene.sceneContext}
+          initialSummary={sceneSummaries[summaryScene.sceneKey] || ""}
+          isPremium={isPremium}
+          onOpenPremiumModal={() => setShowPremiumModal(true)}
+          onSavePermanentSummary={handleSavePermanentSummary}
+          onSaveAsNote={handleSaveAICoachingNote}
+        />
+      )}
+
+      {/* Modale d'incitation Premium */}
+      {showPremiumModal && (
+        <PremiumGateModal
+          featureKey="AI_COACHING"
+          onClose={() => setShowPremiumModal(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function FloatingActionMenu({ onAddNote, onAddCharacter, onAddReplica, audioLink }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
+  const navigate = useNavigate();
+
+  const actions = [
+    {
+      icon: "🎙️",
+      label: "Écouter / s'enregistrer",
+      color: "bg-gold-500",
+      onClick: () => setShowVoiceHelp(true),
+    },
+    {
+      icon: "💬",
+      label: "Ajouter réplique",
+      color: "bg-green-600",
+      onClick: onAddReplica,
+    },
+    {
+      icon: "👤",
+      label: "Ajouter personnage",
+      color: "bg-purple-600",
+      onClick: onAddCharacter,
+    },
+    {
+      icon: "📝",
+      label: "Ajouter note",
+      color: "bg-amber-500",
+      onClick: onAddNote,
+    },
+  ];
+
+  return (
+    <div className="fixed bottom-24 right-4 z-40">
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/30 -z-10"
+          onClick={() => setIsOpen(false)}
+        />
+      )}
+      {isOpen && (
+        <div className="absolute bottom-16 right-0 mb-3 space-y-2">
+          {actions.map((action, index) =>
+            action.link ? (
+              <Link
+                key={index}
+                to={action.link}
+                onClick={() => setIsOpen(false)}
+                className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg ${action.color} text-white font-semibold transform transition-all duration-200 animate-fade-in`}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span className="text-xl">{action.icon}</span>
+                <span className="text-sm whitespace-nowrap">{action.label}</span>
+              </Link>
+            ) : (
+              <button
+                key={index}
+                onClick={() => {
+                  setIsOpen(false);
+                  action.onClick();
+                }}
+                className={`flex items-center gap-3 px-4 py-3 rounded-full shadow-lg ${action.color} text-white font-semibold transform transition-all duration-200 animate-fade-in`}
+                style={{ animationDelay: `${index * 50}ms` }}
+              >
+                <span className="text-xl">{action.icon}</span>
+                <span className="text-sm whitespace-nowrap">{action.label}</span>
+              </button>
+            )
+          )}
+        </div>
+      )}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl transition-all duration-300 transform ${
+          isOpen
+            ? "bg-gray-700 text-white rotate-45"
+            : "bg-red-500 text-white hover:bg-red-400 hover:scale-110"
+        }`}
+      >
+        ➕
+      </button>
+
+      {showVoiceHelp && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowVoiceHelp(false)}
+        >
+          <div
+            className="bg-gray-800 rounded-xl p-6 max-w-sm w-full text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-white mb-3">
+              Écouter / s'enregistrer
+            </h3>
+            <span className="text-5xl block mb-4">🎙️</span>
+            <p className="text-gray-300 mb-4">
+              Écoutez ou enregistrez votre voix sur{" "}
+              <strong>chaque réplique</strong> individuellement.
+            </p>
+            <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-3 mb-4">
+              <p className="text-orange-300 text-sm">
+                👉 Appuyez sur le bouton{" "}
+                <span className="bg-orange-500 text-white px-2 py-1 rounded text-xs">
+                  ▶️ Écouter
+                </span>{" "}
+                ou{" "}
+                <span className="bg-orange-500 text-white px-2 py-1 rounded text-xs">
+                  🎤 Enregistrer
+                </span>{" "}
+                sous chaque bulle
+              </p>
+            </div>
+            <p className="text-gray-500 text-xs mb-4">
+              Vous pouvez effacer et recommencer autant de fois que vous voulez.
+            </p>
+            <button
+              onClick={() => {
+                setShowVoiceHelp(false);
+                navigate(audioLink);
+              }}
+              className="w-full py-3 bg-red-600 text-white rounded-lg font-bold"
+            >
+              C'est compris ! →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const CUE_PREVIEW_CHARS = 140;
+
+function CueContextCard({ replica, character, number, collapsible = false }) {
+  const [expanded, setExpanded] = useState(false);
+  const fullText = stripHtml(replica.text || "").trim();
+  const isLong = collapsible && fullText.length > CUE_PREVIEW_CHARS;
+  const isCollapsed = isLong && !expanded;
+
+  // L'amorce utile est la fin de la réplique : on garde les derniers mots
+  let shownText = fullText;
+  if (isCollapsed) {
+    const tail = fullText.slice(-CUE_PREVIEW_CHARS);
+    const cut = tail.indexOf(" ");
+    shownText = `…${cut > 0 && cut < 30 ? tail.slice(cut + 1) : tail}`;
+  }
+
+  const toggle = () => setExpanded((v) => !v);
+
+  return (
+    <div
+      className={`my-2.5 p-3 bg-slate-100/90 border-l-4 border-amber-500 rounded-r-2xl shadow-sm text-gray-800 text-xs sm:text-sm animate-fade-in max-w-[90%] sm:max-w-[80%] mx-auto ${
+        isLong ? "cursor-pointer hover:bg-slate-200/80" : ""
+      }`}
+      {...(isLong
+        ? {
+            role: "button",
+            tabIndex: 0,
+            "aria-expanded": expanded,
+            onClick: toggle,
+            onKeyDown: (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                toggle();
+              }
+            },
+          }
+        : {})}
+    >
+      <div className="flex items-center justify-between gap-2 mb-1">
+        <div className="flex items-center gap-1.5 font-extrabold text-amber-900">
+          <span>💬</span>
+          <span>Réplique d'amorce — {character?.name || "Partenaire"}</span>
+        </div>
+        <span className="text-[10px] text-gray-400 font-mono font-bold">#{number}</span>
+      </div>
+      <p className="italic text-gray-700 whitespace-pre-wrap leading-relaxed">
+        "{shownText}"
+      </p>
+      {isLong && (
+        <p className="mt-1 text-[11px] font-bold text-amber-800">
+          {expanded ? "▲ Réduire" : "👆 Toucher pour lire la réplique entière"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SortableReplicaBubble({
+  replica,
+  character,
+  characters,
+  viewMode,
+  isRight,
+  number,
+  editMode,
+  onEdit,
+  onDelete,
+  onSplit,
+  onAddNote,
+  myCharacterId,
+  hideMyReplicas,
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: replica.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : 1,
+  };
+
+  if (replica.isContextLine) {
+    return (
+      <div ref={setNodeRef} style={style} id={`replica-anchor-${replica.id}`}>
+        <CueContextCard
+          replica={replica}
+          character={character}
+          number={number}
+          collapsible={viewMode !== "full"}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative">
+      {editMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="absolute -left-2 top-1/2 -translate-y-1/2 z-10 cursor-grab active:cursor-grabbing bg-orange-500 text-white p-2 rounded-lg shadow-lg hover:bg-orange-600"
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+          </svg>
+        </div>
+      )}
+      <ChatBubble
+        replica={replica}
+        character={character}
+        viewMode={viewMode}
+        isRight={isRight}
+        number={number}
+        editMode={editMode}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        onSplit={onSplit}
+        onAddNote={onAddNote}
+        myCharacterId={myCharacterId}
+        hideMyReplicas={hideMyReplicas}
+      />
+    </div>
+  );
+}
+
+function ChatBubble({
+  replica,
+  character,
+  viewMode,
+  isRight,
+  number,
+  editMode,
+  onEdit,
+  onDelete,
+  onSplit,
+  onAddNote,
+  myCharacterId,
+  hideMyReplicas,
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+
+  const bubbleColor = character?.color || "#6B7280";
+  const isMyRole = myCharacterId && replica.character_id === myCharacterId;
+  const isDimmed = myCharacterId && !isMyRole;
+
+  const hexToRgba = (hex, alpha) => {
+    if (!hex) return `rgba(107, 114, 128, ${alpha})`;
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const isHiddenReplica =
+    hideMyReplicas &&
+    myCharacterId &&
+    replica.character_id === myCharacterId &&
+    !revealed;
+
+  const renderContent = () => {
+    if (isHiddenReplica) {
+      return (
+        <div className="text-center py-3">
+          <p className="text-white/40 italic">(Réplique cachée)</p>
+          <p className="text-white/60 text-xs mt-2">👆 Touchez pour révéler</p>
+        </div>
+      );
+    }
+
+    const stripHtml = (html) => {
+      const tmp = document.createElement("div");
+      tmp.innerHTML = html || "";
+      return tmp.textContent || tmp.innerText || "";
+    };
+
+    const getFirst3Words = (text) => {
+      const plain = stripHtml(text || "");
+      const words = plain.trim().split(/\s+/).slice(0, 3);
+      return (
+        words.join(" ") + (plain.trim().split(/\s+/).length > 3 ? "..." : "")
+      );
+    };
+
+    switch (viewMode) {
+      case "gaps":
+        if (revealed) {
+          return (
+            <p
+              className="text-white whitespace-pre-wrap"
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(replica.text || ""),
+              }}
+            />
+          );
+        } else {
+          return (
+            <p className="text-white/80 font-mono text-sm tracking-wide whitespace-pre-wrap">
+              {replica.text_gaps || stripHtml(replica.text)}
+            </p>
+          );
+        }
+
+      case "first3":
+        return (
+          <div>
+            <p className="text-white font-bold">{getFirst3Words(replica.text)}</p>
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
+
+      case "debut_fin":
+        const getFirstAndLast = (text) => {
+          const plain = stripHtml(text || "").trim();
+          if (!plain) return "";
+          const words = plain.split(/\s+/);
+          if (words.length <= 2) return words.join(" ");
+          return `${words[0]} ... ${words[words.length - 1]}`;
+        };
+
+        return (
+          <div>
+            <p className="text-white font-bold">{getFirstAndLast(replica.text)}</p>
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
+
+      case "last_word":
+        const getLastWord = (text) => {
+          const plain = stripHtml(text || "").trim();
+          if (!plain) return "";
+          const words = plain.split(/\s+/);
+          return words[words.length - 1] || "";
+        };
+
+        return (
+          <div>
+            <p className="text-white font-bold">{getLastWord(replica.text)}</p>
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap mt-2 pt-2 border-t border-white/20"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/60 text-xs text-center mt-2">
+                👆 Toucher pour voir la suite
+              </p>
+            )}
+          </div>
+        );
+
+      case "cue":
+        return (
+          <div>
+            {replica.cue_words && (
+              <p className="text-white/70 italic text-xs mb-2 pb-2 border-b border-white/20">
+                💬 {replica.cue_words}
+              </p>
+            )}
+            {revealed ? (
+              <p
+                className="text-white whitespace-pre-wrap"
+                dangerouslySetInnerHTML={{
+                  __html: DOMPurify.sanitize(replica.text || ""),
+                }}
+              />
+            ) : (
+              <p className="text-white/70 text-sm text-center py-2">
+                👆 Toucher pour révéler
+              </p>
+            )}
+          </div>
+        );
+
+      default:
+        return (
+          <p
+            className="text-white leading-relaxed whitespace-pre-wrap"
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(replica.text || ""),
+            }}
+          />
+        );
+    }
+  };
+
+  const isClickable = viewMode !== "full" || isHiddenReplica;
+
+  const handleBubbleClick = () => {
+    if (isClickable) setRevealed(!revealed);
+  };
+
+  return (
+    <div className={`flex ${isRight ? "justify-end" : "justify-start"} mb-1`}>
+      <div
+        className={`relative max-w-[85%] ${
+          isClickable ? "cursor-pointer active:scale-[0.98]" : ""
+        } transition-transform duration-150`}
+        onClick={handleBubbleClick}
+      >
+        <div
+          className={`px-4 py-3 rounded-2xl relative transition-all duration-200 ${
+            isRight ? "rounded-br-md" : "rounded-bl-md"
+          } ${
+            isMyRole
+              ? "ring-4 ring-amber-400 border-2 border-amber-500 shadow-2xl scale-[1.01] z-20"
+              : isDimmed
+              ? "opacity-60 hover:opacity-100 shadow-sm"
+              : "shadow-lg"
+          }`}
+          style={{
+            backgroundColor: hexToRgba(bubbleColor, isMyRole ? 0.98 : 0.85),
+            border: isMyRole
+              ? "3px solid #F59E0B"
+              : `2px solid ${hexToRgba(bubbleColor, 0.9)}`,
+          }}
+        >
+          {isMyRole && (
+            <div className="absolute -top-3 left-4 bg-gradient-to-r from-amber-400 to-amber-500 text-gray-950 text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md uppercase tracking-wider flex items-center gap-1 z-30">
+              <span>👑</span> Mon rôle
+            </div>
+          )}
+          <div
+            className={`absolute bottom-0 w-3 h-3 ${
+              isRight ? "-right-1.5" : "-left-1.5"
+            }`}
+            style={{
+              backgroundColor: hexToRgba(bubbleColor, 0.85),
+              clipPath: isRight
+                ? "polygon(0 0, 100% 100%, 0 100%)"
+                : "polygon(100% 0, 100% 100%, 0 100%)",
+            }}
+          />
+
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-white drop-shadow">
+                {character?.name || "Inconnu"}
+              </span>
+              {editMode && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }}
+                  className="text-xs bg-white/10 text-white px-2 py-1 rounded-md hover:bg-white/20"
+                  title="Modifier"
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
+            <span className="text-xs text-white/70">#{number}</span>
+          </div>
+
+          <div className="text-sm text-white">{renderContent()}</div>
+
+          {isClickable && (
+            <div className="flex justify-end mt-1">
+              <span className="text-xs text-white/60">
+                {revealed ? "✓ Visible" : "👆"}
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(!showMenu);
+            }}
+            className="absolute -top-2 -right-2 w-7 h-7 rounded-full flex items-center justify-center bg-white border-2 border-gray-300 shadow-md hover:border-primary-400 hover:shadow-lg transition-all z-10"
+            title="Éditer cette réplique : modifier, ajouter une note, diviser…"
+          >
+            <span className="text-sm leading-none">
+              ✏️
+            </span>
+          </button>
+        </div>
+
+        {showMenu && (
+          <>
+            <div
+              className="fixed inset-0 z-40"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMenu(false);
+              }}
+            />
+            <div className="absolute z-50 right-0 top-6 bg-gray-900 border border-gray-700 rounded-xl shadow-xl py-2 min-w-[160px]">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onEdit();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-primary-600 flex items-center gap-3 transition"
+              >
+                <span>✏️</span> Modifier
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onAddNote();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-amber-600 flex items-center gap-3 transition"
+              >
+                <span>📝</span> Ajouter note
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onSplit();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-gray-200 hover:bg-orange-600 flex items-center gap-3 transition"
+              >
+                <span>✂️</span> Diviser
+              </button>
+              <div className="border-t border-gray-700 my-1" />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowMenu(false);
+                  onDelete();
+                }}
+                className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-600 hover:text-white flex items-center gap-3 transition"
+              >
+                <span>🗑️</span> Supprimer
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AddReplicaModal({ characters, insertAfterIndex, onAdd, onClose }) {
+  const [selectedCharId, setSelectedCharId] = useState(characters[0]?.id || null);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const handleAdd = async () => {
+    if (!text.trim() || !selectedCharId) return;
+    setSaving(true);
+    try {
+      await onAdd(selectedCharId, text.trim(), insertAfterIndex);
+    } catch (err) {
+      console.error("Erreur ajout:", err);
+      setSaving(false);
+    }
+  };
+
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
+  const canSubmit = text.trim() && selectedCharId && !saving;
+  const insertMessage =
+    insertAfterIndex === -1
+      ? "📍 Sera inséré au début du texte"
+      : insertAfterIndex !== null && insertAfterIndex !== undefined
+      ? `📍 Sera inséré après la réplique #${insertAfterIndex + 1}`
+      : "📍 Sera ajouté à la fin du texte";
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Ajouter une réplique</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4 p-3 bg-orange-500/20 border border-orange-500/50 rounded-lg">
+            <p className="text-orange-400 text-sm font-medium">{insertMessage}</p>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <div className="flex gap-2 flex-wrap">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharId(char.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={{
+                    backgroundColor: selectedCharId === char.id ? char.color : "#374151",
+                    color: selectedCharId === char.id ? "white" : "#9CA3AF",
+                  }}
+                >
+                  {char.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">
+              Texte de la réplique
+            </label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-28 bg-gray-800 border border-gray-600 rounded-xl p-4 text-white text-base resize-none focus:border-gold-500 focus:outline-none"
+              placeholder="Entrez le texte de la réplique..."
+              autoFocus
+            />
+          </div>
+          {text && selectedChar && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+              <div
+                className="p-4 rounded-xl"
+                style={{ backgroundColor: `${selectedChar.color}dd` }}
+              >
+                <p className="text-xs font-semibold mb-1 text-white/80">
+                  {selectedChar.name}
+                </p>
+                <p className="text-white">{text}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleAdd}
+            disabled={!canSubmit}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              canSubmit
+                ? "bg-gold-500 hover:bg-gold-400 text-dark shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Ajout en cours..." : "✅ AJOUTER LA RÉPLIQUE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditReplicaModal({ replica, characters, onSave, onClose }) {
+  const [selectedCharId, setSelectedCharId] = useState(replica.character_id);
+  const [text, setText] = useState(replica.text || "");
+  const [saving, setSaving] = useState(false);
+  const editableRef = useRef(null);
+  const [showToolbar, setShowToolbar] = useState(false);
+  const [toolbarStyle, setToolbarStyle] = useState({ top: 0, left: 0 });
+  const touchPos = useRef({ x: 0, y: 0 });
+  const isMobile =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+
+  useEffect(() => {
+    if (editableRef.current) {
+      editableRef.current.innerHTML = replica.text || "";
+      setText(replica.text || "");
+    }
+  }, [replica]);
+
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) {
+        setShowToolbar(false);
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const container = range.commonAncestorContainer;
+      if (!editableRef.current || !editableRef.current.contains(container)) {
+        setShowToolbar(false);
+        return;
+      }
+      const rect = range.getBoundingClientRect();
+      setToolbarStyle({
+        top: rect.top - 48 + window.scrollY,
+        left: rect.left + window.scrollX,
+      });
+      setShowToolbar(!sel.isCollapsed);
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => document.removeEventListener("selectionchange", onSelectionChange);
+  }, []);
+
+  useEffect(() => {
+    const onTouchEnd = () => {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+      const range = sel.getRangeAt(0);
+      if (
+        !editableRef.current ||
+        !editableRef.current.contains(range.commonAncestorContainer)
+      )
+        return;
+      const rect = range.getBoundingClientRect();
+      const top =
+        rect && rect.top
+          ? rect.top - 48 + window.scrollY
+          : touchPos.current.y - 48 + window.scrollY;
+      const left =
+        rect && rect.left
+          ? rect.left + window.scrollX
+          : touchPos.current.x + window.scrollX;
+      setToolbarStyle({ top, left });
+      setShowToolbar(true);
+    };
+
+    const onTouchStart = (e) => {
+      const t = e.touches && e.touches[0];
+      if (t) touchPos.current = { x: t.clientX, y: t.clientY };
+    };
+
+    document.addEventListener("touchend", onTouchEnd);
+    document.addEventListener("touchstart", onTouchStart, { passive: true });
+    return () => {
+      document.removeEventListener("touchend", onTouchEnd);
+      document.removeEventListener("touchstart", onTouchStart);
+    };
+  }, []);
+
+  const handleInput = (e) => setText(e.currentTarget.innerHTML);
+
+  const applyHighlight = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    if (!editableRef.current.contains(range.commonAncestorContainer)) return;
+    const mark = document.createElement("mark");
+    mark.className = "rc-highlight";
+    mark.style.backgroundColor = "#ffe58a";
+    mark.style.borderRadius = "2px";
+    mark.style.padding = "0 2px";
+    try {
+      range.surroundContents(mark);
+    } catch (e) {
+      const contents = range.extractContents();
+      mark.appendChild(contents);
+      range.insertNode(mark);
+    }
+    sel.removeAllRanges();
+    setShowToolbar(false);
+    setText(editableRef.current.innerHTML);
+  };
+
+  const removeHighlight = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    if (node.nodeType === 3) node = node.parentNode;
+    if (!node.querySelectorAll) return;
+    const marks = node.querySelectorAll("mark.rc-highlight");
+    marks.forEach((m) => {
+      const parent = m.parentNode;
+      while (m.firstChild) parent.insertBefore(m.firstChild, m);
+      parent.removeChild(m);
+    });
+    sel.removeAllRanges();
+    setShowToolbar(false);
+    setText(editableRef.current.innerHTML);
+  };
+
+  const handleSave = async () => {
+    if (!editableRef.current) return;
+    const raw = editableRef.current.innerHTML;
+    if (!raw || !raw.trim()) return;
+    const clean = DOMPurify.sanitize(raw, {
+      ALLOWED_TAGS: ["mark", "b", "i", "em", "strong", "br", "p", "span"],
+      ALLOWED_ATTR: ["class"],
+    });
+    setSaving(true);
+    try {
+      await onSave(replica.id, selectedCharId, clean);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">
+            ✏️ Modifier la réplique
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Personnage</label>
+            <div className="flex gap-2 flex-wrap">
+              {characters.map((char) => (
+                <button
+                  key={char.id}
+                  onClick={() => setSelectedCharId(char.id)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                  style={{
+                    backgroundColor:
+                      selectedCharId === char.id ? char.color : "#374151",
+                    color: selectedCharId === char.id ? "white" : "#9CA3AF",
+                  }}
+                >
+                  {char.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Texte</label>
+            <div
+              ref={editableRef}
+              onInput={handleInput}
+              contentEditable
+              suppressContentEditableWarning
+              className="w-full min-h-[8rem] bg-gray-800 border border-gray-600 rounded-xl p-4 text-white text-base focus:border-gold-500 focus:outline-none"
+              placeholder="Texte de la réplique..."
+            />
+          </div>
+          {showToolbar && (
+            <div
+              className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg flex items-center gap-2 p-2"
+              style={{ top: toolbarStyle.top, left: toolbarStyle.left }}
+            >
+              <button
+                onClick={applyHighlight}
+                className="px-2 py-1 bg-amber-400 text-dark rounded"
+              >
+                Surligner
+              </button>
+              <button
+                onClick={removeHighlight}
+                className="px-2 py-1 bg-gray-700 text-white rounded"
+              >
+                Retirer
+              </button>
+            </div>
+          )}
+          {isMobile && (
+            <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 flex gap-3">
+              <button
+                onClick={() => {
+                  applyHighlight();
+                  setTimeout(() => setShowToolbar(false), 200);
+                }}
+                className="px-4 py-2 bg-amber-400 text-dark rounded-xl shadow-lg"
+              >
+                Surligner
+              </button>
+              <button
+                onClick={() => {
+                  removeHighlight();
+                  setTimeout(() => setShowToolbar(false), 200);
+                }}
+                className="px-4 py-2 bg-gray-700 text-white rounded-xl shadow-lg"
+              >
+                Retirer
+              </button>
+            </div>
+          )}
+          <div
+            className="p-4 rounded-lg"
+            style={{
+              backgroundColor: `${selectedChar?.color || "#666"}20`,
+              borderLeft: `4px solid ${selectedChar?.color || "#666"}`,
+            }}
+          >
+            <p
+              className="text-xs font-semibold mb-1"
+              style={{ color: selectedChar?.color || "#999" }}
+            >
+              {selectedChar?.name || "?"}
+            </p>
+            <div
+              className="text-gray-300 text-sm"
+              dangerouslySetInnerHTML={{
+                __html: DOMPurify.sanitize(text || "..."),
+              }}
+            />
+          </div>
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleSave}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              text.trim() && !saving
+                ? "bg-gold-500 hover:bg-gold-400 text-dark shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Sauvegarde..." : "✅ SAUVEGARDER"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OriginalFileModal({ fileUrl, fullText, filename, onClose }) {
+  const isMobile =
+    typeof navigator !== "undefined" &&
+    /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      navigator.userAgent
+    );
+  const [showText, setShowText] = useState(isMobile);
+  const [pdfError, setPdfError] = useState(false);
+  const [checkingPdf, setCheckingPdf] = useState(!isMobile);
+  const isPdf = filename?.toLowerCase().endsWith(".pdf");
+
+  useEffect(() => {
+    if (fileUrl && isPdf && !isMobile) {
+      setCheckingPdf(true);
+      fetch(fileUrl, { method: "HEAD" })
+        .then((res) => {
+          if (!res.ok) {
+            setPdfError(true);
+            setShowText(true);
+          }
+          setCheckingPdf(false);
+        })
+        .catch(() => {
+          setPdfError(true);
+          setShowText(true);
+          setCheckingPdf(false);
+        });
+    } else {
+      setCheckingPdf(false);
+    }
+  }, [fileUrl, isPdf, isMobile]);
+
+  return (
+    <div className="fixed inset-0 bg-black/90 flex flex-col z-50">
+      <div className="flex items-center justify-between p-4 border-b border-gray-700 bg-dark">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-white font-semibold truncate">
+            {filename || "Fichier original"}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          {fullText && fileUrl && !pdfError && (
+            <button
+              onClick={() => setShowText(!showText)}
+              className={`px-3 py-1 rounded-lg text-sm transition ${
+                showText ? "bg-primary-600 text-white" : "bg-gray-700 text-gray-300"
+              }`}
+            >
+              {showText ? "📄 PDF" : "📝 Texte"}
+            </button>
+          )}
+          {fileUrl && !pdfError && (
+            <a
+              href={fileUrl}
+              download={filename}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+              title="Télécharger / Ouvrir"
+            >
+              ⬇️
+            </a>
+          )}
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto p-4">
+        {checkingPdf ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-400">Chargement...</p>
+          </div>
+        ) : showText || !fileUrl || pdfError ? (
+          <div>
+            {pdfError && (
+              <div className="mb-4 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <p className="text-yellow-400 text-sm">
+                  ⚠️ Le fichier PDF original n'est plus disponible. Voici le texte extrait :
+                </p>
+              </div>
+            )}
+            {isMobile && !pdfError && fileUrl && (
+              <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center justify-between">
+                <p className="text-blue-400 text-sm">
+                  📱 Sur mobile, le PDF s'ouvre dans une nouvelle fenêtre
+                </p>
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-sm rounded-lg"
+                >
+                  Ouvrir PDF
+                </a>
+              </div>
+            )}
+            <pre className="text-gray-300 text-sm whitespace-pre-wrap font-mono bg-gray-900 p-4 rounded-lg">
+              {fullText || "Aucun texte disponible"}
+            </pre>
+          </div>
+        ) : isPdf ? (
+          <iframe
+            src={fileUrl}
+            className="w-full h-full min-h-[60vh] rounded-lg bg-white"
+            title="PDF original"
+          />
+        ) : (
+          <div className="text-center py-8">
+            <p className="text-gray-400 mb-4">
+              Aperçu non disponible pour ce type de fichier
+            </p>
+            <a
+              href={fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-gold inline-block"
+            >
+              Télécharger le fichier
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ShareTroupeModal({ script, userId, onClose }) {
+  const [troupes, setTroupes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sharing, setSharing] = useState(false);
+  const [success, setSuccess] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const loadTroupes = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const userTroupes = await fetchUserTroupes(userId);
+        setTroupes(userTroupes || []);
+      } catch (err) {
+        console.error(err);
+        setTroupes([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadTroupes();
+  }, [userId]);
+
+  const handleShare = async (troupeId) => {
+    setSharing(true);
+    setError(null);
+    try {
+      await shareScript(script.id, troupeId, userId);
+      setSuccess("✓ Texte partagé avec succès !");
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+    } catch (err) {
+      if (err.message?.includes("déjà partagé"))
+        setError("Ce texte est déjà partagé avec cette troupe");
+      else setError(err.message || "Erreur lors du partage");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+      <div className="bg-dark rounded-xl max-w-sm w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700">
+          <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+            👥 Partager "{script.title}"
+          </h3>
+        </div>
+        <div className="p-4">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader />
+            </div>
+          ) : troupes.length === 0 ? (
+            <div className="text-center py-6">
+              <span className="text-4xl mb-3 block">🎭</span>
+              <p className="text-gray-400 mb-2">
+                Vous n'avez pas encore de troupe
+              </p>
+              <p className="text-gray-500 text-sm mb-4">
+                Créez ou rejoignez une troupe pour partager vos textes.
+              </p>
+              <Link to="/shared" onClick={onClose} className="btn-gold inline-block">
+                Gérer mes troupes
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-gray-400 text-sm">
+                Choisissez une troupe pour partager ce texte :
+              </p>
+              <div className="space-y-2">
+                {troupes.map((troupe) => (
+                  <button
+                    key={troupe.id}
+                    onClick={() => handleShare(troupe.id)}
+                    disabled={sharing}
+                    className="w-full p-4 bg-gray-800 hover:bg-primary-600/30 rounded-xl text-left transition flex items-center justify-between border border-gray-700 hover:border-primary-500"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">🎭</span>
+                      <div>
+                        <p className="text-white font-medium">{troupe.name}</p>
+                        <p className="text-gray-500 text-xs">
+                          Code: {troupe.code}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-primary-400 text-xl">→</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {success && (
+            <div className="mt-4 p-3 bg-green-500/10 border border-green-500 rounded-lg">
+              <p className="text-green-400 text-center font-medium">{success}</p>
+            </div>
+          )}
+          {error && (
+            <div className="mt-4 p-3 bg-red-500/10 border border-red-500 rounded-lg">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
+        </div>
+        <div className="p-4 border-t border-gray-700">
+          <button onClick={onClose} className="btn-secondary w-full">
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SplitReplicaModal({
+  replica,
+  characters,
+  onSplit,
+  onAddCharacter,
+  onClose,
+}) {
+  const [splitPosition, setSplitPosition] = useState(null);
+  const [selectedCharId, setSelectedCharId] = useState(null);
+  const [showNewCharForm, setShowNewCharForm] = useState(false);
+  const [newCharName, setNewCharName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const text = replica.text;
+  const CHARACTER_COLORS = [
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
+  ];
+  const usedColors = characters.map((c) => c.color);
+  const availableColors = CHARACTER_COLORS.filter(
+    (c) => !usedColors.includes(c)
+  );
+  const [newCharColor, setNewCharColor] = useState(
+    availableColors[0] || CHARACTER_COLORS[0]
+  );
+
+  const findPotentialSplitPoints = () => {
+    const regex = /([A-ZÀ-Ÿ]{2,}(?:[-'\s][A-ZÀ-Ÿ]+)*)\s*[:-–]/g;
+    const points = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > 10)
+        points.push({
+          position: match.index,
+          name: match[1].trim(),
+          preview: text.substring(
+            Math.max(0, match.index - 20),
+            match.index + 30
+          ),
+        });
+    }
+    return points;
+  };
+  const potentialSplitPoints = findPotentialSplitPoints();
+
+  const handleSplit = async () => {
+    if (splitPosition === null || !selectedCharId) return;
+    setSaving(true);
+    try {
+      await onSplit(replica, splitPosition, selectedCharId);
+    } catch (err) {
+      console.error("Erreur division:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateAndSelect = async () => {
+    if (!newCharName.trim()) return;
+    setSaving(true);
+    try {
+      const newChar = await onAddCharacter(
+        newCharName.trim().toUpperCase(),
+        newCharColor
+      );
+      setSelectedCharId(newChar.id);
+      setShowNewCharForm(false);
+    } catch (err) {
+      console.error("Erreur création personnage:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const firstPart =
+    splitPosition !== null ? text.substring(0, splitPosition).trim() : text;
+  const secondPart =
+    splitPosition !== null ? text.substring(splitPosition).trim() : "";
+  const currentChar = characters.find((c) => c.id === replica.character_id);
+  const selectedChar = characters.find((c) => c.id === selectedCharId);
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">
+            ✂️ Diviser la réplique
+          </h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-gold-500 mb-2">
+              1️⃣ Où voulez-vous couper ?
+            </h4>
+            {potentialSplitPoints.length > 0 && (
+              <div className="mb-4">
+                <p className="text-gray-400 text-xs mb-2">
+                  Points de coupure détectés :
+                </p>
+                <div className="space-y-2">
+                  {potentialSplitPoints.map((point, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setSplitPosition(point.position)}
+                      className={`w-full text-left p-3 rounded-lg border transition text-sm ${
+                        splitPosition === point.position
+                          ? "bg-orange-600/20 border-orange-500 text-orange-300"
+                          : "bg-gray-800 border-gray-700 text-gray-300 hover:border-gray-500"
+                      }`}
+                    >
+                      <span className="font-bold text-white">{point.name}</span>
+                      <span className="text-gray-500 ml-2 text-xs">
+                        Position {point.position}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="mb-4">
+              <label className="text-gray-400 text-xs mb-1 block">
+                Ou entrez la position manuellement :
+              </label>
+              <input
+                type="number"
+                min="1"
+                max={text.length - 1}
+                value={splitPosition || ""}
+                onChange={(e) =>
+                  setSplitPosition(parseInt(e.target.value) || null)
+                }
+                className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white"
+                placeholder="Position du caractère..."
+              />
+            </div>
+          </div>
+          {splitPosition !== null && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">
+                📝 Aperçu
+              </h4>
+              <div className="space-y-3">
+                <div
+                  className="p-3 rounded-xl"
+                  style={{
+                    backgroundColor: `${currentChar?.color || "#666"}dd`,
+                  }}
+                >
+                  <p className="text-xs font-bold text-white/80 mb-1">
+                    {currentChar?.name} (conservé)
+                  </p>
+                  <p className="text-white text-sm">{firstPart || "(vide)"}</p>
+                </div>
+                <div className="text-center text-gray-500">
+                  ✂️ - - - - - - - - - - ✂️
+                </div>
+                <div
+                  className="p-3 rounded-xl"
+                  style={{
+                    backgroundColor: `${selectedChar?.color || "#666"}dd`,
+                  }}
+                >
+                  <p className="text-xs font-bold text-white/80 mb-1">
+                    {selectedChar?.name || "❓ Choisir le personnage"}
+                  </p>
+                  <p className="text-white text-sm">{secondPart || "(vide)"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          {splitPosition !== null && secondPart && (
+            <div className="mb-6">
+              <h4 className="text-sm font-semibold text-gold-500 mb-2">
+                2️⃣ Attribuer à quel personnage ?
+              </h4>
+              <div className="flex gap-2 flex-wrap mb-3">
+                {characters.map((char) => (
+                  <button
+                    key={char.id}
+                    onClick={() => {
+                      setSelectedCharId(char.id);
+                      setShowNewCharForm(false);
+                    }}
+                    className="px-4 py-2 rounded-lg text-sm font-medium transition"
+                    style={{
+                      backgroundColor:
+                        selectedCharId === char.id ? char.color : "#374151",
+                      color: selectedCharId === char.id ? "white" : "#9CA3AF",
+                    }}
+                  >
+                    {char.name}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowNewCharForm(!showNewCharForm)}
+                className={`w-full p-3 rounded-lg border-2 border-dashed transition text-sm ${
+                  showNewCharForm
+                    ? "border-green-500 bg-green-500/10 text-green-400"
+                    : "border-gray-600 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                ➕ Créer un nouveau personnage
+              </button>
+              {showNewCharForm && (
+                <div className="mt-3 p-4 bg-gray-800 rounded-xl border border-gray-700">
+                  <div className="mb-3">
+                    <label className="text-gray-400 text-xs mb-1 block">
+                      Nom du personnage
+                    </label>
+                    <input
+                      type="text"
+                      value={newCharName}
+                      onChange={(e) => setNewCharName(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white uppercase"
+                      placeholder="Ex: L'ADJUDANT-CHEF"
+                    />
+                  </div>
+                  <div className="mb-3">
+                    <label className="text-gray-400 text-xs mb-1 block">
+                      Couleur
+                    </label>
+                    <div className="flex gap-2 flex-wrap">
+                      {CHARACTER_COLORS.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => setNewCharColor(color)}
+                          className={`w-8 h-8 rounded-full transition ${
+                            newCharColor === color
+                              ? "ring-2 ring-white ring-offset-2 ring-offset-gray-800"
+                              : ""
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleCreateAndSelect}
+                    disabled={!newCharName.trim() || saving}
+                    className={`w-full py-3 rounded-lg font-semibold transition ${
+                      newCharName.trim() && !saving
+                        ? "bg-green-600 hover:bg-green-500 text-white"
+                        : "bg-gray-700 text-gray-500 cursor-not-allowed"
+                    }`}
+                  >
+                    {saving ? "⏳ Création..." : "✓ Créer et sélectionner"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleSplit}
+            disabled={
+              splitPosition === null ||
+              !selectedCharId ||
+              !secondPart ||
+              saving
+            }
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              splitPosition !== null && selectedCharId && secondPart && !saving
+                ? "bg-orange-500 hover:bg-orange-400 text-white shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Division en cours..." : "✂️ DIVISER LA RÉPLIQUE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddCharacterModal({ existingColors, onAdd, onClose }) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const CHARACTER_COLORS = [
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
+  ];
+  const availableColors = CHARACTER_COLORS.filter(
+    (c) => !existingColors.includes(c)
+  );
+  const [color, setColor] = useState(
+    availableColors[0] || CHARACTER_COLORS[0]
+  );
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(name.trim().toUpperCase(), color);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-4">
+      <div className="bg-dark rounded-xl max-w-md w-full border border-gray-700">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">
+            ➕ Nouveau personnage
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">
+            ✕
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div>
+            <label className="text-gray-400 text-sm mb-2 block">
+              Nom du personnage
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white uppercase"
+              placeholder="Ex: L'ADJUDANT-CHEF"
+              autoFocus
+            />
+          </div>
+          <div>
+            <label className="text-gray-400 text-sm mb-2 block">Couleur</label>
+            <div className="flex gap-2 flex-wrap">
+              {CHARACTER_COLORS.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setColor(c)}
+                  className={`w-10 h-10 rounded-full transition ${
+                    color === c
+                      ? "ring-2 ring-white ring-offset-2 ring-offset-dark"
+                      : ""
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+          </div>
+          {name && (
+            <div
+              className="p-3 rounded-xl"
+              style={{ backgroundColor: `${color}dd` }}
+            >
+              <p className="text-white font-bold">{name.toUpperCase()}</p>
+              <p className="text-white/70 text-sm">Aperçu de la couleur</p>
+            </div>
+          )}
+        </div>
+        <div className="p-4 border-t border-gray-700">
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className={`w-full py-3 rounded-xl font-bold transition ${
+              name.trim() && !saving
+                ? "bg-gold-500 hover:bg-gold-400 text-dark"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Création..." : "✓ CRÉER LE PERSONNAGE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoteBubble({ note, onEdit, onDelete }) {
+  const typeInfo = { ...getNoteType(note.note_type) };
+  typeInfo.label = typeInfo.shortLabel;
+
+  return (
+    <div className="flex justify-center my-2">
+      <div className="relative max-w-[90%] group">
+        <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 border-2 border-amber-400 border-dashed shadow-lg">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-lg">{typeInfo.icon}</span>
+            <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+              {typeInfo.label}
+            </span>
+          </div>
+          <p className="text-amber-950 text-sm font-medium leading-relaxed">
+            {note.text}
+          </p>
+        </div>
+        <div className="absolute -top-2 -right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={onEdit}
+            className="w-6 h-6 bg-gray-700 hover:bg-primary-600 rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Modifier"
+          >
+            ✏️
+          </button>
+          <button
+            onClick={onDelete}
+            className="w-6 h-6 bg-gray-700 hover:bg-red-600 rounded-full flex items-center justify-center text-xs shadow-lg"
+            title="Supprimer"
+          >
+            🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AddNoteModal({ replicas, characters, afterReplicaId, onAdd, onClose }) {
+  const [text, setText] = useState("");
+  const [noteType, setNoteType] = useState("general");
+  const [selectedReplicaId, setSelectedReplicaId] = useState(afterReplicaId || null);
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const numbered = useMemo(
+    () => (replicas || []).map((r, idx) => ({ replica: r, number: idx + 1 })),
+    [replicas]
+  );
+
+  const acts = useMemo(() => {
+    const list = [];
+    numbered.forEach(({ replica }) => {
+      const a = replica.act_title || "";
+      if (!list.includes(a)) list.push(a);
+    });
+    return list;
+  }, [numbered]);
+
+  const initial = numbered.find(({ replica }) => replica.id === afterReplicaId)?.replica;
+  const [actKey, setActKey] = useState(initial?.act_title ?? acts[0] ?? "");
+  const [sceneKey, setSceneKey] = useState(initial?.scene_title ?? "");
+
+  const scenesOfAct = useMemo(() => {
+    const list = [];
+    numbered.forEach(({ replica }) => {
+      if ((replica.act_title || "") !== actKey) return;
+      const s = replica.scene_title || "";
+      if (!list.includes(s)) list.push(s);
+    });
+    return list;
+  }, [numbered, actKey]);
+
+  const effectiveScene = scenesOfAct.includes(sceneKey) ? sceneKey : scenesOfAct[0] ?? "";
+
+  const query = search.trim().replace(/^#/, "").toLowerCase();
+  const visibleReplicas = useMemo(() => {
+    if (query) {
+      return numbered.filter(({ replica, number }) => {
+        if (/^\d+$/.test(query)) return String(number) === query;
+        return (replica.text || "").toLowerCase().includes(query);
+      });
+    }
+    return numbered.filter(
+      ({ replica }) =>
+        (replica.act_title || "") === actKey && (replica.scene_title || "") === effectiveScene
+    );
+  }, [numbered, query, actKey, effectiveScene]);
+
+  const selectedEntry = numbered.find(({ replica }) => replica.id === selectedReplicaId);
+  const characterName = (r) => characters?.find((c) => c.id === r.character_id)?.name || "";
+  const excerpt = (r) => {
+    const t = (r.text || "").replace(/\s+/g, " ").trim();
+    return t.length > 70 ? `${t.slice(0, 70)}…` : t;
+  };
+
+  const handleSubmit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      await onAdd(selectedReplicaId, text.trim(), noteType);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">📝 Ajouter une note</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <div className="grid grid-cols-2 gap-2">
+              {NOTE_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setNoteType(type.value)}
+                  className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+                    noteType === type.value
+                      ? "bg-amber-500 text-amber-950"
+                      : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  }`}
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-32 bg-gray-800 border border-gray-600 rounded-xl p-4 text-white text-base resize-none focus:border-amber-500 focus:outline-none"
+              placeholder="Ex: Avancer vers le public, prendre la chaise..."
+              autoFocus
+            />
+          </div>
+          {replicas && replicas.length > 0 && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">
+                Placer après la réplique
+              </label>
+              <p className="text-xs text-amber-300 mb-2">
+                📍{" "}
+                {selectedEntry
+                  ? `Après #${selectedEntry.number}${
+                      characterName(selectedEntry.replica)
+                        ? ` · ${characterName(selectedEntry.replica)}`
+                        : ""
+                    }`
+                  : "Au début du texte"}
+              </p>
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="🔍 Rechercher par # (ex: 12) ou mot-clé…"
+                className="w-full mb-2 bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm focus:border-amber-500 focus:outline-none"
+              />
+
+              {!query && (acts.length > 1 || scenesOfAct.length > 1) && (
+                <div className="grid grid-cols-1 gap-2 mb-2">
+                  {acts.length > 1 && (
+                    <select
+                      value={actKey}
+                      onChange={(e) => {
+                        setActKey(e.target.value);
+                        setSceneKey("");
+                      }}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm"
+                    >
+                      {acts.map((a) => (
+                        <option key={a} value={a}>
+                          {a || "Sans acte"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {scenesOfAct.length > 1 && (
+                    <select
+                      value={effectiveScene}
+                      onChange={(e) => setSceneKey(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white text-sm"
+                    >
+                      {scenesOfAct.map((s) => (
+                        <option key={s} value={s}>
+                          {s || "Sans scène"}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-gray-700 divide-y divide-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setSelectedReplicaId(null)}
+                  className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 ${
+                    selectedReplicaId === null
+                      ? "bg-amber-500/20 text-amber-200"
+                      : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  }`}
+                >
+                  <span>{selectedReplicaId === null ? "◉" : "○"}</span>
+                  <span>-- Au début du texte --</span>
+                </button>
+                {visibleReplicas.map(({ replica, number }) => (
+                  <button
+                    type="button"
+                    key={replica.id}
+                    onClick={() => setSelectedReplicaId(replica.id)}
+                    className={`w-full text-left px-3 py-2.5 text-sm flex items-start gap-2 ${
+                      selectedReplicaId === replica.id
+                        ? "bg-amber-500/20 text-amber-200"
+                        : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                    }`}
+                  >
+                    <span className="mt-0.5">{selectedReplicaId === replica.id ? "◉" : "○"}</span>
+                    <span className="min-w-0">
+                      <span className="font-bold">#{number}</span>
+                      {characterName(replica) && (
+                        <span className="text-gray-400"> · {characterName(replica)}</span>
+                      )}
+                      <span className="block text-xs text-gray-400 truncate">{excerpt(replica)}</span>
+                    </span>
+                  </button>
+                ))}
+                {visibleReplicas.length === 0 && (
+                  <p className="px-3 py-4 text-sm text-gray-500 text-center">Aucune réplique trouvée</p>
+                )}
+              </div>
+            </div>
+          )}
+          {text && (
+            <div className="mb-4">
+              <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+              <div className="px-4 py-3 rounded-xl bg-gradient-to-r from-amber-500/90 to-amber-600/90 border-2 border-amber-400 border-dashed">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-lg">{getNoteType(noteType).icon}</span>
+                  <span className="text-xs font-bold text-amber-900 uppercase">
+                    {getNoteType(noteType).label}
+                  </span>
+                </div>
+                <p className="text-amber-950 text-sm font-medium">{text}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleSubmit}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              text.trim() && !saving
+                ? "bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ AJOUTER LA NOTE"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditNoteModal({ note, onSave, onClose }) {
+  const [text, setText] = useState(note.text);
+  const [noteType, setNoteType] = useState(note.note_type || "general");
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(note.id, text.trim(), noteType);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Modifier la note</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Type de note</label>
+            <div className="grid grid-cols-2 gap-2">
+              {NOTE_TYPES.map((type) => (
+                <button
+                  key={type.value}
+                  onClick={() => setNoteType(type.value)}
+                  className={`p-3 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
+                    noteType === type.value
+                      ? "bg-amber-500 text-amber-950"
+                      : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+                  }`}
+                >
+                  <span className="text-lg">{type.icon}</span>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Votre note</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              className="w-full h-32 bg-gray-800 border border-gray-600 rounded-xl p-4 text-white text-base resize-none focus:border-amber-500 focus:outline-none"
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleSubmit}
+            disabled={!text.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              text.trim() && !saving
+                ? "bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CharacterManagerModal({ characters, onEdit, onDelete, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">👥 Gérer les personnages</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {characters.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">Aucun personnage</p>
+          ) : (
+            <div className="space-y-3">
+              {characters.map((char) => (
+                <div
+                  key={char.id}
+                  className="flex items-center gap-3 p-4 bg-gray-800 rounded-xl border border-gray-700"
+                >
+                  <div
+                    className="w-10 h-10 rounded-full shadow-lg"
+                    style={{ backgroundColor: char.color }}
+                  />
+                  <div className="flex-1">
+                    <p className="text-white font-medium">{char.name}</p>
+                    <p className="text-gray-500 text-xs">{char.color}</p>
+                  </div>
+                  <button
+                    onClick={() => onEdit(char)}
+                    className="p-2 bg-gray-700 hover:bg-primary-600 rounded-lg transition"
+                    title="Modifier"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={() => onDelete(char)}
+                    className="p-2 bg-gray-700 hover:bg-red-600 rounded-lg transition"
+                    title="Supprimer"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={onClose}
+            className="w-full py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl font-semibold"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditCharacterModal({ character, existingColors, onSave, onClose }) {
+  const [name, setName] = useState(character.name);
+  const [color, setColor] = useState(character.color);
+  const [saving, setSaving] = useState(false);
+  const CHARACTER_COLORS = [
+    "#8B1538",
+    "#2563EB",
+    "#059669",
+    "#D97706",
+    "#7C3AED",
+    "#DC2626",
+    "#0891B2",
+    "#4F46E5",
+    "#DB2777",
+    "#65A30D",
+    "#0D9488",
+    "#6366F1",
+    "#EA580C",
+    "#84CC16",
+    "#EC4899",
+  ];
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onSave(character.id, name.trim().toUpperCase(), color);
+    } catch (err) {
+      console.error("Erreur:", err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[80] bg-black/95">
+      <div className="h-full flex flex-col max-h-screen">
+        <div className="flex-none p-4 border-b border-gray-700 bg-dark flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">✏️ Modifier le personnage</h3>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white rounded-lg hover:bg-gray-700"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">
+              Nom du personnage
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value.toUpperCase())}
+              className="w-full bg-gray-800 border border-gray-600 rounded-lg p-3 text-white font-semibold focus:border-purple-500 focus:outline-none"
+              placeholder="NOM DU PERSONNAGE"
+            />
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Couleur</label>
+            <div className="grid grid-cols-5 gap-2">
+              {CHARACTER_COLORS.map((c) => {
+                const isUsed = existingColors.includes(c);
+                return (
+                  <button
+                    key={c}
+                    onClick={() => !isUsed && setColor(c)}
+                    disabled={isUsed}
+                    className={`w-12 h-12 rounded-xl transition ${
+                      color === c ? "ring-4 ring-white scale-110" : ""
+                    } ${isUsed ? "opacity-30 cursor-not-allowed" : "hover:scale-105"}`}
+                    style={{ backgroundColor: c }}
+                    title={isUsed ? "Déjà utilisé" : c}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm text-gray-400 mb-2">Aperçu</label>
+            <div
+              className="p-4 rounded-xl text-white font-bold text-center"
+              style={{ backgroundColor: color }}
+            >
+              {name || "NOM"}
+            </div>
+          </div>
+        </div>
+        <div className="flex-none p-4 border-t border-gray-700 bg-dark">
+          <button
+            onClick={handleSubmit}
+            disabled={!name.trim() || saving}
+            className={`w-full py-4 rounded-xl text-lg font-bold transition ${
+              name.trim() && !saving
+                ? "bg-purple-600 hover:bg-purple-500 text-white shadow-lg"
+                : "bg-gray-700 text-gray-500 cursor-not-allowed"
+            }`}
+          >
+            {saving ? "⏳ Enregistrement..." : "✅ ENREGISTRER"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotesListModal({ notes, replicas, onClose, onEdit, onDelete }) {
+  const getReplicaContext = (afterReplicaId) => {
+    if (!afterReplicaId) return "Au début du texte";
+    const replica = replicas.find((r) => r.id === afterReplicaId);
+    if (!replica) return "Réplique inconnue";
+    return (
+      replica.text?.substring(0, 50) + (replica.text?.length > 50 ? "..." : "")
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
+      <div className="bg-dark rounded-xl max-w-lg w-full border border-gray-700 max-h-[80vh] flex flex-col">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">
+            📝 Mes notes personnelles
+          </h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white p-2">
+            ✕
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {notes.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">
+              Aucune note pour ce texte
+            </p>
+          ) : (
+            notes.map((note) => {
+              const noteType = getNoteType(note.note_type);
+              return (
+                <div
+                  key={note.id}
+                  className="p-4 rounded-lg border-l-4"
+                  style={{
+                    backgroundColor: "rgba(245, 158, 11, 0.1)",
+                    borderLeftColor:
+                      noteType.color === "amber"
+                        ? "#f59e0b"
+                        : noteType.color === "blue"
+                        ? "#3b82f6"
+                        : noteType.color === "purple"
+                        ? "#8b5cf6"
+                        : noteType.color === "green"
+                        ? "#22c55e"
+                        : "#ef4444",
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="flex items-center gap-2 text-sm">
+                      <span>{noteType.icon}</span>
+                      <span className="text-gray-400">{noteType.label}</span>
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => onEdit(note)}
+                        className="text-gray-400 hover:text-blue-400 text-sm"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => onDelete(note)}
+                        className="text-gray-400 hover:text-red-400 text-sm"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-white whitespace-pre-wrap">{note.text}</p>
+                  <p className="text-gray-500 text-xs mt-2 italic">
+                    Après : "{getReplicaContext(note.after_replica_id)}"
+                  </p>
+                </div>
+              );
+            })
+          )}
+        </div>
+        <div className="p-4 border-t border-gray-700">
+          <button onClick={onClose} className="btn-secondary w-full">
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ScriptDetail;
