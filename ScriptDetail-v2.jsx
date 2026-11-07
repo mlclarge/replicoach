@@ -141,6 +141,7 @@ function ScriptDetail() {
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null);
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
+// States managed by useScriptFilters(id)
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
@@ -930,7 +931,7 @@ function ScriptDetail() {
             {hasActiveFilters && (
               <button
                 onClick={resetFilters}
-                className="px-2.5 py-1 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold rounded-lg transition flex items-center gap-1 shadow-sm active:scale-95"
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-extrabold rounded-lg transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
                 title="Remise à zéro de tous les filtres"
               >
                 <span>🔄</span> Remise à zéro des filtres

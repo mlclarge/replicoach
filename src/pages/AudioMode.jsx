@@ -1,4 +1,3 @@
-import { useScriptFilters } from "../hooks/useScriptFilters";
 import { useEffect, useState, useMemo, useRef, forwardRef } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
@@ -418,29 +417,22 @@ function AudioMode() {
     }
   };
 
-    const { resetFilters, hasActiveFilters } = useScriptFilters(id);
-
-  const handleResetAllFilters = () => {
-    resetFilters();
-    setRehearsal({
-      myRole: null,
-      listenMode: "all",
-      contextLines: 1,
-      hideMyRole: false,
-      dimOthers: false,
-      readMine: "read",
-      speed: 1,
-    });
-    setHiddenCharacters(new Set());
-    try {
-      localStorage.removeItem(`rehearsal-${id}`);
-      localStorage.removeItem(`replicoach_filters_${id}`);
-    } catch (e) {}
-  };
-
   const handleSpeedChange = (value) => {
     setRate(value);
     updateRehearsal({ speed: value });
+  };
+
+  const handleResetFilters = () => {
+    try {
+      if (id) {
+        localStorage.removeItem("replicoach_filters_" + id);
+        localStorage.removeItem("rehearsal-" + id);
+      }
+    } catch (e) {}
+    setRehearsal({ ...REHEARSAL_DEFAULTS });
+    setHiddenCharacters(new Set());
+    setRate(1);
+    setSelectedSceneKey(null);
   };
 
   // UI : Panneau de réglages fermé par défaut
@@ -1826,6 +1818,7 @@ function AudioMode() {
         delayBeforeOptions={delayBeforeOptions}
         delayAfterOptions={delayAfterOptions}
         onDelaysChange={saveAudioDelays}
+        onResetFilters={handleResetFilters}
       />
 
       {prepMessage && (

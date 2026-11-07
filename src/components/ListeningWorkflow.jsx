@@ -70,6 +70,8 @@ export default function ListeningWorkflow({
   delayBeforeOptions = [1000, 1500, 2000, 2500, 3000],
   delayAfterOptions = [500, 1000, 1500, 2000],
   onDelaysChange,
+  onResetFilters,
+  hasActiveFilters,
 }) {
   const hasRole = !!rehearsal.myRole;
   const formatSeconds = (ms) => `${String(ms / 1000).replace(".", ",")} s`;
@@ -110,6 +112,17 @@ export default function ListeningWorkflow({
           >
             📍 {scopeLabel} ▾
           </button>
+          {onResetFilters && (hasActiveFilters ?? (!!rehearsal.myRole || rehearsal.listenMode !== LISTEN_MODES.all || scopeLabel !== "Pièce entière")) && (
+            <button
+              type="button"
+              onClick={onResetFilters}
+              className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-extrabold rounded-lg transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
+              title="Remise à zéro de tous les filtres"
+            >
+              <span>🔄</span>
+              <span>Remise à zéro des filtres</span>
+            </button>
+          )}
           {characters?.length > 0 && (
             <button
               type="button"
