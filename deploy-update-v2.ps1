@@ -1,5 +1,5 @@
 ﻿# ==============================================================================
-# REPLICOACH - Script d'automatisation des mises à jour & déploiement
+# REPLICOACH - Script d'automatisation des mises a jour & deploiement
 # ==============================================================================
 
 $ErrorActionPreference = "Stop"
@@ -18,11 +18,16 @@ Write-Host "======================================================" -ForegroundC
 Write-Host " REPLICOACH - AUTOMATISATION DE LA MISE A JOUR " -ForegroundColor Cyan
 Write-Host "======================================================" -ForegroundColor Cyan
 
-# ETAPE 1 : Copie automatique des fichiers v2
-Write-Host "`n[1/3] Recherche et application des fichiers v2..." -ForegroundColor Cyan
+# ETAPE 1 : Copie automatique des fichiers de mise a jour v2 / v3
+Write-Host "`n[1/3] Recherche et application des nouveaux fichiers..." -ForegroundColor Cyan
 
 $filesToCopy = @(
+    @{ Source = "AudioMode-v3.jsx"; Dest = "src\pages\AudioMode.jsx" },
     @{ Source = "AudioMode-v2.jsx"; Dest = "src\pages\AudioMode.jsx" },
+    @{ Source = "ScriptDetail-v3.jsx"; Dest = "src\pages\ScriptDetail.jsx" },
+    @{ Source = "TtsBatchModal-v2.jsx"; Dest = "src\components\TtsBatchModal.jsx" },
+    @{ Source = "TtsBatchButton-v2.jsx"; Dest = "src\components\TtsBatchButton.jsx" },
+    @{ Source = "batchTtsService-v2.js"; Dest = "src\lib\batchTtsService.js" },
     @{ Source = "ListeningWorkflow-v2.jsx"; Dest = "src\components\ListeningWorkflow.jsx" },
     @{ Source = "PremiumVoicePicker-v2.jsx"; Dest = "src\components\PremiumVoicePicker.jsx" },
     @{ Source = "ttsVoices-v2.js"; Dest = "src\lib\ttsVoices.js" },
@@ -39,10 +44,10 @@ foreach ($item in $filesToCopy) {
 }
 
 if ($copiedCount -eq 0) {
-    Write-Host "   [INFO] Aucun nouveau fichier v2 a la racine, conservation des fichiers existants." -ForegroundColor Gray
+    Write-Host "   [INFO] Aucun nouveau fichier a la racine, conservation des fichiers existants." -ForegroundColor Gray
 }
 else {
-    Write-Host "   [SUCCESS] $copiedCount fichier(s) v2 mis a jour avec succes !" -ForegroundColor Green
+    Write-Host "   [SUCCESS] $copiedCount fichier(s) mis a jour avec succes !" -ForegroundColor Green
 }
 
 # ETAPE 2 : Controle et compilation npm run build
@@ -71,7 +76,7 @@ if (-not (Prompt-User "Le build est valide ! Voulez-vous commiter et publier sur
 Write-Host "`nMessage de commit (Entree pour message par defaut) : " -NoNewline -ForegroundColor Yellow
 $commitMsg = Read-Host
 if ([string]::IsNullOrWhiteSpace($commitMsg)) {
-    $commitMsg = "fix: mise a jour automatique voix premium, fallback audio et OCR backend"
+    $commitMsg = "fix: pre-generation par lot (Batch TTS) et fallback audio local fluide"
 }
 
 Write-Host "`n[3/3] Publication sur Vercel via Git..." -ForegroundColor Cyan

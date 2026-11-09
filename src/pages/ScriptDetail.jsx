@@ -1,4 +1,3 @@
-import { useScriptFilters } from "../hooks/useScriptFilters";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
@@ -11,6 +10,7 @@ import AICoachingModal from "../components/AICoachingModal";
 import PremiumGateModal from "../components/PremiumGateModal";
 import { buildSceneSummaryContext } from "../lib/geminiService";
 import SceneSummaryModal from "../components/SceneSummaryModal";
+import TtsBatchButton from "../components/TtsBatchButton";
 import VideoBubble from "../components/VideoBubble";
 import { NOTE_TYPES, getNoteType } from "../lib/noteTypes";
 import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
@@ -97,22 +97,8 @@ function ScriptDetail() {
   const [viewMode, setViewMode] = useState("full");
   const [showTools, setShowTools] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const {
-    myCharacterId,
-    setMyCharacterId,
-    selectedCharacter,
-    setSelectedCharacter,
-    filterMode,
-    setFilterMode,
-    contextBefore,
-    setContextBefore,
-    selectedSceneKey,
-    setSelectedSceneKey,
-    hideMyReplicas,
-    setHideMyReplicas,
-    resetFilters,
-    hasActiveFilters,
-  } = useScriptFilters(id);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [selectedSceneKey, setSelectedSceneKey] = useState(null);
   const [isSceneDrawerOpen, setIsSceneDrawerOpen] = useState(false);
   const [editingReplica, setEditingReplica] = useState(null);
   const [showOriginalFile, setShowOriginalFile] = useState(false);
@@ -141,7 +127,10 @@ function ScriptDetail() {
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null);
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
-// States managed by useScriptFilters(id)
+  const [myCharacterId, setMyCharacterId] = useState(null);
+  const [filterMode, setFilterMode] = useState("all"); // "all" | "role"
+  const [contextBefore, setContextBefore] = useState(1); // nb de répliques d'amorce avant les miennes
+  const [hideMyReplicas, setHideMyReplicas] = useState(false);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
@@ -827,6 +816,9 @@ function ScriptDetail() {
             </p>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Bouton Pré-génération Voix HD (Batch TTS) */}
+            <TtsBatchButton script={currentScript} />
+
             {/* Bouton Mode Audio (Optimisé mobile) */}
             <Link
               to={`/script/${id}/audio`}
@@ -928,13 +920,16 @@ function ScriptDetail() {
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <span>🎭</span> Sélectionner mon personnage :
             </span>
-            {hasActiveFilters && (
+            {myCharacterId && (
               <button
-                onClick={resetFilters}
-                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-extrabold rounded-lg transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
-                title="Remise à zéro de tous les filtres"
+                onClick={() => {
+                  setMyCharacterId(null);
+                  setSelectedCharacter(null);
+                  setFilterMode("all");
+                }}
+                className="text-xs text-rose-600 hover:text-rose-800 font-bold underline flex items-center gap-1"
               >
-                <span>🔄</span> Remise à zéro des filtres
+                <span>✖</span> Réinitialiser
               </button>
             )}
           </div>
