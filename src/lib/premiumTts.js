@@ -59,18 +59,50 @@ export const fetchTtsAudioUrl = (scriptId, replicaId, cacheOnly = false) =>
 // Récupère l'audio pré-généré en cache pour les membres de la troupe (Accès Standard / Gratuit)
 // cacheOnly : ne déclenche jamais de génération (donc aucun coût Google TTS)
 export async function fetchTroupeTtsAudioUrl(scriptId, replicaId, cacheOnly = false) {
-  // Essaie d'abord via l'API standard tts
+  // 1. Tenter via l'API TTS (si Vercel répond et génère ou signe l'URL)
   const res = await fetchTtsAudioUrl(scriptId, replicaId, cacheOnly);
-  if (res.ok) return res;
+  if (res?.ok && res?.url) return res;
 
-  // Fallback : recherche directe dans le stockage Supabase si la pièce est partagée dans la troupe
+  // 2. Fallback robuste : recherche directe dans le stockage Supabase
+  // RLS Supabase vérifie que le dossier racine correspond à l'auth.uid() de l'utilisateur ou du metteur en scène
   try {
-    const { data, error } = await supabase.storage
-      .from("tts-cache")
-      .createSignedUrl(`${scriptId}/${replicaId}.mp3`, 3600);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const currentUserId = sessionData?.session?.user?.id;
 
-    if (!error && data?.signedUrl) {
-      return { ok: true, url: data.signedUrl, cached: true };
+    // D'abord vérifier dans tts_audio_cache si on a le storage_path exact
+    if (replicaId) {
+      const { data: cacheRow } = await supabase
+        .from("tts_audio_cache")
+        .select("storage_path")
+        .eq("replica_id", replicaId)
+        .maybeSingle();
+
+      if (cacheRow?.storage_path) {
+        const { data: signedData, error: signErr } = await supabase.storage
+          .from("tts-cache")
+          .createSignedUrl(cacheRow.storage_path, 3600);
+
+        if (!signErr && signedData?.signedUrl) {
+          return { ok: true, url: signedData.signedUrl, cached: true };
+        }
+      }
+    }
+
+    // Sinon, tester les chemins candidats standard conformes à la politique RLS
+    const candidatePaths = [
+      currentUserId ? `${currentUserId}/${scriptId}/${replicaId}.mp3` : null,
+      currentUserId ? `${currentUserId}/${replicaId}.mp3` : null,
+      `${scriptId}/${replicaId}.mp3`,
+    ].filter(Boolean);
+
+    for (const path of candidatePaths) {
+      const { data, error } = await supabase.storage
+        .from("tts-cache")
+        .createSignedUrl(path, 3600);
+
+      if (!error && data?.signedUrl) {
+        return { ok: true, url: data.signedUrl, cached: true };
+      }
     }
   } catch (e) {
     console.warn("Erreur récupération cache troupe:", e);
