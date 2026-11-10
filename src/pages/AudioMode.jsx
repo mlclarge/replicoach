@@ -978,6 +978,35 @@ function AudioMode() {
   // ⚡ Récupération d'une réplique premium : une seule requête par réplique, partagée entre
   // le préchargement et la lecture. Les URL signées expirent (5 min) : on ne réutilise pas
   // une entrée trop ancienne.
+  
+// Helper d'exclusion des didascalies et indications scéniques
+const isDidascalie = (replica, charId = null, allChars = []) => {
+  if (!replica && !charId) return false;
+  const charObj = charId ? allChars?.find((c) => c.id === charId) : null;
+  const name = (
+    charObj?.name ||
+    replica?.character_name ||
+    replica?.character ||
+    ""
+  ).toUpperCase().trim();
+
+  if (
+    name === "DIDASCALIE" ||
+    name === "DIDASCALIES" ||
+    name === "CONTEXTE" ||
+    replica?.is_didascalie ||
+    replica?.is_context
+  ) {
+    return true;
+  }
+
+  const txt = (replica?.text || "").trim();
+  if ((txt.startsWith("(") && txt.endsWith(")")) || (txt.startsWith("[") && txt.endsWith("]"))) {
+    return true;
+  }
+  return false;
+};
+
   const loadTtsEntry = (replicaId, cacheOnly = false) => {
     const existing = ttsCacheRef.current[replicaId];
     if (existing && Date.now() - existing.at < 240000) {
@@ -1008,7 +1037,7 @@ function AudioMode() {
   };
 
   const preloadNextTts = async (nextReplica, cacheOnly = false) => {
-    if (!nextReplica) return;
+    if (!nextReplica || isDidascalie(nextReplica, nextReplica.character_id, characters)) return;
     try {
       await loadTtsEntry(nextReplica.id, cacheOnly);
     } catch (e) {
@@ -1095,27 +1124,33 @@ function AudioMode() {
       return await speakRecorded(characterId);
     }
 
+    // 🎭 EXCLUSION DES DIDASCALIES & CONTEXTE :
+    // Ne jamais appeler l'API TTS ni afficher d'alerte Premium pour les didascalies
+    const repObj = replicaId ? displayReplicas.find((r) => r.id === replicaId) : null;
+    if (isDidascalie(repObj, characterId, characters)) {
+      stopPreparing();
+      setPremiumNotice("");
+      // Courte pause silencieuse pour laisser le temps de lire la didascalie à l'écran
+      await new Promise((r) => setTimeout(r, 700));
+      return "ok";
+    }
+
     // Synergie Troupe & Premium : Si une voix est verrouillée pour ce personnage (par le metteur en scène),
     // lit le fichier audio HD en cache, même pour un comédien au statut Standard
     if (replicaId && premiumLocks[characterId]) {
-      if (nextReplica && premiumLocks[nextReplica.character_id]) {
+      if (nextReplica && premiumLocks[nextReplica.character_id] && !isDidascalie(nextReplica, nextReplica.character_id, characters)) {
         preloadNextTts(nextReplica);
       }
       const result = await speakPremium(replicaId, token);
-      if (result !== "failed") return;
+      if (result !== "failed") return result;
     }
 
-    // Premium : jamais de voix de synthèse (réservée au mode gratuit)
+    // 🛡️ FILET DE SÉCURITÉ LOCAL (Fallback) :
+    // Si la voix Premium n'est pas encore en cache ou échoue temporairement,
+    // on bascule de façon transparente sur la synthèse vocale locale du navigateur
+    // pour garantir qu'il n'y ait JAMAIS de silence ni de défilement rapide bloquant.
     stopPreparing();
-    if (isPremium) {
-      if (token === playTokenRef.current && !premiumLocks[characterId]) {
-        setPremiumNotice(
-          "Verrouillez une voix Premium pour ce personnage afin de l'entendre."
-        );
-      }
-      return;
-    }
-
+    setPremiumNotice("");
     if (token !== playTokenRef.current) return;
     return await speakSynth(cleanedForDecision, characterId);
   };
@@ -1175,6 +1210,7 @@ function AudioMode() {
       for (let k = from; k < displayReplicas.length && count < 2; k++) {
         if (listenIndices && !listenIndices.has(k)) continue;
         const r = displayReplicas[k];
+        if (isDidascalie(r, r.character_id, characters)) continue;
         if (premiumLocks[r.character_id] && !hiddenCharacters.has(r.character_id)) {
           preloadNextTts(r);
         }
@@ -1461,6 +1497,7 @@ function AudioMode() {
     for (let k = Math.max(0, currentIndex); k < displayReplicas.length && count < 3; k++) {
       if (listenIndices && !listenIndices.has(k)) continue;
       const r = displayReplicas[k];
+      if (isDidascalie(r, r.character_id, characters)) continue;
       if (!premiumLocks[r.character_id]) continue;
       if (hiddenCharacters.has(r.character_id) && !readHidden) continue;
       preloadNextTts(r, true);
@@ -2283,7 +2320,11 @@ const AudioBubble = forwardRef(
       >
         <div className="flex items-center justify-between mb-2">
           <span className="text-xs sm:text-sm font-bold text-white/90">
-            {character?.name || "Personnage"}
+            {((character?.name || replica?.character_name || replica?.character || "").toUpperCase() === "DIDASCALIE" ||
+              (character?.name || replica?.character_name || replica?.character || "").toUpperCase() === "CONTEXTE" ||
+              replica?.is_didascalie || replica?.is_context)
+                ? "🎭 Didascalie"
+                : (character?.name || replica?.character_name || "Personnage")}
           </span>
           {showNumber && (
             <span className="text-[10px] text-white/70 font-mono">
