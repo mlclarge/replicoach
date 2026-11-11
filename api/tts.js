@@ -47,10 +47,10 @@ async function ownedScript(supabase, userId, scriptId) {
 }
 
 async function synthesize(text, voiceId) {
+  const apiKey = process.env.GOOGLE_TTS_API_KEY;
+  if (!apiKey) throw new Error("GOOGLE_TTS_API_KEY manquante");
   const response = await fetch(
-    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(
-      process.env.GOOGLE_TTS_API_KEY
-    )}`,
+    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${encodeURIComponent(apiKey)}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -61,7 +61,10 @@ async function synthesize(text, voiceId) {
       }),
     }
   );
-  if (!response.ok) throw new Error(`Google TTS ${response.status}`);
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Google TTS ${response.status}: ${errorBody}`);
+  }
   const json = await response.json();
   if (!json.audioContent) throw new Error("Google TTS: réponse vide");
   return Buffer.from(json.audioContent, "base64");
@@ -129,12 +132,15 @@ export default async function handler(req, res) {
         .maybeSingle();
       if (!character) return fail(res, 404, "not_found", "Personnage introuvable");
 
-      const { error } = await supabase.from("tts_voice_locks").insert({
-        user_id: userId,
-        script_id: scriptId,
-        character_id: characterId,
-        voice_id: voiceId,
-      });
+      const { error } = await supabase.from("tts_voice_locks").upsert(
+        {
+          user_id: userId,
+          script_id: scriptId,
+          character_id: characterId,
+          voice_id: voiceId,
+        },
+        { onConflict: "user_id,script_id,character_id" }
+      );
       if (error) {
         if (error.code === "23505") {
           return fail(res, 409, "already_locked", "La voix de ce personnage est déjà verrouillée");
@@ -197,6 +203,7 @@ export default async function handler(req, res) {
       // Préchargement en lecture seule : on ne génère jamais d'audio (pas de quota consommé)
       if (cacheOnly) return fail(res, 404, "not_cached", "Audio non généré");
 
+      const period = currentPeriod();
       const { data: reserved, error: reserveError } = await supabase.rpc("reserve_tts_quota", {
         p_user: userId,
         p_period: period,
@@ -245,6 +252,6 @@ export default async function handler(req, res) {
     return fail(res, 400, "bad_action", "Action inconnue");
   } catch (err) {
     console.error("[api/tts]", err?.message || err);
-    return fail(res, 502, "tts_failed", "Service de voix indisponible");
+    return fail(res, 502, "tts_failed", `Service de voix indisponible: ${err?.message || err}`);
   }
 }
