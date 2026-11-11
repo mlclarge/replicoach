@@ -2,11 +2,23 @@ import { supabase } from "./supabase";
 import { callTts, fetchScriptVoiceLocks } from "./premiumTts";
 
 /**
- * Service de pré-génération par lot (Batch TTS) pour RépliCoach.
- * Permet de remplir de manière séquentielle et sécurisée le cache Supabase `tts-cache`
- * sans jamais surcharger le serveur Serverless Vercel.
+ * Normalise un nom de personnage pour comparaison insensible aux accents,
+ * à la casse et aux espaces superflus.
  */
+function normalizeName(name) {
+  if (!name) return "";
+  return String(name)
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
+/**
+ * Service de pré-génération par lot (Batch TTS) pour RépliCoach - v4 (Tolérant).
+ * Associe les voix par character_id ET par character_name normalisé.
+ * Gère les répliques sans character_id direct et évite tout blocage silencieux.
+ */
 export class BatchTtsGenerator {
   constructor(scriptId, replicas = [], characters = []) {
     this.scriptId = scriptId;
@@ -17,23 +29,96 @@ export class BatchTtsGenerator {
     this.isRunning = false;
   }
 
+  /**
+   * Construit une table de correspondance flexible :
+   * - character_id -> voice_id
+   * - character_name normalisé -> voice_id
+   */
+  async buildVoiceMap() {
+    const rawLocks = await fetchScriptVoiceLocks(this.scriptId);
+    const voiceById = new Map();
+    const voiceByName = new Map();
+
+    // 1. Enregistre les verrous par character_id
+    for (const [charId, voiceId] of Object.entries(rawLocks || {})) {
+      if (voiceId) {
+        voiceById.set(charId, voiceId);
+      }
+    }
+
+    // 2. Si on a la liste des personnages du script, associe les noms aux voix
+    if (Array.isArray(this.characters) && this.characters.length > 0) {
+      for (const char of this.characters) {
+        const voiceId = voiceById.get(char.id);
+        if (voiceId) {
+          const norm = normalizeName(char.name);
+          if (norm) voiceByName.set(norm, voiceId);
+        }
+      }
+    }
+
+    // 3. Fallback : si this.characters est vide dans le state, interroger Supabase
+    if (voiceByName.size === 0 && voiceById.size > 0 && this.scriptId) {
+      try {
+        const { data: dbChars } = await supabase
+          .from("characters")
+          .select("id, name")
+          .eq("script_id", this.scriptId);
+
+        for (const c of dbChars || []) {
+          const voiceId = voiceById.get(c.id);
+          if (voiceId) {
+            const norm = normalizeName(c.name);
+            if (norm) voiceByName.set(norm, voiceId);
+          }
+        }
+      } catch (err) {
+        console.warn("[BatchTTS] Erreur résolution noms personnages:", err);
+      }
+    }
+
+    return { voiceById, voiceByName, rawLocks };
+  }
+
   async getStatus() {
     if (!this.scriptId) return { total: 0, cached: 0, pending: 0, locks: {} };
 
-    // 1. Récupérer les voix verrouillées
-    const locks = await fetchScriptVoiceLocks(this.scriptId);
-    const lockedCharIds = new Set(Object.keys(locks));
+    const { voiceById, voiceByName, rawLocks } = await this.buildVoiceMap();
 
-    // 2. Filtrer les répliques qui ont un rôle avec une voix verrouillée
-    const targetReplicas = this.replicas.filter(
-      (r) => r.character_id && lockedCharIds.has(r.character_id)
-    );
+    // Filtre les répliques :
+    // - Exclut didascalies et contexte
+    // - Vérifie si une voix est verrouillée soit par character_id, soit par nom
+    const targetReplicas = this.replicas.filter((r) => {
+      const rawName = r.character_name || r.character || "";
+      const normName = normalizeName(rawName);
+
+      const isDida =
+        normName === "DIDASCALIE" ||
+        normName === "CONTEXTE" ||
+        normName === "DIDASCALIES" ||
+        r.is_context ||
+        r.is_didascalie;
+
+      if (isDida) return false;
+
+      // Correspondance par ID
+      if (r.character_id && voiceById.has(r.character_id)) {
+        return true;
+      }
+
+      // Correspondance tolérante par Nom
+      if (normName && voiceByName.has(normName)) {
+        return true;
+      }
+
+      return false;
+    });
 
     if (targetReplicas.length === 0) {
-      return { total: 0, cached: 0, pending: 0, locks, targetReplicas: [] };
+      return { total: 0, cached: 0, pending: 0, locks: rawLocks, targetReplicas: [] };
     }
 
-    // 3. Récupérer les répliques déjà en cache Supabase
+    // Récupérer les répliques déjà en cache Supabase
     try {
       const { data: cachedRows } = await supabase
         .from("tts_audio_cache")
@@ -50,16 +135,16 @@ export class BatchTtsGenerator {
         cached: cachedReplicas.length,
         pending: pendingReplicas.length,
         pendingReplicas,
-        locks,
+        locks: rawLocks,
       };
     } catch (e) {
-      console.warn("Erreur vérification cache TTS:", e);
+      console.warn("[BatchTTS] Erreur vérification cache TTS:", e);
       return {
         total: targetReplicas.length,
         cached: 0,
         pending: targetReplicas.length,
         pendingReplicas: targetReplicas,
-        locks,
+        locks: rawLocks,
       };
     }
   }
@@ -140,18 +225,21 @@ export class BatchTtsGenerator {
           current: processedCount,
           replicaId: replica.id,
           characterId: replica.character_id,
-          textSample: (replica.text || "").slice(0, 40) + "...",
+          textSample: (replica.text || "").slice(0, 45) + "...",
           successCount,
           errorCount,
         });
       }
 
-      // Appel contrôlé à l'API TTS
+      // Appel contrôlé à l'API TTS (speak, cacheOnly: false)
       let success = false;
+      let lastErrorMessage = "";
+
       for (let attempt = 0; attempt < 2; attempt++) {
         const res = await callTts("speak", {
           scriptId: this.scriptId,
           replicaId: replica.id,
+          characterId: replica.character_id,
           cacheOnly: false,
         });
 
@@ -159,17 +247,19 @@ export class BatchTtsGenerator {
           success = true;
           break;
         }
-        // Petit délai de sécurité avant tentative
-        await new Promise((res) => setTimeout(res, 500));
+
+        lastErrorMessage = res.error || res.message || "Erreur inconnue";
+        await new Promise((res) => setTimeout(res, 400));
       }
 
       if (success) {
         successCount++;
       } else {
         errorCount++;
+        console.warn(`[BatchTTS] Réplique ${replica.id} en échec:`, lastErrorMessage);
       }
 
-      // Pause de sécurité entre deux appels API pour éviter toute surcharge Serverless
+      // Pause de sécurité entre deux appels API pour ménager le quota et Vercel
       await new Promise((res) => setTimeout(res, 350));
     }
 
