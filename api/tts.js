@@ -1,4 +1,4 @@
-// /api/tts.js : voix de synthèse Premium (Google Cloud TTS) avec cache privé par utilisateur et support Troupe.
+// /api/tts.js : voix de synthèse Premium (Google Cloud TTS) avec cache privé par utilisateur et gestion de troupe.
 // Actions : status | lock | speak
 import { createClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
@@ -10,14 +10,12 @@ import {
 } from "../src/lib/ttsVoices.js";
 
 const BUCKET = "tts-cache";
-const SIGNED_URL_TTL = 3600;
+const SIGNED_URL_TTL = 3600; // 1 heure de validité pour le cache comédien
 
 const currentPeriod = () => new Date().toISOString().slice(0, 7);
 
 function fail(res, status, code, message, details = null) {
-  const payload = { error: code, message };
-  if (details) payload.details = details;
-  return res.status(status).json(payload);
+  return res.status(status).json({ error: code, message, details });
 }
 
 async function readUsage(supabase, userId) {
@@ -45,36 +43,21 @@ async function signedUrl(supabase, path) {
   }
 }
 
-// Vérifie si le script est accessible par l'utilisateur :
-// 1. Soit le script lui appartient directement (user_id)
-// 2. Soit le script est partagé avec sa troupe
-// 3. Soit le script existe dans la base (mode metteur en scène / admin)
+// Vérifie si le script existe et est accessible
 async function hasScriptAccess(supabase, userId, scriptId) {
   if (!scriptId) return false;
-
-  // 1. Appartient directement à l'utilisateur
-  const { data: ownScript } = await supabase
-    .from("scripts")
-    .select("id, user_id, troupe_id")
-    .eq("id", scriptId)
-    .maybeSingle();
-
-  if (!ownScript) return false;
-  if (ownScript.user_id === userId) return true;
-
-  // 2. Appartient à une troupe dont l'utilisateur fait partie
-  if (ownScript.troupe_id) {
-    const { data: member } = await supabase
-      .from("troupe_members")
-      .select("id")
-      .eq("troupe_id", ownScript.troupe_id)
-      .eq("user_id", userId)
+  try {
+    const { data: script, error } = await supabase
+      .from("scripts")
+      .select("id, user_id")
+      .eq("id", scriptId)
       .maybeSingle();
-    if (member) return true;
-  }
 
-  // 3. Tolérance pour les répétitions : si le script existe et qu'une réplique est demandée
-  return true;
+    if (error || !script) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function synthesize(text, voiceId) {
@@ -84,9 +67,7 @@ async function synthesize(text, voiceId) {
     process.env.VITE_GOOGLE_TTS_API_KEY;
 
   if (!apiKey) {
-    throw new Error(
-      "Clé Google TTS manquante : veuillez configurer GOOGLE_TTS_API_KEY dans vos variables d'environnement Vercel"
-    );
+    throw new Error("GOOGLE_TTS_API_KEY manquante sur le serveur Vercel");
   }
 
   const response = await fetch(
@@ -158,10 +139,10 @@ export default async function handler(req, res) {
     if (action === "status") {
       const hasAccess = await hasScriptAccess(supabase, userId, scriptId);
       if (!hasAccess) {
-        return fail(res, 404, "not_found", "Script introuvable ou non partagé");
+        return fail(res, 404, "not_found", "Script introuvable");
       }
 
-      // Recherche des verrous : d'abord pour ce user_id, sinon au niveau du script (troupe/metteur en scène)
+      // Recherche des verrous au niveau du script
       let { data: locks } = await supabase
         .from("tts_voice_locks")
         .select("character_id, voice_id")
@@ -182,7 +163,7 @@ export default async function handler(req, res) {
       }
       const hasAccess = await hasScriptAccess(supabase, userId, scriptId);
       if (!hasAccess) {
-        return fail(res, 404, "not_found", "Script introuvable ou non partagé");
+        return fail(res, 404, "not_found", "Script introuvable");
       }
 
       const { data: character } = await supabase
@@ -220,14 +201,14 @@ export default async function handler(req, res) {
         hasScriptAccess(supabase, userId, scriptId),
         supabase
           .from("replicas")
-          .select("id, character_id, text")
+          .select("id, character_id, character_name, text")
           .eq("id", replicaId)
           .eq("script_id", scriptId)
           .maybeSingle(),
       ]);
 
       if (!hasAccess) {
-        return fail(res, 404, "not_found", "Script introuvable ou non partagé");
+        return fail(res, 404, "not_found", "Script introuvable");
       }
       if (!replica) {
         return fail(res, 404, "not_found", "Réplique introuvable");
@@ -240,14 +221,39 @@ export default async function handler(req, res) {
       }
 
       // Recherche de la voix verrouillée pour ce personnage :
-      // 1. Cherche un verrou pour cet utilisateur
-      // 2. Sinon cherche un verrou pour le créateur du script (partage troupe)
-      let { data: lock } = await supabase
-        .from("tts_voice_locks")
-        .select("voice_id, user_id")
-        .eq("script_id", scriptId)
-        .eq("character_id", replica.character_id)
-        .maybeSingle();
+      let lock = null;
+      if (replica.character_id) {
+        const { data: directLock } = await supabase
+          .from("tts_voice_locks")
+          .select("voice_id, user_id")
+          .eq("script_id", scriptId)
+          .eq("character_id", replica.character_id)
+          .limit(1)
+          .maybeSingle();
+        lock = directLock;
+      }
+
+      // Fallback par nom de personnage si character_id n'a pas matché
+      if (!lock && replica.character_name) {
+        const { data: matchedChar } = await supabase
+          .from("characters")
+          .select("id")
+          .eq("script_id", scriptId)
+          .ilike("name", replica.character_name.trim())
+          .limit(1)
+          .maybeSingle();
+
+        if (matchedChar) {
+          const { data: charLock } = await supabase
+            .from("tts_voice_locks")
+            .select("voice_id, user_id")
+            .eq("script_id", scriptId)
+            .eq("character_id", matchedChar.id)
+            .limit(1)
+            .maybeSingle();
+          lock = charLock;
+        }
+      }
 
       if (!lock) {
         return fail(res, 409, "voice_not_chosen", "Aucune voix Premium n'est encore verrouillée pour ce personnage");
@@ -263,6 +269,7 @@ export default async function handler(req, res) {
         .eq("replica_id", replica.id)
         .eq("voice_id", lock.voice_id)
         .eq("text_hash", textHash)
+        .limit(1)
         .maybeSingle();
 
       if (cached?.storage_path) {
@@ -304,29 +311,27 @@ export default async function handler(req, res) {
           }
         }
       } catch (quotaErr) {
-        console.warn("[api/tts] Quota RPC ignoré ou non critique:", quotaErr?.message);
+        console.warn("[api/tts] RPC reserve_tts_quota fallback:", quotaErr?.message);
       }
 
       try {
-        // Synthèse Google Cloud TTS
         const audio = await synthesize(text, lock.voice_id);
         const path = `${userId}/${scriptId}/${replica.id}-${lock.voice_id}-${textHash}.mp3`;
 
-        // Upload dans Supabase Storage
         const { error: uploadError } = await supabase.storage
           .from(BUCKET)
           .upload(path, audio, { contentType: "audio/mpeg", upsert: true });
 
         if (uploadError) {
-          throw new Error(`Échec upload Supabase Storage : ${uploadError.message}`);
+          throw new Error(`Échec stockage Supabase Storage: ${uploadError.message}`);
         }
 
-        // Enregistrement dans la table tts_audio_cache
         await supabase.from("tts_audio_cache").upsert(
           {
             user_id: userId,
             script_id: scriptId,
             replica_id: replica.id,
+            character_id: replica.character_id || null,
             voice_id: lock.voice_id,
             text_hash: textHash,
             storage_path: path,
@@ -336,7 +341,9 @@ export default async function handler(req, res) {
         );
 
         const url = await signedUrl(supabase, path);
-        if (!url) throw new Error("Impossible de générer l'URL signée du fichier audio");
+        if (!url) {
+          throw new Error("URL signée Supabase Storage indisponible après génération");
+        }
 
         return res.status(200).json({
           url,
@@ -344,29 +351,26 @@ export default async function handler(req, res) {
           usage: await readUsage(supabase, userId),
         });
       } catch (err) {
-        // Remboursement du quota si échec
-        try {
+        if (reservedTotal !== null) {
           await supabase.rpc("release_tts_quota", {
             p_user: userId,
             p_period: period,
             p_chars: text.length,
-          });
-        } catch {
-          // ignore
+          }).catch(() => {});
         }
         throw err;
       }
     }
 
-    return fail(res, 400, "bad_action", `Action inconnue : ${action}`);
+    return fail(res, 400, "bad_action", "Action inconnue demandée à l'API");
   } catch (err) {
-    console.error("[api/tts]", err?.message || err);
+    console.error("[api/tts fatal]", err?.message || err);
     return fail(
       res,
       502,
       "tts_failed",
-      `Erreur lors du traitement TTS : ${err?.message || err}`,
-      err?.message || String(err)
+      `Échec du service de voix Premium : ${err?.message || err}`,
+      err?.stack
     );
   }
 }
