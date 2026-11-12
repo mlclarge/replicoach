@@ -125,11 +125,14 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
+const REHEARSAL_SETTINGS_VERSION = 2;
+
 const REHEARSAL_DEFAULTS = {
+  settingsVersion: REHEARSAL_SETTINGS_VERSION,
   myRole: null,
-  hideUnlistened: false, // ⚡ OPTIMISATION : masque visuellement les répliques non écoutées
-  hideMyRole: true,
-  dimOthers: true, // estompe les bulles des autres rôles
+  hideUnlistened: false, // conservé pour compatibilité : l'affichage suit désormais le mode d'écoute
+  hideMyRole: false,
+  dimOthers: false, // estompe les bulles des autres rôles
   readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
   listenMode: "all", // all | aroundMine | mineOnly
   beforeCount: 1, // répliques entendues avant la mienne (0 à 3)
@@ -366,6 +369,12 @@ function AudioMode() {
       // Conversion des anciens réglages (none | before | after | both)
       if (["none", "before", "after", "both"].includes(saved.readMine)) {
         saved.readMine = saved.readMine === "none" ? "memory" : "read";
+      }
+      // Anciens réglages : les deux cases de l'étape 1 repartent décochées (une seule fois)
+      if (saved.settingsVersion !== REHEARSAL_SETTINGS_VERSION) {
+        delete saved.hideMyRole;
+        delete saved.dimOthers;
+        saved.settingsVersion = REHEARSAL_SETTINGS_VERSION;
       }
       return { ...REHEARSAL_DEFAULTS, ...saved };
     } catch (e) {
@@ -1336,6 +1345,10 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       return;
     }
     const target = displayReplicas[n - 1];
+    if (listenIndices && !listenIndices.has(n - 1)) {
+      setJumpError("Cette réplique est hors du périmètre d'écoute choisi.");
+      return;
+    }
     const wasPlaying = isPlaying;
     stop();
     setCurrentIndex(n - 1);
@@ -1961,8 +1974,8 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {renderScopeVideo(SCRIPT_VIDEO_KEY)}
         {displayReplicas.map((replica, index) => {
-          // ⚡ OPTIMISATION : Masquage visuel des répliques non écoutées
-          if (rehearsal.hideUnlistened && listenIndices && !listenIndices.has(index)) {
+          // Seules les répliques du périmètre d'écoute (rôle + mode choisi) sont affichées
+          if (listenIndices && !listenIndices.has(index)) {
             return null;
           }
           const character = characters.find(

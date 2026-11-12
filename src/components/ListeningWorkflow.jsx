@@ -231,18 +231,6 @@ export default function ListeningWorkflow({
         )}
         {listenSummary && <p className="text-[11px] text-emerald-800 font-semibold">{listenSummary}</p>}
 
-        {/* ⚡ OPTIMISATION : Toggle pour filtrage visuel des répliques non écoutées */}
-        {hasRole && rehearsal.listenMode !== LISTEN_MODES.all && (
-          <div className="mt-2 pt-2 border-t border-amber-200">
-            <Toggle
-              checked={rehearsal.hideUnlistened || false}
-              onChange={(v) => onUpdate({ hideUnlistened: v })}
-            >
-              👁️ Masquer visuellement les répliques non écoutées
-            </Toggle>
-          </div>
-        )}
-
         {hasRole && rehearsal.hideMyRole && (
           <div className="mt-2">
             <span className="text-xs font-bold text-gray-800 block mb-1">Quand arrive ma réplique</span>

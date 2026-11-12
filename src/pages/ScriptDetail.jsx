@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
+import { useScriptFilters } from "../hooks/useScriptFilters";
 import { getFileUrl, fetchUserTroupes, shareScript, getUserRole } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import ReplicaGroupsManager from "../components/ReplicaGroups";
@@ -130,10 +131,25 @@ function ScriptDetail() {
   const [showReplicaGroups, setShowReplicaGroups] = useState(false);
   const [studyingGroup, setStudyingGroup] = useState(null);
   const [showFloatingRecorder, setShowFloatingRecorder] = useState(false);
-  const [myCharacterId, setMyCharacterId] = useState(null);
-  const [filterMode, setFilterMode] = useState("all"); // "all" | "role"
-  const [contextBefore, setContextBefore] = useState(1); // nb de répliques d'amorce avant les miennes
-  const [hideMyReplicas, setHideMyReplicas] = useState(false);
+  const {
+    myCharacterId,
+    setMyCharacterId,
+    filterMode,
+    setFilterMode,
+    contextBefore,
+    setContextBefore,
+    hideMyReplicas,
+    resetFilters,
+    hasActiveFilters,
+  } = useScriptFilters(id);
+
+  // Un rôle mémorisé qui n'existe plus (personnage supprimé) ne doit pas vider l'affichage
+  useEffect(() => {
+    if (myCharacterId && characters.length > 0 && !characters.some((c) => c.id === myCharacterId)) {
+      setMyCharacterId(null);
+      setFilterMode("all");
+    }
+  }, [myCharacterId, characters]);
   const [coachingMode, setCoachingMode] = useState(null);
   const [coachingCharacterId, setCoachingCharacterId] = useState(null);
 
@@ -442,6 +458,7 @@ function ScriptDetail() {
     currentScript?.replicas,
     currentScript?.characters,
     selectedCharacter,
+    myCharacterId,
     filterMode,
     contextBefore,
     selectedSceneKey,
@@ -934,16 +951,16 @@ function ScriptDetail() {
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1.5">
               <span>🎭</span> Sélectionner mon personnage :
             </span>
-            {myCharacterId && (
+            {(myCharacterId || hasActiveFilters) && (
               <button
                 onClick={() => {
-                  setMyCharacterId(null);
+                  resetFilters();
                   setSelectedCharacter(null);
-                  setFilterMode("all");
                 }}
-                className="text-xs text-rose-600 hover:text-rose-800 font-bold underline flex items-center gap-1"
+                className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white border border-red-700 text-xs font-extrabold rounded-lg transition-all shadow-md active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                title="Remise à zéro de tous les filtres"
               >
-                <span>✖</span> Réinitialiser
+                <span>🔄</span> Remise à zéro des filtres
               </button>
             )}
           </div>
