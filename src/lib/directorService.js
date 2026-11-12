@@ -97,8 +97,9 @@ export const fetchMyAssignedScripts = async (userEmail) => {
   
   const { data, error } = await supabase
     .from("script_assignments")
-    .select("*, scripts(id, title, full_text, user_id)")
-    .eq("assigned_to_email", cleanEmail);
+    .select("*, scripts(id, title, user_id)")
+    .eq("assigned_to_email", cleanEmail)
+    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Erreur fetchMyAssignedScripts:", error);

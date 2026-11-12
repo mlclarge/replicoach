@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { fetchMyAssignedScripts } from '../lib/directorService';
 
 export const useScriptStore = create((set, get) => ({
   scripts: [],
+  assignedScripts: [],
   currentScript: null,
   loading: false,
   error: null,
@@ -48,6 +50,20 @@ export const useScriptStore = create((set, get) => ({
       console.error('Error fetching scripts:', err);
       set({ error: err.message, loading: false });
     }
+  },
+
+  // 1.b Charger les textes affectés par un metteur en scène / le dev (accès direct, sans copie)
+  fetchAssignedScripts: async (userId, userEmail) => {
+    if (!userEmail) {
+      set({ assignedScripts: [] });
+      return [];
+    }
+    const assignments = await fetchMyAssignedScripts(userEmail);
+    const assigned = assignments.filter(
+      (a) => a.scripts && a.scripts.user_id !== userId
+    );
+    set({ assignedScripts: assigned });
+    return assigned;
   },
 
   // 2. Charger un script complet par son ID (découplé anti-PGRST201)

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { fetchDirectorNotes, getUserRole } from "../lib/supabase";
-import { fetchMyAssignedScripts } from "../lib/directorService";
 import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
 import AdminPanel from "../components/AdminPanel";
@@ -15,12 +14,11 @@ const ADMIN_EMAILS = ["moz2611@gmail.com"];
 function Profile() {
   const navigate = useNavigate();
   const { user, isPremium, signOut } = useAuthStore();
-  const { scripts, fetchScripts } = useScriptStore();
+  const { scripts, assignedScripts, fetchScripts, fetchAssignedScripts } = useScriptStore();
 
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRoleState] = useState("member");
   const [directorNotes, setDirectorNotes] = useState([]);
-  const [assignedScripts, setAssignedScripts] = useState([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [activeTab, setActiveTab] = useState("scripts");
 
@@ -36,11 +34,7 @@ function Profile() {
       const role = await getUserRole(user.id);
       setUserRoleState(role);
 
-      // En Option A : Lecture directe et permanente des pièces affectées
-      if (user.email) {
-        const assigned = await fetchMyAssignedScripts(user.email);
-        setAssignedScripts(assigned || []);
-      }
+      await fetchAssignedScripts(user.id, user.email);
 
       await fetchScripts(user.id);
 

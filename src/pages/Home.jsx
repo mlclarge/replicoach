@@ -44,6 +44,44 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import "../styles/mes-saynetes.css";
 
+// Textes affectés par un metteur en scène ou le dev : lecture directe, toujours présents à la connexion
+function AssignedScriptsSection({ assignments, onOpen }) {
+  if (!assignments || assignments.length === 0) return null;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between border-b border-gray-800 pb-3">
+        <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
+          <span>📌</span> Affectés par votre metteur en scène
+        </h2>
+        <span className="text-xs font-bold px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full font-mono">
+          {assignments.length} texte{assignments.length > 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        {assignments.map((a) => (
+          <button
+            key={a.id}
+            onClick={() => onOpen(a.script_id)}
+            className="text-left p-4 bg-amber-950/40 hover:bg-amber-950/60 border-2 border-amber-500/50 hover:border-amber-400 rounded-2xl transition shadow-lg flex items-center gap-3"
+          >
+            <span className="text-2xl">📜</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-white font-bold text-sm truncate">
+                {a.scripts?.title || "Texte de troupe"}
+              </p>
+              <p className="text-[11px] text-amber-300/80">
+                Accès permanent • Prêt pour répétition
+              </p>
+            </div>
+            <span className="text-amber-400 text-lg">→</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function DirectorNotesSection({
   notes,
   onUpload,
@@ -200,6 +238,8 @@ export default function Home() {
     deleteScript,
     updateScriptOrder,
     countNotesForScripts,
+    assignedScripts,
+    fetchAssignedScripts,
   } = useScriptStore();
 
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -248,6 +288,7 @@ export default function Home() {
     if (!user) return;
     try {
       await fetchScripts(user.id);
+      await fetchAssignedScripts(user.id, user.email);
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
 
@@ -259,7 +300,7 @@ export default function Home() {
     } catch (err) {
       console.error(err);
     }
-  }, [user, fetchScripts]);
+  }, [user, fetchScripts, fetchAssignedScripts]);
 
   useEffect(() => {
     loadData();
@@ -471,6 +512,10 @@ export default function Home() {
         </div>
       ) : activeHomeTab === "library" ? (
         <div className="space-y-8">
+          <AssignedScriptsSection
+            assignments={assignedScripts}
+            onOpen={handleOpenScript}
+          />
           {/* 1. BLOC ON TOP : MES TEXTES & SAYNÈTES */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">
@@ -565,6 +610,10 @@ export default function Home() {
       ) : (
         /* ACCUEIL PRINCIPAL : LISTE DE TEXTES ON TOP + LES 2 PARCOURS EN DESSOUS */
         <div className="space-y-8">
+          <AssignedScriptsSection
+            assignments={assignedScripts}
+            onOpen={handleOpenScript}
+          />
           {/* 1. BLOC ON TOP : MES TEXTES & SAYNÈTES */}
           <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-gray-800 pb-3">

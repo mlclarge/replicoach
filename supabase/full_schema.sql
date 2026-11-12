@@ -571,6 +571,65 @@ DROP POLICY IF EXISTS "pa_all" ON public.personal_audios;
 CREATE POLICY "pa_all" ON public.personal_audios FOR ALL TO authenticated
   USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
+-- Affectation de textes par e-mail (metteur en scène / dev -> comédien)
+CREATE TABLE IF NOT EXISTS public.director_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  director_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  actor_email TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_director_actor UNIQUE (director_id, actor_email)
+);
+CREATE TABLE IF NOT EXISTS public.script_assignments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  script_id UUID NOT NULL REFERENCES public.scripts(id) ON DELETE CASCADE,
+  assigned_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  assigned_to_email TEXT NOT NULL,
+  is_default BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_script_assigned UNIQUE (script_id, assigned_to_email)
+);
+CREATE INDEX IF NOT EXISTS idx_director_members_director ON public.director_members(director_id);
+CREATE INDEX IF NOT EXISTS idx_director_members_email ON public.director_members(actor_email);
+CREATE INDEX IF NOT EXISTS idx_script_assignments_email ON public.script_assignments(assigned_to_email);
+ALTER TABLE public.director_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.script_assignments ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Metteur en scène gère ses comédiens" ON public.director_members;
+CREATE POLICY "Metteur en scène gère ses comédiens" ON public.director_members FOR ALL
+  USING (auth.uid() = director_id);
+DROP POLICY IF EXISTS "Comédien voit son appartenance" ON public.director_members;
+CREATE POLICY "Comédien voit son appartenance" ON public.director_members FOR SELECT
+  USING (LOWER(actor_email) = LOWER(auth.jwt()->>'email'));
+DROP POLICY IF EXISTS "Metteur en scène gère ses affectations" ON public.script_assignments;
+CREATE POLICY "Metteur en scène gère ses affectations" ON public.script_assignments FOR ALL
+  USING (auth.uid() = assigned_by);
+DROP POLICY IF EXISTS "Comédien voit ses textes affectés" ON public.script_assignments;
+CREATE POLICY "Comédien voit ses textes affectés" ON public.script_assignments FOR SELECT
+  USING (LOWER(assigned_to_email) = LOWER(auth.jwt()->>'email'));
+
+-- Lecture (seule) des textes affectés : scripts, personnages, répliques
+DROP POLICY IF EXISTS "Comédien lit son texte affecté" ON public.scripts;
+CREATE POLICY "Comédien lit son texte affecté" ON public.scripts FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.script_assignments a
+    WHERE a.script_id = scripts.id
+      AND LOWER(a.assigned_to_email) = LOWER(auth.jwt()->>'email')
+  ));
+DROP POLICY IF EXISTS "Comédien lit les personnages du texte affecté" ON public.characters;
+CREATE POLICY "Comédien lit les personnages du texte affecté" ON public.characters FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.script_assignments a
+    WHERE a.script_id = characters.script_id
+      AND LOWER(a.assigned_to_email) = LOWER(auth.jwt()->>'email')
+  ));
+DROP POLICY IF EXISTS "Comédien lit les répliques du texte affecté" ON public.replicas;
+CREATE POLICY "Comédien lit les répliques du texte affecté" ON public.replicas FOR SELECT
+  USING (EXISTS (
+    SELECT 1 FROM public.script_assignments a
+    WHERE a.script_id = replicas.script_id
+      AND LOWER(a.assigned_to_email) = LOWER(auth.jwt()->>'email')
+  ));
+
 -- active_sessions
 DROP POLICY IF EXISTS "as_select" ON public.active_sessions;
 CREATE POLICY "as_select" ON public.active_sessions FOR SELECT TO authenticated USING (true);
