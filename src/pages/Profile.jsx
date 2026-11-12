@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useScriptStore } from "../store/scriptStore";
 import { fetchDirectorNotes, getUserRole } from "../lib/supabase";
-import { fetchMyAssignedScripts, syncAssignedScriptsToActor } from "../lib/directorService";
+import { fetchMyAssignedScripts } from "../lib/directorService";
 import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
 import AdminPanel from "../components/AdminPanel";
@@ -36,8 +36,8 @@ function Profile() {
       const role = await getUserRole(user.id);
       setUserRoleState(role);
 
+      // En Option A : Lecture directe et permanente des pièces affectées
       if (user.email) {
-        await syncAssignedScriptsToActor(user.id, user.email);
         const assigned = await fetchMyAssignedScripts(user.email);
         setAssignedScripts(assigned || []);
       }
@@ -136,6 +136,7 @@ function Profile() {
         </div>
       </div>
 
+      {/* Textes affectés par le Metteur en scène (Option A : Accès Direct et Permanent) */}
       {assignedScripts.length > 0 && (
         <div className="mb-6 p-4 bg-amber-950/40 border-2 border-gold-500/50 rounded-xl shadow-lg animate-fade-in">
           <h3 className="text-sm font-bold text-gold-400 flex items-center gap-2 mb-1">
@@ -149,20 +150,22 @@ function Profile() {
             {assignedScripts.map((a) => (
               <div
                 key={a.id}
-                onClick={async () => {
-                  await syncAssignedScriptsToActor(user.id, user.email);
-                  await fetchScripts(user.id);
-                  navigate(`/script/${a.script_id}`);
-                }}
-                className="p-3 bg-gray-900/80 hover:bg-gray-900 border border-gold-500/40 rounded-lg cursor-pointer transition flex items-center justify-between"
+                onClick={() => navigate(`/script/${a.script_id}`)}
+                className="p-3 bg-gray-900/80 hover:bg-gray-800 border border-gold-500/40 rounded-lg cursor-pointer transition flex items-center justify-between"
               >
                 <div className="min-w-0">
                   <p className="text-white text-xs font-bold truncate">📜 {a.scripts?.title || "Texte de troupe"}</p>
-                  <p className="text-[11px] text-gray-400">Synchronisé pour répétition en Mode Audio</p>
+                  <p className="text-[11px] text-gray-400">Accès permanent • Prêt pour répétition en Mode Audio</p>
                 </div>
-                <span className="px-3 py-1 bg-gold-500 text-black text-xs font-bold rounded-full flex-shrink-0">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/script/${a.script_id}`);
+                  }}
+                  className="px-4 py-1.5 bg-gradient-to-r from-amber-500 to-gold-500 hover:from-amber-400 hover:to-gold-400 text-black text-xs font-bold rounded-full shadow transition flex-shrink-0"
+                >
                   Ouvrir ▶
-                </span>
+                </button>
               </div>
             ))}
           </div>
