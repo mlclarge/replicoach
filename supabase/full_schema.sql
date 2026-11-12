@@ -245,16 +245,28 @@ RETURNS void LANGUAGE sql SECURITY DEFINER SET search_path = public AS $$
 $$;
 
 -- user_id NULL = consigne publique visible par tous
+-- script_id renseigné = consigne du metteur en scène rattachée à une pièce (fichier, lien ou lien vidéo)
 CREATE TABLE IF NOT EXISTS public.director_notes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   troupe_id UUID REFERENCES public.troupes(id) ON DELETE CASCADE,
+  script_id UUID REFERENCES public.scripts(id) ON DELETE CASCADE,
+  scope_type TEXT NOT NULL DEFAULT 'script' CHECK (scope_type IN ('script', 'act', 'scene', 'replica')),
+  scope_key TEXT,
+  kind TEXT NOT NULL DEFAULT 'file' CHECK (kind IN ('file', 'link', 'video_link')),
+  url TEXT,
+  title TEXT,
   file_name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
+  file_path TEXT,
   file_size BIGINT,
   file_type TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT director_notes_content_check CHECK (
+    (kind = 'file' AND file_path IS NOT NULL)
+    OR (kind <> 'file' AND url IS NOT NULL AND url ~* '^https://')
+  )
 );
+CREATE INDEX IF NOT EXISTS idx_director_notes_script_id ON public.director_notes(script_id);
 
 CREATE TABLE IF NOT EXISTS public.global_videos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -515,15 +527,7 @@ DROP POLICY IF EXISTS "pd_delete" ON public.public_documents;
 CREATE POLICY "pd_delete" ON public.public_documents FOR DELETE TO authenticated
   USING (uploaded_by = auth.uid() OR public.is_dev());
 
--- director_notes
-DROP POLICY IF EXISTS "dn_select" ON public.director_notes;
-CREATE POLICY "dn_select" ON public.director_notes FOR SELECT TO authenticated
-  USING (user_id IS NULL OR user_id = auth.uid()
-         OR (troupe_id IS NOT NULL AND public.is_troupe_member(troupe_id)));
-DROP POLICY IF EXISTS "dn_insert" ON public.director_notes;
-CREATE POLICY "dn_insert" ON public.director_notes FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid()
-              AND (troupe_id IS NULL OR public.is_troupe_member(troupe_id)));
+-- director_notes : lecture/ajout définis plus bas (dépendent de script_assignments)
 DROP POLICY IF EXISTS "dn_delete" ON public.director_notes;
 CREATE POLICY "dn_delete" ON public.director_notes FOR DELETE TO authenticated
   USING (user_id = auth.uid() OR public.is_dev()
@@ -629,6 +633,47 @@ CREATE POLICY "Comédien lit les répliques du texte affecté" ON public.replica
     WHERE a.script_id = replicas.script_id
       AND LOWER(a.assigned_to_email) = LOWER(auth.jwt()->>'email')
   ));
+
+-- Consignes du metteur en scène rattachées à une pièce
+CREATE OR REPLACE FUNCTION public.is_script_assigned_to_me(sid UUID)
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.script_assignments a
+    WHERE a.script_id = sid
+      AND lower(a.assigned_to_email) = lower(coalesce(auth.jwt()->>'email', ''))
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION public.is_director_or_dev()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = auth.uid() AND role IN ('dev', 'director')
+  );
+$$;
+
+DROP POLICY IF EXISTS "dn_select" ON public.director_notes;
+CREATE POLICY "dn_select" ON public.director_notes FOR SELECT TO authenticated
+  USING (
+    user_id IS NULL
+    OR user_id = auth.uid()
+    OR (troupe_id IS NOT NULL AND public.is_troupe_member(troupe_id))
+    OR (script_id IS NOT NULL AND (
+      public.is_script_owner(script_id)
+      OR public.is_script_shared_with_me(script_id)
+      OR public.is_script_assigned_to_me(script_id)
+    ))
+  );
+DROP POLICY IF EXISTS "dn_insert" ON public.director_notes;
+CREATE POLICY "dn_insert" ON public.director_notes FOR INSERT TO authenticated
+  WITH CHECK (
+    user_id = auth.uid()
+    AND (troupe_id IS NULL OR public.is_troupe_member(troupe_id))
+    AND (
+      script_id IS NULL
+      OR (public.is_director_or_dev() AND (public.is_script_owner(script_id) OR public.is_dev()))
+    )
+  );
 
 -- active_sessions
 DROP POLICY IF EXISTS "as_select" ON public.active_sessions;

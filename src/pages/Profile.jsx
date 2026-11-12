@@ -7,6 +7,7 @@ import Loader from "../components/ui/Loader";
 import { MonitoringPanel } from "../components/Monitoring";
 import AdminPanel from "../components/AdminPanel";
 import DirectorTroupeManager from "../components/DirectorTroupeManager";
+import DirectorDocManager from "../components/DirectorDocManager";
 import AudioSettingsPanel from "../components/AudioSettingsPanel";
 
 const ADMIN_EMAILS = ["moz2611@gmail.com"];
@@ -186,6 +187,8 @@ function Profile() {
       </div>
 
       {isDirectorOrDev && <DirectorTroupeManager />}
+
+      {isDirectorOrDev && <DirectorDocManager />}
 
       {isDev && ADMIN_EMAILS.includes(user?.email?.toLowerCase()) && (
         <div className="mb-6">

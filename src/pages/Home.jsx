@@ -15,8 +15,10 @@ import {
   fetchPersonalAudios,
   deletePersonalAudio,
   getAudioUrl,
+  supabase,
 } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
+import { validateDocFile, formatBytes } from "../lib/directorDocs";
 import DocumentViewer from "../components/DocumentViewer";
 import PublicLibrary from "../components/PublicLibrary";
 import CoachingHub from "../components/CoachingHub";
@@ -91,9 +93,29 @@ function DirectorNotesSection({
   error,
   expanded,
   onToggleExpand,
+  canUpload = true,
+  scriptTitles = {},
+  currentUserId,
 }) {
   const [dragActive, setDragActive] = useState(false);
   const safeNotes = Array.isArray(notes) ? notes : [];
+
+  // Regroupement par pièce ; les consignes générales (sans pièce) restent en tête
+  const noteGroups = [];
+  const groupIndex = {};
+  safeNotes.forEach((note) => {
+    const key = note.script_id || "general";
+    if (!(key in groupIndex)) {
+      groupIndex[key] = noteGroups.length;
+      noteGroups.push({
+        key,
+        label: note.script_id ? `📜 ${scriptTitles[note.script_id] || "Pièce"}` : "Consignes générales",
+        items: [],
+      });
+    }
+    noteGroups[groupIndex[key]].items.push(note);
+  });
+  noteGroups.sort((a, b) => (a.key === "general" ? -1 : b.key === "general" ? 1 : 0));
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -160,6 +182,7 @@ function DirectorNotesSection({
         <div className="mt-4 pt-4 border-t border-amber-300/80 transition text-gray-900">
           {error && <p className="text-red-600 text-xs font-bold mb-3">{error}</p>}
 
+          {canUpload && (
           <div
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -172,7 +195,7 @@ function DirectorNotesSection({
             }`}
           >
             <p className="text-xs text-gray-900 font-semibold mb-2">
-              Glissez vos consignes (PDF, Word, TXT, Images) ici
+              Glissez vos consignes (PDF, Word, TXT, Images) ici — {formatBytes(10 * 1024 * 1024)} maximum par document
             </p>
             <label className="btn-gold text-xs px-3 py-1.5 inline-block cursor-pointer font-bold bg-amber-500 text-gray-950 rounded-lg border border-amber-600 shadow">
               {uploading ? "⏳ Upload..." : "📤 Parcourir les fichiers"}
@@ -187,35 +210,51 @@ function DirectorNotesSection({
               />
             </label>
           </div>
+          )}
 
           {safeNotes.length === 0 ? (
             <p className="text-gray-700 text-xs font-medium text-center py-3">
               Aucune consigne ajoutée.
             </p>
           ) : (
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {safeNotes.map((note) => (
-                <div
-                  key={note.id}
-                  className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-300 hover:border-amber-400 transition text-xs shadow-sm"
-                >
-                  <div
-                    onClick={() => onViewDocument(note)}
-                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
-                  >
-                    <span className="text-base">
-                      {note.file_name?.endsWith(".pdf") ? "📕" : "📝"}
-                    </span>
-                    <span className="text-gray-900 font-bold truncate">
-                      {note.file_name}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => onDelete(note.id, note.file_path)}
-                    className="p-1 text-gray-600 hover:text-red-600 rounded transition"
-                  >
-                    🗑️
-                  </button>
+            <div className="space-y-3 max-h-72 overflow-y-auto">
+              {noteGroups.map((group) => (
+                <div key={group.key} className="space-y-2">
+                  <p className="text-[11px] font-extrabold text-amber-950 uppercase tracking-wide">
+                    {group.label}
+                  </p>
+                  {group.items.map((note) => (
+                    <div
+                      key={note.id}
+                      className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-300 hover:border-amber-400 transition text-xs shadow-sm"
+                    >
+                      <div
+                        onClick={() => onViewDocument(note)}
+                        className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                      >
+                        <span className="text-base">
+                          {note.kind === "video_link"
+                            ? "🎬"
+                            : note.kind === "link"
+                            ? "🔗"
+                            : note.file_name?.endsWith(".pdf")
+                            ? "📕"
+                            : "📝"}
+                        </span>
+                        <span className="text-gray-900 font-bold truncate">
+                          {note.title || note.file_name}
+                        </span>
+                      </div>
+                      {(!note.script_id || note.user_id === currentUserId) && (
+                        <button
+                          onClick={() => onDelete(note.id, note.file_path)}
+                          className="p-1 text-gray-600 hover:text-red-600 rounded transition"
+                        >
+                          🗑️
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -253,6 +292,8 @@ export default function Home() {
   const [uploadError, setUploadError] = useState(null);
   const [directorNotesExpanded, setDirectorNotesExpanded] = useState(false);
   const [viewingDocument, setViewingDocument] = useState(null);
+  const [canManageDocs, setCanManageDocs] = useState(false);
+  const [extraScriptTitles, setExtraScriptTitles] = useState({});
 
   const [scriptToShare, setScriptToShare] = useState(null);
   const [shareTroupes, setShareTroupes] = useState([]);
@@ -289,8 +330,23 @@ export default function Home() {
     try {
       await fetchScripts(user.id);
       await fetchAssignedScripts(user.id, user.email);
+      const role = await getUserRole(user.id);
+      setCanManageDocs(role === "director" || role === "dev");
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
+
+      // Titres des pièces des consignes qui ne sont ni à moi ni affectées (ex. pièces de troupe)
+      const knownIds = new Set([
+        ...(useScriptStore.getState().scripts || []).map((s) => s.id),
+        ...(useScriptStore.getState().assignedScripts || []).map((a) => a.script_id),
+      ]);
+      const missingIds = [
+        ...new Set((notes || []).map((n) => n.script_id).filter((sid) => sid && !knownIds.has(sid))),
+      ];
+      if (missingIds.length > 0) {
+        const { data: extra } = await supabase.from("scripts").select("id, title").in("id", missingIds);
+        setExtraScriptTitles(Object.fromEntries((extra || []).map((s) => [s.id, s.title])));
+      }
 
       const tags = await fetchUserTags(user.id);
       setUserTags(tags || []);
@@ -428,11 +484,19 @@ export default function Home() {
 
   const handleUploadDirectorNote = async (files) => {
     if (!files || files.length === 0) return;
-    setUploadingNote(true);
     setUploadError(null);
+
+    const list = Array.from(files);
+    const problem = list.map((f) => validateDocFile(f)).find(Boolean);
+    if (problem) {
+      setUploadError(problem);
+      return;
+    }
+
+    setUploadingNote(true);
     try {
-      for (const file of files) {
-        await uploadDirectorNote(user.id, file);
+      for (const file of list) {
+        await uploadDirectorNote(file, user.id);
       }
       const notes = await fetchDirectorNotes(user.id);
       setDirectorNotes(notes || []);
@@ -454,11 +518,27 @@ export default function Home() {
   };
 
   const handleViewDocument = (note) => {
+    if (note.kind && note.kind !== "file") {
+      if (note.url) window.open(note.url, "_blank", "noopener,noreferrer");
+      return;
+    }
     const url = getDirectorNoteUrl(note.file_path);
     if (url) {
-      setViewingDocument({ title: note.file_name, url });
+      setViewingDocument({
+        file_name: note.title || note.file_name,
+        file_url: url,
+        file_type: note.file_type,
+      });
     }
   };
+
+  const noteScriptTitles = { ...extraScriptTitles };
+  (scripts || []).forEach((s) => {
+    noteScriptTitles[s.id] = s.title;
+  });
+  (assignedScripts || []).forEach((a) => {
+    if (a.scripts) noteScriptTitles[a.script_id] = a.scripts.title;
+  });
 
   const handleDeleteAudio = async (audioId, audioPath) => {
     if (!confirm("Supprimer cet audio personnel ?")) return;
@@ -502,6 +582,9 @@ export default function Home() {
             onUpload={handleUploadDirectorNote}
             onDelete={handleDeleteDirectorNote}
             onViewDocument={handleViewDocument}
+            canUpload={canManageDocs}
+            scriptTitles={noteScriptTitles}
+            currentUserId={user?.id}
             uploading={uploadingNote}
             error={uploadError}
             expanded={directorNotesExpanded}

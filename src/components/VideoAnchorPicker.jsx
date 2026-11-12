@@ -6,7 +6,13 @@ import { SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorag
  * pièce entière, acte, scène ou réplique (#numéro).
  * Remonte la clé de stockage via onChange(targetKey).
  */
-export default function VideoAnchorPicker({ replicas = [], characters = [], scenes = [], onChange }) {
+export default function VideoAnchorPicker({
+  replicas = [],
+  characters = [],
+  scenes = [],
+  onChange,
+  label = "📌 Insérer la vidéo dans le script :",
+}) {
   const [scope, setScope] = useState("script");
   const [replicaNumber, setReplicaNumber] = useState(1);
   const [actTitle, setActTitle] = useState("");
@@ -48,7 +54,7 @@ export default function VideoAnchorPicker({ replicas = [], characters = [], scen
 
   return (
     <div className="space-y-3 bg-gray-950/60 p-3.5 rounded-2xl border border-white/10 text-xs text-left">
-      <label className="block text-gray-400 font-bold">📌 Insérer la vidéo dans le script :</label>
+      <label className="block text-gray-400 font-bold">{label}</label>
       <div className="flex flex-wrap gap-1.5">
         {availableScopes.map((s) => (
           <button

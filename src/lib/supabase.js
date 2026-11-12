@@ -120,12 +120,14 @@ export const fetchDirectorNotes = async (userId) => {
     .select("*")
     .order("created_at", { ascending: false });
 
+  // Les consignes rattachées à une pièce (script_id) sont filtrées par les règles RLS :
+  // seuls les comédiens ayant accès à la pièce les reçoivent.
   if (troupeIds.length > 0) {
     query = query.or(
-      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")}),user_id.is.null`
+      `user_id.eq.${userId},troupe_id.in.(${troupeIds.join(",")}),user_id.is.null,script_id.not.is.null`
     );
   } else {
-    query = query.or(`user_id.eq.${userId},user_id.is.null`);
+    query = query.or(`user_id.eq.${userId},user_id.is.null,script_id.not.is.null`);
   }
 
   const { data, error } = await query;

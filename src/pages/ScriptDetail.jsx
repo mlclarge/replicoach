@@ -12,6 +12,7 @@ import PremiumGateModal from "../components/PremiumGateModal";
 import { buildSceneSummaryContext } from "../lib/geminiService";
 import SceneSummaryModal from "../components/SceneSummaryModal";
 import TtsBatchButton from "../components/TtsBatchButton";
+import ScriptConsignes from "../components/ScriptConsignes";
 import VideoBubble from "../components/VideoBubble";
 import { NOTE_TYPES, getNoteType } from "../lib/noteTypes";
 import { loadAllReplicaVideosDB, deleteReplicaVideoDB, SCRIPT_VIDEO_KEY, actVideoKey, sceneVideoKey } from "../lib/videoStorage";
@@ -944,6 +945,9 @@ function ScriptDetail() {
             </p>
           </div>
         )}
+
+        {/* Consignes du metteur en scène rattachées à cette pièce */}
+        <ScriptConsignes scriptId={id} scenes={scenes} replicas={replicas} />
 
         {/* Refonte Sélection de Rôle & Filtrage (UI/UX) */}
         <div className="mb-4 space-y-3">
