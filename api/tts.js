@@ -495,11 +495,16 @@ export default async function handler(req, res) {
         });
       } catch (err) {
         if (reservedTotal !== null) {
-          await supabase.rpc("release_tts_quota", {
-            p_user: userId,
-            p_period: period,
-            p_chars: text.length,
-          }).catch(() => {});
+          // rpc() renvoie un builder sans .catch : try/await pour ne pas masquer l'erreur d'origine
+          try {
+            await supabase.rpc("release_tts_quota", {
+              p_user: userId,
+              p_period: period,
+              p_chars: text.length,
+            });
+          } catch (releaseErr) {
+            console.warn("[api/tts] RPC release_tts_quota échec:", releaseErr?.message);
+          }
         }
         throw err;
       }
