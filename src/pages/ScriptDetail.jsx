@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams, useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useScriptStore, extractScenes } from "../store/scriptStore";
 import { useAuthStore } from "../store/authStore";
-import { getFileUrl, fetchUserTroupes, shareScript } from "../lib/supabase";
+import { getFileUrl, fetchUserTroupes, shareScript, getUserRole } from "../lib/supabase";
 import Loader from "../components/ui/Loader";
 import ReplicaGroupsManager from "../components/ReplicaGroups";
 import FloatingRecorder from "../components/FloatingRecorder";
@@ -67,6 +67,9 @@ function ScriptDetail() {
   const [searchParams] = useSearchParams();
   // Récupération de user et isPremium pour la gestion du Coach IA
   const { user, isPremium } = useAuthStore();
+  // Rôle inconnu tant que non chargé : le bouton de pré-génération reste caché
+  const [userRole, setUserRole] = useState(null);
+  const canBatchTts = userRole === "director" || userRole === "dev";
   const {
     currentScript,
     loading,
@@ -268,6 +271,17 @@ function ScriptDetail() {
     fetchScript(id);
     return () => clearCurrentScript();
   }, [id, fetchScript, clearCurrentScript]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getUserRole(user.id).then((role) => {
+      if (!cancelled) setUserRole(role);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     if (currentScript?.id && user?.id) {
@@ -816,8 +830,8 @@ function ScriptDetail() {
             </p>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Bouton Pré-génération Voix HD (Batch TTS) */}
-            <TtsBatchButton script={currentScript} />
+            {/* Bouton Pré-génération Voix HD (Batch TTS) : réservé aux metteurs en scène et au dev */}
+            {canBatchTts && <TtsBatchButton script={currentScript} />}
 
             {/* Bouton Mode Audio (Optimisé mobile) */}
             <Link
