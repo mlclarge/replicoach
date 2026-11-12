@@ -188,6 +188,7 @@ function AudioMode() {
   // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
   const [ttsUsage, setTtsUsage] = useState(null);
+  const [ttsCanGenerate, setTtsCanGenerate] = useState(false); // renvoyé par /api/tts (Premium ou metteur en scène)
   const [premiumNotice, setPremiumNotice] = useState("");
 
   // Voix synthétiques
@@ -490,16 +491,16 @@ function AudioMode() {
     let cancelled = false;
 
     async function loadVoiceLocks() {
-      if (isPremium) {
-        const res = await fetchTtsStatus(id);
-        if (!cancelled && res.ok) {
-          setPremiumLocks(res.locks || {});
-          setTtsUsage(res.usage || null);
-          return;
-        }
+      // Tous les comptes passent par l'API : elle vérifie l'accès au script et indique
+      // si l'utilisateur peut verrouiller des voix / générer (Premium ou metteur en scène).
+      const res = await fetchTtsStatus(id);
+      if (!cancelled && res.ok) {
+        setPremiumLocks(res.locks || {});
+        setTtsUsage(res.usage || null);
+        setTtsCanGenerate(!!res.canGenerate);
+        return;
       }
-      // Pour les comptes Standard / Gratuit (ou si la requête serveur échoue) :
-      // Récupérer les voix verrouillées par le metteur en scène directement depuis Supabase
+      // Si la requête serveur échoue : repli sur la lecture directe Supabase
       const locks = await fetchScriptVoiceLocks(id);
       if (!cancelled) {
         setPremiumLocks(locks || {});
@@ -1746,7 +1747,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
             </button>
           </div>
 
-          {isPremium ? (
+          {(isPremium || ttsCanGenerate) ? (
             <div className="p-3.5 bg-amber-50 border-l-4 border-amber-500 rounded-xl space-y-3">
               <p className="text-xs text-amber-900 font-bold">
                 ✨ Voix Premium Google Cloud TTS (verrouillage par personnage) :

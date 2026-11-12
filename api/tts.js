@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import {
   TTS_MONTHLY_QUOTA_CHARS,
   TTS_MAX_CHARS_PER_REQUEST,
+  TTS_MAX_CHARS_PER_REPLICA,
   isAllowedVoice,
   cleanTextForTts,
 } from "../src/lib/ttsVoices.js";
@@ -16,6 +17,15 @@ const currentPeriod = () => new Date().toISOString().slice(0, 7);
 
 function fail(res, status, code, message, details = null) {
   return res.status(status).json({ error: code, message, details });
+}
+
+// Une erreur Supabase (colonne inexistante, RLS, réseau...) ne doit JAMAIS être confondue
+// avec « introuvable » : on la remonte pour qu'elle apparaisse dans les logs Vercel.
+function must(result, label) {
+  if (result?.error) {
+    throw new Error(`${label} : ${result.error.message || result.error.code || "erreur Supabase"}`);
+  }
+  return result?.data ?? null;
 }
 
 async function readUsage(supabase, userId) {
@@ -43,21 +53,129 @@ async function signedUrl(supabase, path) {
   }
 }
 
-// Vérifie si le script existe et est accessible
-async function hasScriptAccess(supabase, userId, scriptId) {
-  if (!scriptId) return false;
-  try {
-    const { data: script, error } = await supabase
-      .from("scripts")
-      .select("id, user_id")
-      .eq("id", scriptId)
-      .maybeSingle();
+// Renvoie le script si l'utilisateur y a accès, sinon null. Même logique que les règles RLS :
+//  - propriétaire (scripts.user_id)
+//  - script partagé avec une troupe dont il est membre (shared_scripts + troupe_members)
+//  - texte affecté à son adresse e-mail (script_assignments.assigned_to_email)
+async function hasScriptAccess(supabase, user, scriptId) {
+  if (!scriptId) return null;
 
-    if (error || !script) return false;
-    return true;
-  } catch {
-    return false;
+  const script = must(
+    await supabase.from("scripts").select("id, user_id").eq("id", scriptId).maybeSingle(),
+    "Lecture du script"
+  );
+  if (!script) return null;
+  if (script.user_id === user.id) return script;
+
+  const shared =
+    must(
+      await supabase.from("shared_scripts").select("troupe_id").eq("script_id", scriptId),
+      "Lecture des partages de troupe"
+    ) || [];
+  const troupeIds = shared.map((s) => s.troupe_id).filter(Boolean);
+  if (troupeIds.length > 0) {
+    // Le propriétaire de la troupe (metteur en scène) accède aux scripts partagés dans sa troupe
+    const ownedTroupe = must(
+      await supabase
+        .from("troupes")
+        .select("id")
+        .eq("owner_id", user.id)
+        .in("id", troupeIds)
+        .limit(1)
+        .maybeSingle(),
+      "Lecture de la troupe"
+    );
+    if (ownedTroupe) return script;
+
+    const membership = must(
+      await supabase
+        .from("troupe_members")
+        .select("id")
+        .eq("user_id", user.id)
+        .in("troupe_id", troupeIds)
+        .limit(1)
+        .maybeSingle(),
+      "Lecture de l'appartenance à la troupe"
+    );
+    if (membership) return script;
   }
+
+  const email = (user.email || "").trim().toLowerCase();
+  if (email) {
+    const assignments =
+      must(
+        await supabase.from("script_assignments").select("assigned_to_email").eq("script_id", scriptId),
+        "Lecture des affectations"
+      ) || [];
+    if (assignments.some((a) => (a.assigned_to_email || "").trim().toLowerCase() === email)) {
+      return script;
+    }
+  }
+  return null;
+}
+
+// Metteur en scène : propriétaire d'une troupe (troupes.owner_id), ou membre avec le rôle "director".
+async function isDirector(supabase, userId) {
+  const owned = must(
+    await supabase.from("troupes").select("id").eq("owner_id", userId).limit(1).maybeSingle(),
+    "Lecture des troupes"
+  );
+  if (owned) return true;
+  const asDirector = must(
+    await supabase
+      .from("troupe_members")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("role", "director")
+      .limit(1)
+      .maybeSingle(),
+    "Lecture du rôle en troupe"
+  );
+  return !!asDirector;
+}
+
+// Plusieurs utilisateurs peuvent avoir verrouillé une voix pour le même personnage :
+// celle du propriétaire du script est prioritaire.
+function pickLock(rows, ownerId) {
+  if (!rows || rows.length === 0) return null;
+  return rows.find((r) => r.user_id === ownerId) || rows[0];
+}
+
+// Découpe un texte en morceaux <= max caractères, aux fins de phrase si possible.
+function splitForTts(text, max) {
+  if (text.length <= max) return [text];
+  const chunks = [];
+  let current = "";
+  const flush = () => {
+    if (current) chunks.push(current);
+    current = "";
+  };
+  for (const sentence of text.split(/(?<=[.!?…:;])\s+/)) {
+    if (sentence.length > max) {
+      flush();
+      let part = "";
+      for (const word of sentence.split(" ")) {
+        const next = part ? `${part} ${word}` : word;
+        if (next.length > max && part) {
+          chunks.push(part);
+          part = word;
+        } else {
+          part = next;
+        }
+      }
+      if (part) chunks.push(part);
+      continue;
+    }
+    const next = current ? `${current} ${sentence}` : sentence;
+    if (next.length > max) {
+      flush();
+      current = sentence;
+    } else {
+      current = next;
+    }
+  }
+  flush();
+  return chunks;
 }
 
 async function synthesize(text, voiceId) {
@@ -96,6 +214,13 @@ async function synthesize(text, voiceId) {
   return Buffer.from(json.audioContent, "base64");
 }
 
+// Les répliques longues sont découpées (limite par requête), synthétisées en parallèle puis recollées.
+async function synthesizeLong(text, voiceId) {
+  const chunks = splitForTts(text, TTS_MAX_CHARS_PER_REQUEST);
+  const buffers = await Promise.all(chunks.map((chunk) => synthesize(chunk, voiceId)));
+  return Buffer.concat(buffers);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
 
@@ -124,44 +249,59 @@ export default async function handler(req, res) {
   }
   const userId = authData.user.id;
 
-  // Vérification statut Premium ou rôle beta / troupe
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("is_premium, role")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const isEligible = profile?.is_premium || profile?.role === "beta" || profile?.role === "director";
-
   const { action, scriptId, characterId, voiceId, replicaId, cacheOnly } = req.body || {};
+
+  // Peut verrouiller des voix et générer de l'audio : abonné Premium OU metteur en scène.
+  // (profiles n'a pas de colonne "role" : ne sélectionner que is_premium.)
+  let eligibility = null;
+  const isEligible = async () => {
+    if (eligibility !== null) return eligibility;
+    const profile = must(
+      await supabase.from("profiles").select("is_premium").eq("id", userId).maybeSingle(),
+      "Lecture du profil"
+    );
+    eligibility = !!profile?.is_premium || (await isDirector(supabase, userId));
+    return eligibility;
+  };
 
   try {
     if (action === "status") {
-      const hasAccess = await hasScriptAccess(supabase, userId, scriptId);
+      const hasAccess = await hasScriptAccess(supabase, authData.user, scriptId);
       if (!hasAccess) {
         return fail(res, 404, "not_found", "Script introuvable");
       }
 
-      // Recherche des verrous au niveau du script
-      let { data: locks } = await supabase
-        .from("tts_voice_locks")
-        .select("character_id, voice_id")
-        .eq("script_id", scriptId);
+      // Verrous au niveau du script (ceux du propriétaire priment en cas de doublon)
+      const lockRows =
+        must(
+          await supabase
+            .from("tts_voice_locks")
+            .select("character_id, voice_id, user_id")
+            .eq("script_id", scriptId),
+          "Lecture des verrous de voix"
+        ) || [];
+      const locks = {};
+      for (const l of lockRows) {
+        if (!(l.character_id in locks) || l.user_id === hasAccess.user_id) {
+          locks[l.character_id] = l.voice_id;
+        }
+      }
 
       return res.status(200).json({
-        locks: Object.fromEntries((locks || []).map((l) => [l.character_id, l.voice_id])),
+        locks,
         usage: await readUsage(supabase, userId),
+        canGenerate: await isEligible(),
       });
     }
 
     if (action === "lock") {
-      if (!isEligible) {
-        return fail(res, 403, "not_premium", "Fonctionnalité réservée aux abonnés Premium");
+      if (!(await isEligible())) {
+        return fail(res, 403, "not_premium", "Fonctionnalité réservée aux abonnés Premium et aux metteurs en scène");
       }
       if (!isAllowedVoice(voiceId)) {
         return fail(res, 400, "bad_voice", `Voix HD inconnue : ${voiceId}`);
       }
-      const hasAccess = await hasScriptAccess(supabase, userId, scriptId);
+      const hasAccess = await hasScriptAccess(supabase, authData.user, scriptId);
       if (!hasAccess) {
         return fail(res, 404, "not_found", "Script introuvable");
       }
@@ -197,11 +337,11 @@ export default async function handler(req, res) {
     }
 
     if (action === "speak") {
-      const [hasAccess, { data: replica }] = await Promise.all([
-        hasScriptAccess(supabase, userId, scriptId),
+      const [hasAccess, replicaResult] = await Promise.all([
+        hasScriptAccess(supabase, authData.user, scriptId),
         supabase
           .from("replicas")
-          .select("id, character_id, character_name, text")
+          .select("id, character_id, text") // PAS de character_name : cette colonne n'existe pas
           .eq("id", replicaId)
           .eq("script_id", scriptId)
           .maybeSingle(),
@@ -210,49 +350,45 @@ export default async function handler(req, res) {
       if (!hasAccess) {
         return fail(res, 404, "not_found", "Script introuvable");
       }
+      const replica = must(replicaResult, "Lecture de la réplique");
       if (!replica) {
         return fail(res, 404, "not_found", "Réplique introuvable");
       }
 
       const text = cleanTextForTts(replica.text);
       if (!text) return fail(res, 400, "empty_text", "Aucun texte à lire");
-      if (text.length > TTS_MAX_CHARS_PER_REQUEST) {
+      if (text.length > TTS_MAX_CHARS_PER_REPLICA) {
         return fail(res, 413, "too_long", "Réplique trop longue pour la synthèse vocale");
       }
 
-      // Recherche de la voix verrouillée pour ce personnage :
-      let lock = null;
-      if (replica.character_id) {
-        const { data: directLock } = await supabase
-          .from("tts_voice_locks")
-          .select("voice_id, user_id")
-          .eq("script_id", scriptId)
-          .eq("character_id", replica.character_id)
-          .limit(1)
-          .maybeSingle();
-        lock = directLock;
+      // Recherche de la voix verrouillée pour ce personnage.
+      // character_id vient de la réplique ; à défaut, celui envoyé par le client (vérifié dans le script).
+      let lockCharacterId = replica.character_id || null;
+      if (!lockCharacterId && characterId) {
+        const char = must(
+          await supabase
+            .from("characters")
+            .select("id")
+            .eq("id", characterId)
+            .eq("script_id", scriptId)
+            .maybeSingle(),
+          "Lecture du personnage"
+        );
+        lockCharacterId = char?.id || null;
       }
 
-      // Fallback par nom de personnage si character_id n'a pas matché
-      if (!lock && replica.character_name) {
-        const { data: matchedChar } = await supabase
-          .from("characters")
-          .select("id")
-          .eq("script_id", scriptId)
-          .ilike("name", replica.character_name.trim())
-          .limit(1)
-          .maybeSingle();
-
-        if (matchedChar) {
-          const { data: charLock } = await supabase
+      let lock = null;
+      if (lockCharacterId) {
+        const lockRows = must(
+          await supabase
             .from("tts_voice_locks")
             .select("voice_id, user_id")
             .eq("script_id", scriptId)
-            .eq("character_id", matchedChar.id)
-            .limit(1)
-            .maybeSingle();
-          lock = charLock;
-        }
+            .eq("character_id", lockCharacterId)
+            .limit(20),
+          "Lecture du verrou de voix"
+        );
+        lock = pickLock(lockRows, hasAccess.user_id);
       }
 
       if (!lock) {
@@ -262,15 +398,18 @@ export default async function handler(req, res) {
       const textHash = createHash("sha256").update(text).digest("hex").slice(0, 32);
 
       // 1. Vérification dans la table de cache Supabase
-      const { data: cached } = await supabase
-        .from("tts_audio_cache")
-        .select("storage_path")
-        .eq("script_id", scriptId)
-        .eq("replica_id", replica.id)
-        .eq("voice_id", lock.voice_id)
-        .eq("text_hash", textHash)
-        .limit(1)
-        .maybeSingle();
+      const cached = must(
+        await supabase
+          .from("tts_audio_cache")
+          .select("storage_path")
+          .eq("script_id", scriptId)
+          .eq("replica_id", replica.id)
+          .eq("voice_id", lock.voice_id)
+          .eq("text_hash", textHash)
+          .limit(1)
+          .maybeSingle(),
+        "Lecture du cache audio"
+      );
 
       if (cached?.storage_path) {
         const [url, usage] = await Promise.all([
@@ -288,8 +427,8 @@ export default async function handler(req, res) {
       }
 
       // 3. Génération Premium : vérification de l'éligibilité
-      if (!isEligible) {
-        return fail(res, 403, "not_premium", "Génération réservée aux abonnés Premium");
+      if (!(await isEligible())) {
+        return fail(res, 403, "not_premium", "Génération réservée aux abonnés Premium et aux metteurs en scène");
       }
 
       const period = currentPeriod();
@@ -315,7 +454,7 @@ export default async function handler(req, res) {
       }
 
       try {
-        const audio = await synthesize(text, lock.voice_id);
+        const audio = await synthesizeLong(text, lock.voice_id);
         const path = `${userId}/${scriptId}/${replica.id}-${lock.voice_id}-${textHash}.mp3`;
 
         const { error: uploadError } = await supabase.storage
@@ -326,12 +465,11 @@ export default async function handler(req, res) {
           throw new Error(`Échec stockage Supabase Storage: ${uploadError.message}`);
         }
 
-        await supabase.from("tts_audio_cache").upsert(
+        const { error: cacheError } = await supabase.from("tts_audio_cache").upsert(
           {
             user_id: userId,
             script_id: scriptId,
             replica_id: replica.id,
-            character_id: replica.character_id || null,
             voice_id: lock.voice_id,
             text_hash: textHash,
             storage_path: path,
@@ -339,6 +477,11 @@ export default async function handler(req, res) {
           },
           { onConflict: "user_id,replica_id,voice_id,text_hash" }
         );
+        if (cacheError) {
+          // L'audio est stocké : on le sert quand même, mais on le signale très fort
+          // (sinon chaque lecture régénère l'audio et consomme du quota Google).
+          console.error("[api/tts] Écriture tts_audio_cache en échec :", cacheError.message);
+        }
 
         const url = await signedUrl(supabase, path);
         if (!url) {
@@ -370,7 +513,7 @@ export default async function handler(req, res) {
       502,
       "tts_failed",
       `Échec du service de voix Premium : ${err?.message || err}`,
-      err?.stack
+      process.env.VERCEL_ENV === "production" ? null : err?.stack
     );
   }
 }

@@ -14,6 +14,25 @@ function normalizeName(name) {
     .replace(/[\u0300-\u036f]/g, "");
 }
 
+// Répliques qui ne se lisent pas à voix haute (même règle que AudioMode.isDidascalie)
+function isNonSpoken(r, normName) {
+  const txt = (r.text || "").trim();
+  return (
+    normName === "DIDASCALIE" ||
+    normName === "DIDASCALIES" ||
+    normName === "CONTEXTE" ||
+    r.is_context ||
+    r.is_didascalie ||
+    (txt.startsWith("(") && txt.endsWith(")")) ||
+    (txt.startsWith("[") && txt.endsWith("]"))
+  );
+}
+
+// Erreurs qui doivent arrêter tout le lot (inutile d'insister réplique après réplique)
+const FATAL_CODES = new Set(["unauthorized", "not_premium", "quota_exceeded", "config"]);
+// Seules les erreurs transitoires méritent une nouvelle tentative
+const RETRYABLE_CODES = new Set(["network", "tts_failed"]);
+
 /**
  * Service de pré-génération par lot (Batch TTS) pour RépliCoach - v4 (Tolérant).
  * Associe les voix par character_id ET par character_name normalisé.
@@ -38,6 +57,7 @@ export class BatchTtsGenerator {
     const rawLocks = await fetchScriptVoiceLocks(this.scriptId);
     const voiceById = new Map();
     const voiceByName = new Map();
+    const charIdByName = new Map();
 
     // 1. Enregistre les verrous par character_id
     for (const [charId, voiceId] of Object.entries(rawLocks || {})) {
@@ -52,7 +72,10 @@ export class BatchTtsGenerator {
         const voiceId = voiceById.get(char.id);
         if (voiceId) {
           const norm = normalizeName(char.name);
-          if (norm) voiceByName.set(norm, voiceId);
+          if (norm) {
+            voiceByName.set(norm, voiceId);
+            charIdByName.set(norm, char.id);
+          }
         }
       }
     }
@@ -69,7 +92,10 @@ export class BatchTtsGenerator {
           const voiceId = voiceById.get(c.id);
           if (voiceId) {
             const norm = normalizeName(c.name);
-            if (norm) voiceByName.set(norm, voiceId);
+            if (norm) {
+              voiceByName.set(norm, voiceId);
+              charIdByName.set(norm, c.id);
+            }
           }
         }
       } catch (err) {
@@ -77,13 +103,13 @@ export class BatchTtsGenerator {
       }
     }
 
-    return { voiceById, voiceByName, rawLocks };
+    return { voiceById, voiceByName, charIdByName, rawLocks };
   }
 
   async getStatus() {
     if (!this.scriptId) return { total: 0, cached: 0, pending: 0, locks: {} };
 
-    const { voiceById, voiceByName, rawLocks } = await this.buildVoiceMap();
+    const { voiceById, voiceByName, charIdByName, rawLocks } = await this.buildVoiceMap();
 
     // Filtre les répliques :
     // - Exclut didascalies et contexte
@@ -92,14 +118,7 @@ export class BatchTtsGenerator {
       const rawName = r.character_name || r.character || "";
       const normName = normalizeName(rawName);
 
-      const isDida =
-        normName === "DIDASCALIE" ||
-        normName === "CONTEXTE" ||
-        normName === "DIDASCALIES" ||
-        r.is_context ||
-        r.is_didascalie;
-
-      if (isDida) return false;
+      if (isNonSpoken(r, normName)) return false;
 
       // Correspondance par ID
       if (r.character_id && voiceById.has(r.character_id)) {
@@ -112,7 +131,14 @@ export class BatchTtsGenerator {
       }
 
       return false;
-    });
+    }).map((r) => ({
+      ...r,
+      // Identifiant de personnage résolu (par id, sinon par nom) : c'est celui qu'on envoie à l'API
+      _characterId:
+        r.character_id ||
+        charIdByName.get(normalizeName(r.character_name || r.character || "")) ||
+        null,
+    }));
 
     if (targetReplicas.length === 0) {
       return { total: 0, cached: 0, pending: 0, locks: rawLocks, targetReplicas: [] };
@@ -122,10 +148,18 @@ export class BatchTtsGenerator {
     try {
       const { data: cachedRows } = await supabase
         .from("tts_audio_cache")
-        .select("replica_id")
+        .select("replica_id, voice_id")
         .eq("script_id", this.scriptId);
 
-      const cachedReplicaIds = new Set((cachedRows || []).map((row) => row.replica_id));
+      const expectedVoice = new Map(
+        targetReplicas.map((t) => [t.id, voiceById.get(t._characterId)])
+      );
+      // Une réplique n'est « en cache » que si l'audio existe avec la voix actuellement verrouillée
+      const cachedReplicaIds = new Set(
+        (cachedRows || [])
+          .filter((row) => expectedVoice.get(row.replica_id) === row.voice_id)
+          .map((row) => row.replica_id)
+      );
 
       const pendingReplicas = targetReplicas.filter((r) => !cachedReplicaIds.has(r.id));
       const cachedReplicas = targetReplicas.filter((r) => cachedReplicaIds.has(r.id));
@@ -235,11 +269,12 @@ export class BatchTtsGenerator {
       let success = false;
       let lastErrorMessage = "";
 
+      let fatal = null;
       for (let attempt = 0; attempt < 2; attempt++) {
         const res = await callTts("speak", {
           scriptId: this.scriptId,
           replicaId: replica.id,
-          characterId: replica.character_id,
+          characterId: replica._characterId || replica.character_id,
           cacheOnly: false,
         });
 
@@ -248,8 +283,31 @@ export class BatchTtsGenerator {
           break;
         }
 
-        lastErrorMessage = res.error || res.message || "Erreur inconnue";
-        await new Promise((res) => setTimeout(res, 400));
+        lastErrorMessage = res.message || res.code || "Erreur inconnue";
+        if (FATAL_CODES.has(res.code)) {
+          fatal = res;
+          break;
+        }
+        if (!RETRYABLE_CODES.has(res.code)) break; // 404, 409, 413... : réessayer ne sert à rien
+        await new Promise((r) => setTimeout(r, 800));
+      }
+
+      if (fatal) {
+        errorCount++;
+        this.isRunning = false;
+        if (onProgress) {
+          onProgress({
+            stage: "aborted",
+            total: status.total,
+            alreadyCached: status.cached + successCount,
+            toGenerate: totalToProcess,
+            current: processedCount,
+            successCount,
+            errorCount,
+            fatalMessage: fatal.message || fatal.code,
+          });
+        }
+        return { ok: false, generated: successCount, errors: errorCount, aborted: fatal.code };
       }
 
       if (success) {

@@ -1,6 +1,7 @@
 // Configuration partagée (front + endpoint /api/tts) des voix Premium Google Cloud.
 export const TTS_MONTHLY_QUOTA_CHARS = 250000;
-export const TTS_MAX_CHARS_PER_REQUEST = 1000;
+export const TTS_MAX_CHARS_PER_REQUEST = 1000; // taille d'un morceau envoyé à Google
+export const TTS_MAX_CHARS_PER_REPLICA = 6000; // plafond par réplique (découpée en plusieurs morceaux)
 
 export const TTS_VOICES = [
   // 👩 10 Voix Féminines Premium Google Cloud

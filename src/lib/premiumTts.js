@@ -22,6 +22,8 @@ export async function callTts(action, payload = {}) {
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // Visible dans la console du navigateur (F12) : action, statut HTTP, code et message du serveur
+      console.warn(`[TTS] /api/tts « ${action} » → HTTP ${res.status}`, json);
       return { ok: false, code: json.error || "error", message: json.message || "Erreur synthèse vocale" };
     }
     return { ok: true, ...json };
@@ -33,9 +35,16 @@ export async function callTts(action, payload = {}) {
 // Interroge le statut des voix verrouillées et du quota mensuel
 export const fetchTtsStatus = (scriptId) => callTts("status", { scriptId });
 
-// Récupère les verrous de voix directement dans la table Supabase (accessible aux membres de la troupe/comédiens)
+// Récupère les verrous de voix du script (API en priorité, table Supabase en repli)
 export async function fetchScriptVoiceLocks(scriptId) {
   if (!scriptId) return {};
+
+  // 1. Via l'API (service_role) : fonctionne aussi pour les comédiens de la troupe, car la table
+  //    tts_voice_locks n'est lisible en direct que par l'utilisateur qui a verrouillé la voix (RLS).
+  const status = await fetchTtsStatus(scriptId);
+  if (status.ok && status.locks) return status.locks;
+
+  // 2. Repli : lecture directe (ne renvoie que les verrous de l'utilisateur courant)
   try {
     const { data, error } = await supabase
       .from("tts_voice_locks")
@@ -63,18 +72,22 @@ export async function fetchTroupeTtsAudioUrl(scriptId, replicaId, cacheOnly = fa
   const res = await fetchTtsAudioUrl(scriptId, replicaId, cacheOnly);
   if (res?.ok && res?.url) return res;
 
-  // 2. Fallback robuste : recherche directe dans le stockage Supabase
-  // RLS Supabase vérifie que le dossier racine correspond à l'auth.uid() de l'utilisateur ou du metteur en scène
-  try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const currentUserId = sessionData?.session?.user?.id;
+  // 2. Repli direct sur Supabase UNIQUEMENT si l'API est indisponible (réseau / erreur serveur).
+  // Pour une vraie réponse de l'API (réplique non encore en cache, voix non verrouillée, quota...),
+  // on la renvoie telle quelle : un repli pourrait servir un audio périmé (texte ou voix modifiés).
+  if (!["network", "tts_failed"].includes(res?.code)) {
+    return { ok: false, ...res, message: res?.message || "Audio non disponible en cache" };
+  }
 
-    // D'abord vérifier dans tts_audio_cache si on a le storage_path exact
+  // Lecture seule du cache de l'utilisateur courant (RLS : ses propres lignes).
+  try {
     if (replicaId) {
       const { data: cacheRow } = await supabase
         .from("tts_audio_cache")
         .select("storage_path")
         .eq("replica_id", replicaId)
+        .order("created_at", { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (cacheRow?.storage_path) {
@@ -85,23 +98,6 @@ export async function fetchTroupeTtsAudioUrl(scriptId, replicaId, cacheOnly = fa
         if (!signErr && signedData?.signedUrl) {
           return { ok: true, url: signedData.signedUrl, cached: true };
         }
-      }
-    }
-
-    // Sinon, tester les chemins candidats standard conformes à la politique RLS
-    const candidatePaths = [
-      currentUserId ? `${currentUserId}/${scriptId}/${replicaId}.mp3` : null,
-      currentUserId ? `${currentUserId}/${replicaId}.mp3` : null,
-      `${scriptId}/${replicaId}.mp3`,
-    ].filter(Boolean);
-
-    for (const path of candidatePaths) {
-      const { data, error } = await supabase.storage
-        .from("tts-cache")
-        .createSignedUrl(path, 3600);
-
-      if (!error && data?.signedUrl) {
-        return { ok: true, url: data.signedUrl, cached: true };
       }
     }
   } catch (e) {
