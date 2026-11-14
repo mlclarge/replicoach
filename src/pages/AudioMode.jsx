@@ -125,14 +125,11 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
-const REHEARSAL_SETTINGS_VERSION = 2;
-
 const REHEARSAL_DEFAULTS = {
-  settingsVersion: REHEARSAL_SETTINGS_VERSION,
   myRole: null,
-  hideUnlistened: false, // conservé pour compatibilité : l'affichage suit désormais le mode d'écoute
-  hideMyRole: false,
-  dimOthers: false, // estompe les bulles des autres rôles
+  hideUnlistened: false, // ⚡ OPTIMISATION : masque visuellement les répliques non écoutées
+  hideMyRole: true,
+  dimOthers: true, // estompe les bulles des autres rôles
   readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
   listenMode: "all", // all | aroundMine | mineOnly
   beforeCount: 1, // répliques entendues avant la mienne (0 à 3)
@@ -191,7 +188,6 @@ function AudioMode() {
   // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
   const [ttsUsage, setTtsUsage] = useState(null);
-  const [ttsCanGenerate, setTtsCanGenerate] = useState(false); // renvoyé par /api/tts (Premium ou metteur en scène)
   const [premiumNotice, setPremiumNotice] = useState("");
 
   // Voix synthétiques
@@ -370,12 +366,6 @@ function AudioMode() {
       if (["none", "before", "after", "both"].includes(saved.readMine)) {
         saved.readMine = saved.readMine === "none" ? "memory" : "read";
       }
-      // Anciens réglages : les deux cases de l'étape 1 repartent décochées (une seule fois)
-      if (saved.settingsVersion !== REHEARSAL_SETTINGS_VERSION) {
-        delete saved.hideMyRole;
-        delete saved.dimOthers;
-        saved.settingsVersion = REHEARSAL_SETTINGS_VERSION;
-      }
       return { ...REHEARSAL_DEFAULTS, ...saved };
     } catch (e) {
       return { ...REHEARSAL_DEFAULTS };
@@ -500,16 +490,16 @@ function AudioMode() {
     let cancelled = false;
 
     async function loadVoiceLocks() {
-      // Tous les comptes passent par l'API : elle vérifie l'accès au script et indique
-      // si l'utilisateur peut verrouiller des voix / générer (Premium ou metteur en scène).
-      const res = await fetchTtsStatus(id);
-      if (!cancelled && res.ok) {
-        setPremiumLocks(res.locks || {});
-        setTtsUsage(res.usage || null);
-        setTtsCanGenerate(!!res.canGenerate);
-        return;
+      if (isPremium) {
+        const res = await fetchTtsStatus(id);
+        if (!cancelled && res.ok) {
+          setPremiumLocks(res.locks || {});
+          setTtsUsage(res.usage || null);
+          return;
+        }
       }
-      // Si la requête serveur échoue : repli sur la lecture directe Supabase
+      // Pour les comptes Standard / Gratuit (ou si la requête serveur échoue) :
+      // Récupérer les voix verrouillées par le metteur en scène directement depuis Supabase
       const locks = await fetchScriptVoiceLocks(id);
       if (!cancelled) {
         setPremiumLocks(locks || {});
@@ -1345,10 +1335,6 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       return;
     }
     const target = displayReplicas[n - 1];
-    if (listenIndices && !listenIndices.has(n - 1)) {
-      setJumpError("Cette réplique est hors du périmètre d'écoute choisi.");
-      return;
-    }
     const wasPlaying = isPlaying;
     stop();
     setCurrentIndex(n - 1);
@@ -1760,7 +1746,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
             </button>
           </div>
 
-          {(isPremium || ttsCanGenerate) ? (
+          {isPremium ? (
             <div className="p-3.5 bg-amber-50 border-l-4 border-amber-500 rounded-xl space-y-3">
               <p className="text-xs text-amber-900 font-bold">
                 ✨ Voix Premium Google Cloud TTS (verrouillage par personnage) :
@@ -1974,8 +1960,8 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {renderScopeVideo(SCRIPT_VIDEO_KEY)}
         {displayReplicas.map((replica, index) => {
-          // Seules les répliques du périmètre d'écoute (rôle + mode choisi) sont affichées
-          if (listenIndices && !listenIndices.has(index)) {
+          // ⚡ OPTIMISATION : Masquage visuel des répliques non écoutées
+          if (rehearsal.hideUnlistened && listenIndices && !listenIndices.has(index)) {
             return null;
           }
           const character = characters.find(
