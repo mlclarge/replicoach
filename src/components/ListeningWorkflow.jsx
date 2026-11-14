@@ -231,7 +231,7 @@ export default function ListeningWorkflow({
         )}
         {listenSummary && <p className="text-[11px] text-emerald-800 font-semibold">{listenSummary}</p>}
 
-        {hasRole && rehearsal.hideMyRole && (
+        {hasRole && (
           <div className="mt-2">
             <span className="text-xs font-bold text-gray-800 block mb-1">Quand arrive ma réplique</span>
             <Segmented
@@ -245,7 +245,7 @@ export default function ListeningWorkflow({
             />
             <p className="text-[11px] text-gray-500 mt-1">
               {rehearsal.readMine === "read"
-                ? "Votre réplique est lue à voix haute, puis la lecture vous laisse la répéter."
+                ? "Votre réplique est lue à voix haute (avec le délai avant lecture si configuré)."
                 : "L'application se tait et attend. Cliquez sur votre réplique pour la révéler si besoin."}
             </p>
           </div>
@@ -256,7 +256,7 @@ export default function ListeningWorkflow({
             <span className="text-xs font-extrabold text-amber-900 block">
               ⏱️ Temps pour dire ma réplique
             </span>
-            {rehearsal.hideMyRole && rehearsal.readMine === "read" && (
+            {rehearsal.readMine === "read" && (
               <div>
                 <span className="text-xs font-bold text-gray-800 block mb-1">
                   Attente avant que l'application lise ma réplique

@@ -125,11 +125,14 @@ function cleanTextForSpeech(text) {
     .trim();
 }
 
+const REHEARSAL_SETTINGS_VERSION = 2;
+
 const REHEARSAL_DEFAULTS = {
+  settingsVersion: REHEARSAL_SETTINGS_VERSION,
   myRole: null,
-  hideUnlistened: false, // ⚡ OPTIMISATION : masque visuellement les répliques non écoutées
-  hideMyRole: true,
-  dimOthers: true, // estompe les bulles des autres rôles
+  hideUnlistened: false, // conservé pour compatibilité : l'affichage suit désormais le mode d'écoute
+  hideMyRole: false,
+  dimOthers: false, // estompe les bulles des autres rôles
   readMine: "memory", // memory (de mémoire) | read (l'application me la lit)
   listenMode: "all", // all | aroundMine | mineOnly
   beforeCount: 1, // répliques entendues avant la mienne (0 à 3)
@@ -188,6 +191,7 @@ function AudioMode() {
   // Voix Premium (Google TTS)
   const [premiumLocks, setPremiumLocks] = useState({});
   const [ttsUsage, setTtsUsage] = useState(null);
+  const [ttsCanGenerate, setTtsCanGenerate] = useState(false); // renvoyé par /api/tts (Premium ou metteur en scène)
   const [premiumNotice, setPremiumNotice] = useState("");
 
   // Voix synthétiques
@@ -366,6 +370,12 @@ function AudioMode() {
       if (["none", "before", "after", "both"].includes(saved.readMine)) {
         saved.readMine = saved.readMine === "none" ? "memory" : "read";
       }
+      // Anciens réglages : les deux cases de l'étape 1 repartent décochées (une seule fois)
+      if (saved.settingsVersion !== REHEARSAL_SETTINGS_VERSION) {
+        delete saved.hideMyRole;
+        delete saved.dimOthers;
+        saved.settingsVersion = REHEARSAL_SETTINGS_VERSION;
+      }
       return { ...REHEARSAL_DEFAULTS, ...saved };
     } catch (e) {
       return { ...REHEARSAL_DEFAULTS };
@@ -449,6 +459,7 @@ function AudioMode() {
   // Refs
   const playingRef = useRef(false);
   const waitingRef = useRef(false);
+  const tempRevealedRef = useRef({});
   const currentReplicaRef = useRef(null);
   const singleBubbleRef = useRef(false);
   const mediaRecorderRef = useRef(null);
@@ -490,16 +501,16 @@ function AudioMode() {
     let cancelled = false;
 
     async function loadVoiceLocks() {
-      if (isPremium) {
-        const res = await fetchTtsStatus(id);
-        if (!cancelled && res.ok) {
-          setPremiumLocks(res.locks || {});
-          setTtsUsage(res.usage || null);
-          return;
-        }
+      // Tous les comptes passent par l'API : elle vérifie l'accès au script et indique
+      // si l'utilisateur peut verrouiller des voix / générer (Premium ou metteur en scène).
+      const res = await fetchTtsStatus(id);
+      if (!cancelled && res.ok) {
+        setPremiumLocks(res.locks || {});
+        setTtsUsage(res.usage || null);
+        setTtsCanGenerate(!!res.canGenerate);
+        return;
       }
-      // Pour les comptes Standard / Gratuit (ou si la requête serveur échoue) :
-      // Récupérer les voix verrouillées par le metteur en scène directement depuis Supabase
+      // Si la requête serveur échoue : repli sur la lecture directe Supabase
       const locks = await fetchScriptVoiceLocks(id);
       if (!cancelled) {
         setPremiumLocks(locks || {});
@@ -1230,10 +1241,12 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       const keepIds = [displayReplicas[i - 1]?.id, replica.id];
       setTempRevealedReplicas((prev) => {
         const keys = Object.keys(prev);
-        if (keys.every((k) => keepIds.some((id) => String(id) === k))) return prev;
-        return Object.fromEntries(
+        const filtered = Object.fromEntries(
           keys.filter((k) => keepIds.some((id) => String(id) === k)).map((k) => [k, true])
         );
+        tempRevealedRef.current = filtered;
+        if (keys.every((k) => keepIds.some((id) => String(id) === k))) return prev;
+        return filtered;
       });
 
       const opts = rehearsalRef.current;
@@ -1243,7 +1256,6 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       preloadAhead(i + 1);
 
       if (hiddenCharacters.has(replica.character_id)) {
-        if (opts.readMine !== "read") stopPreparing();
         if (opts.readMine === "read") {
           // ⏱️ Attente AVANT que l'application lise MA réplique
           await pauseWithCountdown("before", delaysRef.current.before);
@@ -1251,26 +1263,39 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
 
           await speak(replica.text, replica.character_id, replica.id, nextReplica);
           if (!isActive()) break;
+        } else {
+          stopPreparing();
+          // Mode mémoire : on attend que le comédien dise sa réplique ou clique pour révéler
+          setWaitingForClick(true);
+          waitingRef.current = true;
+
+          const maxWaitMs = opts.playback !== "manual"
+            ? Math.max(2500, countWords(replica.text) * 400) * (DELAY_FACTORS[opts.delay] || 1.2)
+            : Infinity;
+          const startedAt = Date.now();
+
+          while (waitingRef.current && isActive()) {
+            if (Date.now() - startedAt >= maxWaitMs) break;
+            await new Promise((r) => setTimeout(r, 100));
+          }
+
+          if (run === runRef.current) {
+            waitingRef.current = false;
+            setWaitingForClick(false);
+          }
+          if (!isActive()) break;
+
+          // Si la réplique a été révélée par clic pendant l'attente : on déclenche la lecture après temporisation
+          const wasRevealed = !!tempRevealedRef.current[replica.id];
+          if (wasRevealed && isActive()) {
+            if (delaysRef.current.before > 0) {
+              await pauseWithCountdown("before", delaysRef.current.before);
+            }
+            if (!isActive()) break;
+            await speak(replica.text, replica.character_id, replica.id, nextReplica);
+            if (!isActive()) break;
+          }
         }
-
-        setWaitingForClick(true);
-        waitingRef.current = true;
-
-        const maxWaitMs = opts.playback !== "manual"
-          ? Math.max(2500, countWords(replica.text) * 400) * (DELAY_FACTORS[opts.delay] || 1.2)
-          : Infinity;
-        const startedAt = Date.now();
-
-        while (waitingRef.current && isActive()) {
-          if (Date.now() - startedAt >= maxWaitMs) break;
-          await new Promise((r) => setTimeout(r, 100));
-        }
-
-        if (run === runRef.current) {
-          waitingRef.current = false;
-          setWaitingForClick(false);
-        }
-        if (!isActive()) break;
 
         if (opts.playback === "manual") {
           setCurrentIndex(Math.min(i + 1, displayReplicas.length - 1));
@@ -1335,6 +1360,10 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       return;
     }
     const target = displayReplicas[n - 1];
+    if (listenIndices && !listenIndices.has(n - 1)) {
+      setJumpError("Cette réplique est hors du périmètre d'écoute choisi.");
+      return;
+    }
     const wasPlaying = isPlaying;
     stop();
     setCurrentIndex(n - 1);
@@ -1349,21 +1378,36 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
     if (wasPlaying) playAll(n - 1);
   };
 
-  const onBubbleClick = (index) => {
+  const onBubbleClick = async (index) => {
     const replica = displayReplicas[index];
     if (!replica) return;
 
     const isHidden = hiddenCharacters.has(replica.character_id);
 
     if (isHidden) {
-      // Révèle le texte sans lancer la voix : la bulle reste ouverte jusqu'à ce que la lecture avance
-      setTempRevealedReplicas((prev) => ({ ...prev, [replica.id]: true }));
+      // Révèle le texte de la réplique
+      setTempRevealedReplicas((prev) => {
+        const next = { ...prev, [replica.id]: true };
+        tempRevealedRef.current = next;
+        return next;
+      });
       setCurrentIndex(index);
 
-      if (waitingForClick) {
+      // Si la répétition automatique était en attente sur cette réplique :
+      // On libère la boucle d'attente qui va enclencher la temporisation et la lecture
+      if (waitingForClick || waitingRef.current) {
         setWaitingForClick(false);
         waitingRef.current = false;
+        return;
       }
+
+      // Si la lecture n'était pas active (clic unitaire sur bulle masquée) :
+      // On applique la temporisation 'Temps pour dire ma réplique' avant de lire
+      const delayBefore = delaysRef.current?.before || 0;
+      if (delayBefore > 0) {
+        await pauseWithCountdown("before", delayBefore);
+      }
+      await playSingleBubble(index);
       return;
     }
 
@@ -1746,7 +1790,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
             </button>
           </div>
 
-          {isPremium ? (
+          {(isPremium || ttsCanGenerate) ? (
             <div className="p-3.5 bg-amber-50 border-l-4 border-amber-500 rounded-xl space-y-3">
               <p className="text-xs text-amber-900 font-bold">
                 ✨ Voix Premium Google Cloud TTS (verrouillage par personnage) :
@@ -1960,8 +2004,8 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       <div className="p-4 space-y-4 w-full max-w-7xl mx-auto">
         {renderScopeVideo(SCRIPT_VIDEO_KEY)}
         {displayReplicas.map((replica, index) => {
-          // ⚡ OPTIMISATION : Masquage visuel des répliques non écoutées
-          if (rehearsal.hideUnlistened && listenIndices && !listenIndices.has(index)) {
+          // Seules les répliques du périmètre d'écoute (rôle + mode choisi) sont affichées
+          if (listenIndices && !listenIndices.has(index)) {
             return null;
           }
           const character = characters.find(
