@@ -469,6 +469,7 @@ function AudioMode() {
   const audioPlayerRef = useRef(null);
   const playTokenRef = useRef(0);
   const runRef = useRef(0);
+  const pauseCountdownTokenRef = useRef(0);
 
   // Message d'attente ludique, affiché seulement si le démarrage dépasse ~0,3 s
   const [prepMessage, setPrepMessage] = useState("");
@@ -1168,6 +1169,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
 
   const stop = () => {
     playTokenRef.current += 1;
+    pauseCountdownTokenRef.current += 1;
     if (cancelPremiumRef.current) cancelPremiumRef.current();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -1189,6 +1191,22 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
     stopPreparing();
   };
 
+  // Pause visible (compte à rebours) interrompue dès qu'on arrête la lecture
+  const pauseWithCountdown = async (type, ms, checkActive = null) => {
+    if (!(ms > 0)) return;
+    setActiveDelay({ type, ms });
+    const end = Date.now() + ms;
+    const token = ++pauseCountdownTokenRef.current;
+    while (Date.now() < end) {
+      if (checkActive && !checkActive()) break;
+      if (token !== pauseCountdownTokenRef.current) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    if (token === pauseCountdownTokenRef.current) {
+      setActiveDelay(null);
+    }
+  };
+
   const playAll = async (startIndex = currentIndex) => {
     if (!displayReplicas || displayReplicas.length === 0) return;
     if (!(startIndex >= 0 && startIndex < displayReplicas.length)) startIndex = 0;
@@ -1197,16 +1215,6 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
     startPreparing();
     const run = ++runRef.current;
     const isActive = () => playingRef.current && run === runRef.current;
-    // Pause visible (compte à rebours) interrompue dès qu'on arrête la lecture
-    const pauseWithCountdown = async (type, ms) => {
-      if (!(ms > 0)) return;
-      setActiveDelay({ type, ms });
-      const end = Date.now() + ms;
-      while (Date.now() < end && isActive()) {
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      setActiveDelay(null);
-    };
     ensureAudioUnlocked();
 
     setIsPlaying(true);
@@ -1255,10 +1263,16 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       if (listenIndices && !listenIndices.has(i)) continue;
       preloadAhead(i + 1);
 
-      if (hiddenCharacters.has(replica.character_id)) {
+      // Est-ce la réplique de mon rôle (qu'elle soit masquée ou affichée en clair) ?
+      const isMyRole = !!(opts.myRole && replica.character_id === opts.myRole);
+      const isHidden = hiddenCharacters.has(replica.character_id);
+
+      if (isMyRole || isHidden) {
         if (opts.readMine === "read") {
           // ⏱️ Attente AVANT que l'application lise MA réplique
-          await pauseWithCountdown("before", delaysRef.current.before);
+          if (delaysRef.current.before > 0) {
+            await pauseWithCountdown("before", delaysRef.current.before, isActive);
+          }
           if (!isActive()) break;
 
           await speak(replica.text, replica.character_id, replica.id, nextReplica);
@@ -1289,7 +1303,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
           const wasRevealed = !!tempRevealedRef.current[replica.id];
           if (wasRevealed && isActive()) {
             if (delaysRef.current.before > 0) {
-              await pauseWithCountdown("before", delaysRef.current.before);
+              await pauseWithCountdown("before", delaysRef.current.before, isActive);
             }
             if (!isActive()) break;
             await speak(replica.text, replica.character_id, replica.id, nextReplica);
@@ -1303,7 +1317,9 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
         }
 
         // ⏱️ Pause APRÈS MA réplique, avant la réplique du partenaire
-        await pauseWithCountdown("after", delaysRef.current.after);
+        if (delaysRef.current.after > 0) {
+          await pauseWithCountdown("after", delaysRef.current.after, isActive);
+        }
         if (!isActive()) break;
         continue;
       }
@@ -1405,7 +1421,7 @@ const isDidascalie = (replica, charId = null, allChars = []) => {
       // On applique la temporisation 'Temps pour dire ma réplique' avant de lire
       const delayBefore = delaysRef.current?.before || 0;
       if (delayBefore > 0) {
-        await pauseWithCountdown("before", delayBefore);
+        await pauseWithCountdown("before", delayBefore, () => true);
       }
       await playSingleBubble(index);
       return;
